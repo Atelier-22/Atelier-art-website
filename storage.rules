@@ -1,0 +1,22 @@
+rules_version = '2';
+service firebase.storage {
+  match /b/{bucket}/o {
+
+    // artworks/{category}/{fileName}
+    match /artworks/{category}/{fileName} {
+
+      // Public read so every gallery page can display uploaded images.
+      allow read: if true;
+
+      // Only the signed-in owner can upload or delete a file, and only
+      // if it's actually an image under 15 MB.
+      allow write, delete: if request.auth != null
+  && request.auth.token.email in [
+    "jonathanalafi@gmail.com",
+    "muhwezipetros@gmail.com"
+  ]
+  && request.resource.size < 15 * 1024 * 1024
+  && request.resource.contentType.matches('image/.*');
+    }
+  }
+}

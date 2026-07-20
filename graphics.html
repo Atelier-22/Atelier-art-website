@@ -1,0 +1,255 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Graphics | Alafi Art Work Website</title>
+  <link rel="stylesheet" href="style.css">
+
+  <style>
+    body {
+      margin: 0;
+      font-family: Arial, sans-serif;
+      color: white;
+      background-image: url('2.jpg');
+      background-size: cover;
+      background-position: center;
+      background-repeat: no-repeat;
+      min-height: 100vh;
+    }
+
+    nav {
+      display: flex;
+      justify-content: space-between;
+      align-items: center;
+      padding: 15px 40px;
+      background: rgba(0,0,0,0.5);
+    }
+
+    .logo { font-size: 1.5em; }
+
+    nav ul {
+      list-style: none;
+      display: flex;
+      gap: 20px;
+    }
+
+    nav a {
+      color: white;
+      text-decoration: none;
+      font-weight: bold;
+    }
+
+    nav a.active { text-decoration: underline; }
+
+    .gallery {
+      text-align: center;
+      padding: 100px 20px;
+      background: rgba(0,0,0,0.4);
+    }
+
+    .gallery h2 {
+      font-size: 2.5em;
+      margin-bottom: 20px;
+      text-shadow: 1px 1px 5px black;
+    }
+
+    .gallery-grid {
+      display: grid;
+      grid-template-columns: repeat(auto-fit, minmax(200px, 1fr));
+      gap: 20px;
+      max-width: 1200px;
+      margin: 0 auto;
+    }
+
+    .gallery-grid img {
+      width: 100%;
+      border-radius: 12px;
+      box-shadow: 0 4px 10px rgba(0,0,0,0.5);
+      transition: transform 0.3s;
+      cursor: pointer;
+    }
+
+    .gallery-grid img:hover {
+      transform: scale(1.05);
+    }
+
+    footer {
+      text-align: center;
+      padding: 20px;
+      background: rgba(0,0,0,0.5);
+    }
+
+    /* Lightbox Overlay */
+    .lightbox-nav {
+      position: fixed;
+      top: 0;
+      left: 0;
+      width: 100%;
+      height: 100%;
+      background: rgba(0,0,0,0.95);
+      display: flex;
+      justify-content: center;
+      align-items: center;
+      opacity: 0;
+      visibility: hidden;
+      transition: opacity 0.4s ease;
+      z-index: 1000;
+      flex-direction: row;
+    }
+
+    .lightbox-nav.active {
+      opacity: 1;
+      visibility: visible;
+    }
+
+    .lightbox-nav img {
+      max-width: 90%;
+      max-height: 80%;
+      border-radius: 12px;
+      animation: zoomIn 0.4s ease;
+    }
+
+    @keyframes zoomIn {
+      0% { transform: scale(0.7); opacity: 0; }
+      100% { transform: scale(1); opacity: 1; }
+    }
+
+    .lightbox-nav .close {
+      position: absolute;
+      top: 20px;
+      right: 30px;
+      font-size: 2.5em;
+      color: white;
+      cursor: pointer;
+      z-index: 1001;
+    }
+
+    .lightbox-nav .arrow {
+      position: absolute;
+      top: 50%;
+      transform: translateY(-50%);
+      font-size: 3em;
+      color: white;
+      cursor: pointer;
+      user-select: none;
+      z-index: 1001;
+      padding: 10px;
+      background: rgba(0,0,0,0.3);
+      border-radius: 50%;
+      display: none;
+    }
+
+    .lightbox-nav .arrow.left { left: 20px; }
+    .lightbox-nav .arrow.right { right: 20px; }
+  
+    </style>
+</head>
+
+<body>
+
+  <nav>
+    <h1 class="logo">🎨 Alafi Art Work Website</h1>
+    <ul>
+      <li><a href="index.html">Home</a></li>
+      <li><a href="gallery.html" class="active">Gallery</a></li>
+      <li><a href="about.html">About</a></li>
+      <li><a href="contact.html">Contact</a></li>
+    </ul>
+  </nav>
+
+  <section class="gallery">
+    <h2>Graphics</h2>
+
+    
+    <div class="gallery-grid">
+      <img src="artworks/graphics/graphic1.jpg" alt="Graphic 1">
+      <img src="artworks/graphics/graphic2.jpg" alt="Graphic 2">
+      <img src="artworks/graphics/graphic3.jpg" alt="Graphic 3">
+      <img src="artworks/graphics/graphic4.jpg" alt="Graphic 4">
+      <img src="artworks/graphics/graphic5.jpg" alt="Graphic 5">
+    </div>
+  </section>
+
+  <!-- Lightbox Overlay -->
+  <div class="lightbox-nav" id="lightboxNav">
+    <span class="close" id="lbClose">&times;</span>
+    <span class="arrow left" id="lbLeft">&#10094;</span>
+    <img src="" alt="Expanded Graphic" id="lbImage">
+    <span class="arrow right" id="lbRight">&#10095;</span>
+  </div>
+
+  <footer>
+    © 2026 Alafi Art Work Website | All Rights Reserved
+  </footer>
+
+  <script>
+    const galleryImages = document.querySelectorAll('.gallery-grid img');
+    const lightboxNav = document.getElementById('lightboxNav');
+    const lbImage = document.getElementById('lbImage');
+    const lbClose = document.getElementById('lbClose');
+    const lbLeft = document.getElementById('lbLeft');
+    const lbRight = document.getElementById('lbRight');
+
+    let currentIndex = 0;
+
+    // Open lightbox
+    galleryImages.forEach((img, index) => {
+      img.addEventListener('click', () => {
+        currentIndex = index;
+        lbImage.src = img.src;
+        lbImage.alt = img.alt;
+        lightboxNav.classList.add('active');
+        updateArrows();
+      });
+    });
+
+    // Close lightbox
+    lbClose.addEventListener('click', () => lightboxNav.classList.remove('active'));
+
+    // Navigate left
+    lbLeft.addEventListener('click', () => {
+      if(currentIndex > 0){
+        currentIndex--;
+        lbImage.src = galleryImages[currentIndex].src;
+        lbImage.alt = galleryImages[currentIndex].alt;
+        updateArrows();
+      }
+    });
+
+    // Navigate right
+    lbRight.addEventListener('click', () => {
+      if(currentIndex < galleryImages.length - 1){
+        currentIndex++;
+        lbImage.src = galleryImages[currentIndex].src;
+        lbImage.alt = galleryImages[currentIndex].alt;
+        updateArrows();
+      }
+    });
+
+    // Update arrow visibility
+    function updateArrows(){
+      lbLeft.style.display = currentIndex > 0 ? 'block' : 'none';
+      lbRight.style.display = currentIndex < galleryImages.length - 1 ? 'block' : 'none';
+    }
+
+    // Swipe support for mobile
+    let startX = 0;
+    lbImage.addEventListener('touchstart', (e) => { startX = e.touches[0].clientX; });
+    lbImage.addEventListener('touchend', (e) => {
+      let endX = e.changedTouches[0].clientX;
+      if(endX - startX > 50) lbLeft.click();
+      if(startX - endX > 50) lbRight.click();
+    });
+
+    // Close when clicking outside image
+    lightboxNav.addEventListener('click', (e) => {
+      if(e.target === lightboxNav) lightboxNav.classList.remove('active');
+    });
+  </script>
+
+
+    <script type="module" src="firebase-config.js"></script>
+  <script type="module" src="gallery-social.js"></script>
+</body>
+</html>

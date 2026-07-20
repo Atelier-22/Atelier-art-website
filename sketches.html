@@ -1,0 +1,183 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Sketches | Alafi Art Work Website</title>
+  <link rel="stylesheet" href="style.css">
+  <style>
+    body { margin: 0; font-family: Arial, sans-serif; color: white; background-image: url('2.jpg'); background-size: cover; background-position: center; background-repeat: no-repeat; min-height: 100vh; }
+    nav { display: flex; justify-content: space-between; align-items: center; padding: 15px 40px; background: rgba(0,0,0,0.5); }
+    .logo { font-size: 1.5em; }
+    nav ul { list-style: none; display: flex; gap: 20px; }
+    nav a { color: white; text-decoration: none; font-weight: bold; }
+    nav a.active { text-decoration: underline; }
+
+    .gallery { text-align: center; padding: 100px 20px; background: rgba(0,0,0,0.4); }
+    .gallery h2 { font-size: 2.5em; margin-bottom: 20px; text-shadow: 1px 1px 5px black; }
+
+    .gallery-grid {
+      display: grid;
+      grid-template-columns: repeat(auto-fit, minmax(200px, 1fr));
+      gap: 20px;
+      max-width: 1200px;
+      margin: 0 auto;
+    }
+
+    .gallery-grid img {
+      width: 100%;
+      border-radius: 12px;
+      box-shadow: 0 4px 10px rgba(0,0,0,0.5);
+      transition: transform 0.3s;
+      cursor: pointer;
+    }
+
+    .gallery-grid img:hover { transform: scale(1.05); }
+
+    /* LIGHTBOX */
+    .lightbox {
+      display: none;
+      position: fixed;
+      inset: 0;
+      background: rgba(0,0,0,0.95);
+      align-items: center;
+      justify-content: center;
+      z-index: 9999;
+    }
+
+    .lightbox img {
+      max-width: 90%;
+      max-height: 90%;
+      border-radius: 12px;
+    }
+
+    .arrow {
+      position: absolute;
+      top: 50%;
+      transform: translateY(-50%);
+      font-size: 3rem;
+      color: white;
+      cursor: pointer;
+      user-select: none;
+      padding: 10px;
+    }
+
+    .arrow.left { left: 20px; }
+    .arrow.right { right: 20px; }
+
+    .close {
+      position: absolute;
+      top: 20px;
+      right: 30px;
+      font-size: 2rem;
+      cursor: pointer;
+    }
+
+    footer { text-align: center; padding: 20px; background: rgba(0,0,0,0.5); }
+  
+    </style>
+</head>
+<body>
+
+  <nav>
+    <h1 class="logo">🎨 Alafi Art Work Website</h1>
+    <ul>
+      <li><a href="index.html">Home</a></li>
+      <li><a href="gallery.html" class="active">Gallery</a></li>
+      <li><a href="about.html">About</a></li>
+      <li><a href="contact.html">Contact</a></li>
+    </ul>
+  </nav>
+
+  <section class="gallery">
+    <h2>Sketches</h2>
+    
+    <div class="gallery-grid">
+      <img src="artworks/sketches/sketch1.jpg">
+      <img src="artworks/sketches/sketch2.jpg">
+      <img src="artworks/sketches/sketch3.jpg">
+      <img src="artworks/sketches/sketch4.jpg">
+      <img src="artworks/sketches/sketch5.jpg">
+      <img src="artworks/sketches/sketch6.jpg">
+      <img src="artworks/sketches/sketch7.jpg">
+      <img src="artworks/sketches/sketch8.jpg">
+      <img src="artworks/sketches/sketch9.jpg">
+      <img src="artworks/sketches/sketch10.jpg">
+      <img src="artworks/sketches/sketch11.jpg">
+      <img src="artworks/sketches/sketch12.jpg">
+      <img src="artworks/sketches/sketch13.jpg">
+      <img src="artworks/sketches/sketch14.jpg">
+      <img src="artworks/sketches/sketch15.jpg">
+      <img src="artworks/sketches/sketch16.jpg">
+      <img src="artworks/sketches/sketch17.jpg">
+      <img src="artworks/sketches/sketch18.jpg">
+      <img src="artworks/sketches/sketch19.jpg">
+      <img src="artworks/sketches/sketch20.jpg">
+    </div>
+  </section>
+
+  <!-- LIGHTBOX -->
+  <div class="lightbox" id="lightbox">
+    <span class="close" id="close">✕</span>
+    <span class="arrow left" id="prev">❮</span>
+    <img id="lightbox-img">
+    <span class="arrow right" id="next">❯</span>
+  </div>
+
+  <footer>
+    © 2026 Alafi Art Work | All Rights Reserved
+  </footer>
+
+<script>
+  const images = document.querySelectorAll('.gallery-grid img');
+  const lightbox = document.getElementById('lightbox');
+  const lightboxImg = document.getElementById('lightbox-img');
+  const prev = document.getElementById('prev');
+  const next = document.getElementById('next');
+  const close = document.getElementById('close');
+
+  let currentIndex = 0;
+
+  function updateArrows() {
+    prev.style.display = currentIndex === 0 ? 'none' : 'block';
+    next.style.display = currentIndex === images.length - 1 ? 'none' : 'block';
+  }
+
+  images.forEach((img, index) => {
+    img.addEventListener('click', () => {
+      currentIndex = index;
+      lightboxImg.src = img.src;
+      lightbox.style.display = 'flex';
+      updateArrows();
+    });
+  });
+
+  prev.onclick = () => {
+    currentIndex--;
+    lightboxImg.src = images[currentIndex].src;
+    updateArrows();
+  };
+
+  next.onclick = () => {
+    currentIndex++;
+    lightboxImg.src = images[currentIndex].src;
+    updateArrows();
+  };
+
+  close.onclick = () => lightbox.style.display = 'none';
+
+  // Swipe support
+  let startX = 0;
+  lightbox.addEventListener('touchstart', e => startX = e.touches[0].clientX);
+  lightbox.addEventListener('touchend', e => {
+    let endX = e.changedTouches[0].clientX;
+    if (startX - endX > 50 && currentIndex < images.length - 1) next.onclick();
+    if (endX - startX > 50 && currentIndex > 0) prev.onclick();
+  });
+</script>
+
+
+    <script type="module" src="firebase-config.js"></script>
+  <script type="module" src="gallery-social.js"></script>
+</body>
+</html>

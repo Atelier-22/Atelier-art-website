@@ -1,0 +1,62 @@
+rules_version = '2';
+service cloud.firestore {
+  match /databases/{database}/documents {
+
+    // /artworks/{artId}  — one doc per painting/sketch/etc.
+    match /artworks/{artId} {
+
+      // Everyone (including anonymous guests) can read artwork + like counts.
+      allow read: if true;
+
+      // Only the signed-in owner (matched by email) can create or delete
+      // an artwork document.
+      allow create, delete: if isOwner();
+
+      // Updates are allowed for the owner (editing title/description),
+      // OR for any signed-in guest performing exactly a +1 like increment
+      // and touching no other field.
+      allow update: if isOwner() || isValidLikeIncrement();
+
+      function isOwner() {
+        return request.auth != null
+          && request.auth.token.email in [
+            "jonathanalafi@gmail.com",
+            "muhwezipetros@gmail.com"
+          ];
+      }
+
+      function isValidLikeIncrement() {
+        let before = resource.data.likes;
+        let after = request.resource.data.likes;
+        return request.auth != null
+          && request.resource.data.diff(resource.data).affectedKeys().hasOnly(['likes'])
+          && after == before + 1;
+      }
+
+      // /artworks/{artId}/comments/{commentId}
+      match /comments/{commentId} {
+        // Public read so anyone can see the comment thread.
+        allow read: if true;
+
+        // Any signed-in user — including anonymous guests — can post a
+        // comment, as long as it's a real, reasonably-sized comment.
+        allow create: if request.auth != null
+          && request.resource.data.text is string
+          && request.resource.data.text.size() > 0
+          && request.resource.data.text.size() <= 300
+          && request.resource.data.name is string
+          && request.resource.data.name.size() <= 40;
+
+        // Comments can't be edited after posting.
+        allow update: if false;
+
+        // Only the owner can delete a comment (basic moderation).
+        allow delete: if request.auth != null
+          && request.auth.token.email in [
+            "jonathanalafi@gmail.com",
+            "muhwezipetros@gmail.com"
+          ];
+      }
+    }
+  }
+}

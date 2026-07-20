@@ -1,0 +1,108 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Home | Alafi Art Work Website</title>
+  <link rel="stylesheet" href="style.css">
+  <style>
+    body {
+      margin: 0;
+      font-family: Arial, sans-serif;
+      color: white;
+      background-image: url('1.jpg');
+      background-size: cover;
+      background-position: center;
+      background-repeat: no-repeat;
+      min-height: 100vh;
+    }
+
+    nav {
+      display: flex;
+      justify-content: space-between;
+      align-items: center;
+      padding: 15px 40px;
+      background: rgba(0, 0, 0, 0.5);
+    }
+
+    .logo {
+      font-size: 1.5em;
+    }
+
+    nav ul {
+      list-style: none;
+      display: flex;
+      gap: 20px;
+    }
+
+    nav a {
+      color: white;
+      text-decoration: none;
+      font-weight: bold;
+    }
+
+    nav a.active {
+      text-decoration: underline;
+    }
+
+    .home {
+      text-align: center;
+      padding: 150px 20px;
+      background: rgba(0, 0, 0, 0.4);
+    }
+
+    .home h2 {
+      font-size: 2.5em;
+      margin-bottom: 10px;
+    }
+
+    .home p {
+      font-size: 1.2em;
+      margin-bottom: 20px;
+    }
+
+    .btn {
+      display: inline-block;
+      background: #ffcc00;
+      color: black;
+      padding: 10px 20px;
+      text-decoration: none;
+      border-radius: 8px;
+      font-weight: bold;
+    }
+
+    footer {
+      text-align: center;
+      padding: 20px;
+      background: rgba(0, 0, 0, 0.5);
+      position: relative;
+      bottom: 0;
+      width: 100%;
+    }
+  </style>
+</head>
+<body>
+
+  <nav>
+    <h1 class="logo">🎨 Alafi Art Work Website</h1>
+    <ul>
+      <li><a href="index.html" class="active">Home</a></li>
+      <li><a href="gallery.html">Gallery</a></li>
+      <li><a href="about.html">About</a></li>
+      <li><a href="contact.html">Contact</a></li>
+    </ul>
+  </nav>
+
+  <section class="home">
+    <h2>Welcome to Alafi Art Work</h2>
+    <p>Discover a world of creativity through paintings, sketches, and digital art by A-Jonah.</p>
+    <a href="gallery.html" class="btn">Visit the Gallery</a>
+  </section>
+
+  <footer>
+    © 2026 Alafi Art Work | All Rights Reserved
+  </footer>
+
+</body>
+</html>
+

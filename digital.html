@@ -1,0 +1,252 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Digital Art | Alafi Art Work Website</title>
+  <link rel="stylesheet" href="style.css">
+
+  <style>
+    body {
+      margin: 0;
+      font-family: Arial, sans-serif;
+      color: white;
+      background-image: url('2.jpg');
+      background-size: cover;
+      background-position: center;
+      background-repeat: no-repeat;
+      min-height: 100vh;
+    }
+
+    nav {
+      display: flex;
+      justify-content: space-between;
+      align-items: center;
+      padding: 15px 40px;
+      background: rgba(0,0,0,0.5);
+    }
+
+    .logo { font-size: 1.5em; }
+
+    nav ul {
+      list-style: none;
+      display: flex;
+      gap: 20px;
+    }
+
+    nav a {
+      color: white;
+      text-decoration: none;
+      font-weight: bold;
+    }
+
+    nav a.active { text-decoration: underline; }
+
+    .gallery {
+      text-align: center;
+      padding: 100px 20px;
+      background: rgba(0,0,0,0.4);
+    }
+
+    .gallery h2 {
+      font-size: 2.5em;
+      margin-bottom: 20px;
+      text-shadow: 1px 1px 5px black;
+    }
+
+    .gallery-grid {
+      display: grid;
+      grid-template-columns: repeat(auto-fit, minmax(200px, 1fr));
+      gap: 20px;
+      max-width: 1200px;
+      margin: 0 auto;
+    }
+
+    .gallery-grid img {
+      width: 100%;
+      border-radius: 12px;
+      box-shadow: 0 4px 10px rgba(0,0,0,0.5);
+      transition: transform 0.3s;
+      cursor: pointer;
+    }
+
+    .gallery-grid img:hover {
+      transform: scale(1.05);
+    }
+
+    footer {
+      text-align: center;
+      padding: 20px;
+      background: rgba(0,0,0,0.5);
+      position: relative;
+      bottom: 0;
+      width: 100%;
+    }
+
+    /* ===== LIGHTBOX (NECESSARY ADDITION) ===== */
+    #lightbox {
+      position: fixed;
+      top: 0;
+      left: 0;
+      width: 100%;
+      height: 100%;
+      background: rgba(0,0,0,0.9);
+      display: none;
+      align-items: center;
+      justify-content: center;
+      z-index: 9999;
+    }
+
+    #lightbox img {
+      max-width: 90%;
+      max-height: 90%;
+      border-radius: 12px;
+    }
+
+    #lightbox-close,
+    #lightbox-prev,
+    #lightbox-next {
+      position: absolute;
+      color: white;
+      font-size: 40px;
+      cursor: pointer;
+      user-select: none;
+    }
+
+    #lightbox-close {
+      top: 20px;
+      right: 30px;
+    }
+
+    #lightbox-prev {
+      left: 30px;
+    }
+
+    #lightbox-next {
+      right: 30px;
+    }
+  
+    </style>
+</head>
+
+<body>
+
+  <nav>
+    <h1 class="logo">🎨 Alafi Art Work Website</h1>
+    <ul>
+      <li><a href="index.html">Home</a></li>
+      <li><a href="gallery.html" class="active">Gallery</a></li>
+      <li><a href="about.html">About</a></li>
+      <li><a href="contact.html">Contact</a></li>
+    </ul>
+  </nav>
+
+  <section class="gallery">
+    <h2>Digital Art</h2>
+
+    
+    <div class="gallery-grid">
+      <img src="artworks/digital/digital1.jpg" alt="Digital 1">
+      <img src="artworks/digital/digital2.jpg" alt="Digital 2">
+      <img src="artworks/digital/digital3.jpg" alt="Digital 3">
+      <img src="artworks/digital/digital4.jpg" alt="Digital 4">
+      <img src="artworks/digital/digital5.jpg" alt="Digital 5">
+      <img src="artworks/digital/digital6.jpg" alt="Digital 6">
+      <img src="artworks/digital/digital7.jpg" alt="Digital 7">
+      <img src="artworks/digital/digital8.jpg" alt="Digital 8">
+      <img src="artworks/digital/digital9.jpg" alt="Digital 9">
+      <img src="artworks/digital/digital10.jpg" alt="Digital 10">
+      <img src="artworks/digital/digital11.jpg" alt="Digital 11">
+      <img src="artworks/digital/digital12.jpg" alt="Digital 12">
+      <img src="artworks/digital/digital13.jpg" alt="Digital 13">
+      <img src="artworks/digital/digital14.jpg" alt="Digital 14">
+      <img src="artworks/digital/digital15.jpg" alt="Digital 15">
+      <img src="artworks/digital/digital16.jpg" alt="Digital 16">
+      <img src="artworks/digital/digital17.jpg" alt="Digital 17">
+      <img src="artworks/digital/digital18.jpg" alt="Digital 18">
+      <img src="artworks/digital/digital19.jpg" alt="Digital 19">
+      <img src="artworks/digital/digital20.jpg" alt="Digital 20">
+    </div>
+  </section>
+
+  <footer>
+    © 2026 Alafi Art Work | All Rights Reserved
+  </footer>
+
+  <!-- ===== LIGHTBOX HTML (NECESSARY ADDITION) ===== -->
+  <div id="lightbox">
+    <span id="lightbox-close">&times;</span>
+    <span id="lightbox-prev">&#10094;</span>
+    <img id="lightbox-img">
+    <span id="lightbox-next">&#10095;</span>
+  </div>
+
+  <!-- ===== LIGHTBOX SCRIPT (NECESSARY ADDITION) ===== -->
+  <script>
+    const images = document.querySelectorAll('.gallery-grid img');
+    const lightbox = document.getElementById('lightbox');
+    const lightboxImg = document.getElementById('lightbox-img');
+    const prevBtn = document.getElementById('lightbox-prev');
+    const nextBtn = document.getElementById('lightbox-next');
+    const closeBtn = document.getElementById('lightbox-close');
+
+    let index = 0;
+    let startX = 0;
+
+    function update() {
+      lightboxImg.src = images[index].src;
+      prevBtn.style.display = index === 0 ? 'none' : 'block';
+      nextBtn.style.display = index === images.length - 1 ? 'none' : 'block';
+    }
+
+    images.forEach((img, i) => {
+      img.addEventListener('click', () => {
+        index = i;
+        lightbox.style.display = 'flex';
+        update();
+        document.body.style.overflow = 'hidden';
+      });
+    });
+
+    closeBtn.onclick = () => {
+      lightbox.style.display = 'none';
+      document.body.style.overflow = '';
+    };
+
+    nextBtn.onclick = () => {
+      if (index < images.length - 1) {
+        index++;
+        update();
+      }
+    };
+
+    prevBtn.onclick = () => {
+      if (index > 0) {
+        index--;
+        update();
+      }
+    };
+
+    lightbox.addEventListener('touchstart', e => {
+      startX = e.touches[0].clientX;
+    });
+
+    lightbox.addEventListener('touchend', e => {
+      const endX = e.changedTouches[0].clientX;
+      if (startX - endX > 50 && index < images.length - 1) {
+        index++;
+        update();
+      }
+      if (endX - startX > 50 && index > 0) {
+        index--;
+        update();
+      }
+    });
+  </script>
+
+
+    <script type="module" src="firebase-config.js"></script>
+  <script type="module" src="gallery-social.js"></script>
+</body>
+</html>
+

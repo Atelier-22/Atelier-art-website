@@ -1,0 +1,248 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Comics | Alafi Art Work</title>
+  <link rel="stylesheet" href="style.css">
+  <style>
+    body {
+      margin: 0;
+      font-family: Arial, sans-serif;
+      color: white;
+      background-image: url('2.jpg'); /* Make sure 2.jpg is in the same folder */
+      background-size: cover;
+      background-position: center;
+      background-repeat: no-repeat;
+      min-height: 100vh;
+    }
+
+    nav {
+      display: flex;
+      justify-content: space-between;
+      align-items: center;
+      padding: 15px 40px;
+      background: rgba(0, 0, 0, 0.5);
+    }
+
+    .logo { font-size: 1.5em; }
+
+    nav ul { list-style: none; display: flex; gap: 20px; }
+
+    nav a { color: white; text-decoration: none; font-weight: bold; }
+    nav a.active { text-decoration: underline; }
+
+    h2 { text-align: center; margin: 50px 0; font-size: 2.5em; text-shadow: 1px 1px 5px black; }
+
+    /* Comics gallery grid */
+    .gallery-grid {
+      display: grid;
+      grid-template-columns: repeat(auto-fit, minmax(250px, 1fr));
+      gap: 20px;
+      max-width: 1200px;
+      margin: 0 auto 50px;
+    }
+
+    .gallery-grid img {
+      width: 100%;
+      border-radius: 12px;
+      box-shadow: 0 4px 10px rgba(0,0,0,0.5);
+      transition: transform 0.3s;
+      cursor: pointer;
+    }
+
+    .gallery-grid img:hover { transform: scale(1.05); }
+
+    /* Footer */
+    footer {
+      text-align: center;
+      padding: 20px;
+      background: rgba(0,0,0,0.5);
+    }
+
+    /* Lightbox Overlay */
+    .lightbox-nav {
+      position: fixed;
+      top: 0;
+      left: 0;
+      width: 100%;
+      height: 100%;
+      background: rgba(0,0,0,0.95);
+      display: flex;
+      justify-content: center;
+      align-items: center;
+      opacity: 0;
+      visibility: hidden;
+      transition: opacity 0.4s ease;
+      z-index: 1000;
+      flex-direction: row;
+    }
+
+    .lightbox-nav.active {
+      opacity: 1;
+      visibility: visible;
+    }
+
+    .lightbox-nav img {
+      max-width: 90%;
+      max-height: 80%;
+      border-radius: 12px;
+      animation: zoomIn 0.4s ease;
+    }
+
+    @keyframes zoomIn {
+      0% { transform: scale(0.7); opacity: 0; }
+      100% { transform: scale(1); opacity: 1; }
+    }
+
+    /* Close button */
+    .lightbox-nav .close {
+      position: absolute;
+      top: 20px;
+      right: 30px;
+      font-size: 2.5em;
+      color: white;
+      cursor: pointer;
+      z-index: 1001;
+    }
+
+    /* Navigation arrows */
+    .lightbox-nav .arrow {
+      position: absolute;
+      top: 50%;
+      transform: translateY(-50%);
+      font-size: 3em;
+      color: white;
+      cursor: pointer;
+      user-select: none;
+      z-index: 1001;
+      padding: 10px;
+      background: rgba(0,0,0,0.3);
+      border-radius: 50%;
+      display: none;
+    }
+
+    .lightbox-nav .arrow.left { left: 20px; }
+    .lightbox-nav .arrow.right { right: 20px; }
+  
+    </style>
+</head>
+<body>
+
+  <nav>
+    <div class="logo">🎨 Alafi Art Work Website</div>
+    <ul>
+      <li><a href="index.html">Home</a></li>
+      <li><a href="gallery.html" class="active">Gallery</a></li>
+      <li><a href="about.html">About</a></li>
+      <li><a href="contact.html">Contact</a></li>
+    </ul>
+  </nav>
+
+  <h2>Comics Gallery</h2>
+  
+    <div class="gallery-grid">
+    <img src="artworks/comics/comic1.jpg" alt="Comic 1">
+    <img src="artworks/comics/comic2.jpg" alt="Comic 2">
+    <img src="artworks/comics/comic3.jpg" alt="Comic 3">
+    <img src="artworks/comics/comic4.jpg" alt="Comic 4">
+    <img src="artworks/comics/comic5.jpg" alt="Comic 5">
+    <img src="artworks/comics/comic6.jpg" alt="Comic 6">
+    <img src="artworks/comics/comic7.jpg" alt="Comic 7">
+    <img src="artworks/comics/comic8.jpg" alt="Comic 8">
+    <img src="artworks/comics/comic9.jpg" alt="Comic 9">
+    <img src="artworks/comics/comic10.jpg" alt="Comic 10">
+    <img src="artworks/comics/comic11.jpg" alt="Comic 11">
+    <img src="artworks/comics/comic12.jpg" alt="Comic 12">
+    <img src="artworks/comics/comic13.jpg" alt="Comic 13">
+    <img src="artworks/comics/comic14.jpg" alt="Comic 14">
+    <img src="artworks/comics/comic15.jpg" alt="Comic 15">
+    <img src="artworks/comics/comic16.jpg" alt="Comic 16">
+    <img src="artworks/comics/comic17.jpg" alt="Comic 17">
+    <img src="artworks/comics/comic18.jpg" alt="Comic 18">
+    <img src="artworks/comics/comic19.jpg" alt="Comic 19">
+    <img src="artworks/comics/comic20.jpg" alt="Comic 20">
+  </div>
+
+  <!-- Lightbox Overlay -->
+  <div class="lightbox-nav" id="lightboxNav">
+    <span class="close" id="lbClose">&times;</span>
+    <span class="arrow left" id="lbLeft">&#10094;</span>
+    <img src="" alt="Expanded Comic" id="lbImage">
+    <span class="arrow right" id="lbRight">&#10095;</span>
+  </div>
+
+  <footer>
+    © 2026 Alafi Art Work | All Rights Reserved
+  </footer>
+
+  <script>
+    const galleryImages = document.querySelectorAll('.gallery-grid img');
+    const lightboxNav = document.getElementById('lightboxNav');
+    const lbImage = document.getElementById('lbImage');
+    const lbClose = document.getElementById('lbClose');
+    const lbLeft = document.getElementById('lbLeft');
+    const lbRight = document.getElementById('lbRight');
+
+    let currentIndex = 0;
+
+    // Open lightbox
+    galleryImages.forEach((img, index) => {
+      img.addEventListener('click', () => {
+        currentIndex = index;
+        lbImage.src = img.src;
+        lbImage.alt = img.alt;
+        lightboxNav.classList.add('active');
+        updateArrows();
+      });
+    });
+
+    // Close lightbox
+    lbClose.addEventListener('click', () => lightboxNav.classList.remove('active'));
+
+    // Navigate left
+    lbLeft.addEventListener('click', () => {
+      if(currentIndex > 0){
+        currentIndex--;
+        lbImage.src = galleryImages[currentIndex].src;
+        lbImage.alt = galleryImages[currentIndex].alt;
+        updateArrows();
+      }
+    });
+
+    // Navigate right
+    lbRight.addEventListener('click', () => {
+      if(currentIndex < galleryImages.length - 1){
+        currentIndex++;
+        lbImage.src = galleryImages[currentIndex].src;
+        lbImage.alt = galleryImages[currentIndex].alt;
+        updateArrows();
+      }
+    });
+
+    // Update arrow visibility
+    function updateArrows(){
+      lbLeft.style.display = currentIndex > 0 ? 'block' : 'none';
+      lbRight.style.display = currentIndex < galleryImages.length - 1 ? 'block' : 'none';
+    }
+
+    // Swipe support for mobile
+    let startX = 0;
+    lbImage.addEventListener('touchstart', (e) => { startX = e.touches[0].clientX; });
+    lbImage.addEventListener('touchend', (e) => {
+      let endX = e.changedTouches[0].clientX;
+      if(endX - startX > 50) lbLeft.click();
+      if(startX - endX > 50) lbRight.click();
+    });
+
+    // Close when clicking outside image
+    lightboxNav.addEventListener('click', (e) => {
+      if(e.target === lightboxNav) lightboxNav.classList.remove('active');
+    });
+  </script>
+
+
+    <script type="module" src="firebase-config.js"></script>
+  <script type="module" src="gallery-social.js"></script>
+</body>
+</html>
