@@ -30,7 +30,7 @@ const firebaseConfig = {
   projectId: "alafi-art-website",
   storageBucket: "alafi-art-website.firebasestorage.app",
   messagingSenderId: "526806992674",
-  appId: "1:526806992674:web:58f445a4352c02b9a3877b"D"
+  appId: "1:526806992674:web:58f445a4352c02b9a3877b"
 };
 
 // ============================================================
