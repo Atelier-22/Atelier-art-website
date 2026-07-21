@@ -1,4 +1,4 @@
-/ firebase-config.js — shared Firebase + Cloudinary setup for the whole site.
+// firebase-config.js — shared Firebase + Cloudinary setup for the whole site.
 
 import { initializeApp } from "https://www.gstatic.com/firebasejs/10.13.0/firebase-app.js";
 import {
@@ -34,8 +34,8 @@ export const auth = getAuth(app);
 export const db = getFirestore(app);
 
 export const uploadsConfigured =
-  CLOUDINARY_CLOUD_NAME !== "pmhpabd8" &&
-  CLOUDINARY_UPLOAD_PRESET !== "lpwbmgnq";
+  CLOUDINARY_CLOUD_NAME !== "PASTE_YOUR_CLOUD_NAME_HERE" &&
+  CLOUDINARY_UPLOAD_PRESET !== "PASTE_YOUR_UNSIGNED_PRESET_HERE";
 
 async function uploadToCloudinary(file) {
   if (!uploadsConfigured) {
@@ -194,4 +194,3 @@ export async function deleteArtwork(artId) {
   // uploads can't be deleted from the browser, that's fine at this scale).
   await deleteDoc(doc(db, "artworks", artId));
 }
-
