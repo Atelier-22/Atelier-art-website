@@ -294,7 +294,7 @@
     <div class="upload-card">
       <h2>📤 Upload New Artwork</h2>
       <div id="storage-notice" style="display:none; background: rgba(255,204,0,0.12); border: 1px solid #ffcc00; border-radius: 8px; padding: 10px 14px; margin-bottom: 16px; font-size: 0.9em; color: #ffcc00;">
-        ⚠️ Uploads are paused until Firebase Storage is turned on (requires the Blaze plan). Likes, comments, and everything else on the site still work normally.
+        ⚠️ Uploads are paused until Cloudinary is set up — paste your cloud name and upload preset into <code>firebase-config.js</code> (see SETUP_README.md, it's free, no card needed). Likes, comments, and everything else on the site still work normally.
       </div>
       <div class="upload-row">
         <select id="cat-select">
@@ -330,10 +330,10 @@
 <script type="module">
   import {
     watchAuth, isOwner, ownerLogin, ownerLogout,
-    uploadArtwork, deleteArtwork, watchCategoryArtworks, storage
+    uploadArtwork, deleteArtwork, watchCategoryArtworks, uploadsConfigured
   } from './firebase-config.js';
 
-  if (!storage) {
+  if (!uploadsConfigured) {
     document.getElementById('storage-notice').style.display = 'block';
     document.getElementById('do-upload-btn').disabled = true;
     document.getElementById('do-upload-btn').style.opacity = '0.5';
@@ -493,7 +493,11 @@
       del.textContent = '✕';
       del.onclick = async () => {
         if (confirm('Delete "' + (art.title || art.id) + '"?')) {
-          await deleteArtwork(art.id, art.storagePath);
+          try {
+            await deleteArtwork(art.id);
+          } catch (err) {
+            alert('Delete failed: ' + err.message);
+          }
         }
       };
       card.appendChild(img);
@@ -505,3 +509,4 @@
 
 </body>
 </html>
+
