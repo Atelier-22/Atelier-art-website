@@ -1,4 +1,4 @@
-<!DOCTYPE html>
+!DOCTYPE html>
 <html lang="en">
 <head>
   <meta charset="UTF-8">
@@ -7,25 +7,335 @@
   <link rel="stylesheet" href="style.css">
 
   <style>
-    .about,
-    .about h2,
-    .about p,
-    .logo,
-    footer,
-    nav ul li a {
+    * { box-sizing: border-box; }
+
+    body {
+      margin: 0;
+      font-family: Arial, sans-serif;
       color: white;
+      min-height: 100vh;
+      overflow-x: hidden;
+    }
+
+    .about, .about h2, .about p, .logo, footer, nav ul li a {
+      color: white;
+    }
+
+    /* ===== FIXED WALLPAPER (same AJ1.jpg, untouched) ===== */
+    .wallpaper {
+      position: fixed;
+      top: 0; left: 0;
+      width: 100%; height: 100%;
+      background-image: url('AJ1.jpg');
+      background-size: cover;
+      background-position: center;
+      background-repeat: no-repeat;
+      background-color: black;
+      z-index: -2;
+    }
+
+    .wallpaper::after {
+      content: '';
+      position: absolute;
+      inset: 0;
+      background: linear-gradient(180deg, rgba(0,0,0,0.6) 0%, rgba(0,0,0,0.35) 22%, rgba(0,0,0,0.65) 100%);
+      z-index: -1;
+    }
+
+    nav {
+      display: flex;
+      justify-content: space-between;
+      align-items: center;
+      padding: 15px 40px;
+      background: rgba(0, 0, 0, 0.5);
+      position: sticky;
+      top: 0;
+      z-index: 500;
+      backdrop-filter: blur(10px);
+    }
+
+    .logo { font-size: 1.5em; margin: 0; }
+    nav ul { list-style: none; display: flex; gap: 20px; margin: 0; padding: 0; }
+    nav a { color: white; text-decoration: none; font-weight: bold; transition: opacity 0.25s ease; }
+    nav a:hover { opacity: 0.75; }
+    nav a.active { text-decoration: underline; }
+
+    @keyframes fadeInUp {
+      from { opacity: 0; transform: translateY(28px); }
+      to   { opacity: 1; transform: translateY(0); }
+    }
+
+    /* ===== HERO ===== */
+    .about {
+      text-align: center;
+      padding: 150px 20px 60px;
+    }
+
+    .about .eyebrow {
+      letter-spacing: 4px;
+      text-transform: uppercase;
+      font-size: 0.8em;
+      color: #ffcc00;
+      margin-bottom: 16px;
+      opacity: 0;
+      animation: fadeInUp 1s ease forwards 0.1s;
+    }
+
+    .about h2 {
+      font-size: 2.8em;
+      margin-bottom: 20px;
+      text-shadow: 0 4px 20px rgba(0,0,0,0.6);
+      opacity: 0;
+      animation: fadeInUp 1s ease forwards 0.3s;
+    }
+
+    .about p {
+      font-size: 1.15em;
+      max-width: 680px;
+      margin: 0 auto;
+      line-height: 1.8;
+      color: rgba(255,255,255,0.9);
+      opacity: 0;
+      animation: fadeInUp 1s ease forwards 0.5s;
+    }
+
+    .hero-quote {
+      max-width: 600px;
+      margin: 34px auto 0;
+      font-style: italic;
+      font-size: 1.15em;
+      color: #ffcc00;
+      opacity: 0;
+      animation: fadeInUp 1s ease forwards 0.7s;
+    }
+
+    /* ===== GENERIC STORY SECTIONS ===== */
+    .story-section {
+      padding: 100px 24px;
+      max-width: 1000px;
+      margin: 0 auto;
+    }
+
+    .story-section .section-inner {
+      opacity: 0;
+      transform: translateY(40px);
+      transition: opacity 0.9s ease, transform 0.9s ease;
+    }
+
+    .story-section.visible .section-inner {
+      opacity: 1;
+      transform: translateY(0);
+    }
+
+    .story-section .eyebrow {
+      letter-spacing: 3px;
+      text-transform: uppercase;
+      font-size: 0.75em;
+      color: #ffcc00;
+      display: block;
+      text-align: center;
+      margin-bottom: 12px;
+    }
+
+    .story-section h3 {
+      font-size: 2.1em;
+      text-align: center;
+      margin: 0 0 24px;
+      text-shadow: 0 4px 18px rgba(0,0,0,0.5);
+    }
+
+    .story-section .lead {
+      text-align: center;
+      max-width: 720px;
+      margin: 0 auto 10px;
+      font-size: 1.08em;
+      line-height: 1.8;
+      color: rgba(255,255,255,0.86);
+    }
+
+    .glass-panel {
+      background: rgba(255,255,255,0.07);
+      border: 1px solid rgba(255,255,255,0.15);
+      border-radius: 20px;
+      padding: 36px;
+      backdrop-filter: blur(16px);
+      -webkit-backdrop-filter: blur(16px);
+      box-shadow: 0 8px 32px rgba(0,0,0,0.25);
+    }
+
+    /* Process cards */
+    .card-grid {
+      display: grid;
+      grid-template-columns: repeat(auto-fit, minmax(200px, 1fr));
+      gap: 22px;
+      margin-top: 40px;
+    }
+
+    .glass-card {
+      background: rgba(255,255,255,0.07);
+      border: 1px solid rgba(255,255,255,0.15);
+      border-radius: 18px;
+      padding: 30px 22px;
+      text-align: center;
+      backdrop-filter: blur(16px);
+      -webkit-backdrop-filter: blur(16px);
+      box-shadow: 0 8px 32px rgba(0,0,0,0.25);
+      transition: transform 0.4s ease, border-color 0.4s ease, box-shadow 0.4s ease;
+    }
+
+    .glass-card:hover {
+      transform: translateY(-8px);
+      border-color: rgba(255,204,0,0.5);
+      box-shadow: 0 16px 40px rgba(0,0,0,0.4);
+    }
+
+    .glass-card .icon { font-size: 2em; margin-bottom: 12px; }
+    .glass-card h4 { margin: 0 0 10px; color: #ffcc00; font-size: 1.05em; }
+    .glass-card p { margin: 0; font-size: 0.92em; line-height: 1.6; color: rgba(255,255,255,0.85); }
+
+    /* Inspiration tags */
+    .tag-cloud {
+      display: flex;
+      flex-wrap: wrap;
+      justify-content: center;
+      gap: 14px;
+      margin-top: 36px;
+    }
+
+    .tag-cloud span {
+      background: rgba(255,255,255,0.08);
+      border: 1px solid rgba(255,255,255,0.2);
+      padding: 10px 22px;
+      border-radius: 30px;
+      font-size: 0.95em;
+      backdrop-filter: blur(10px);
+      transition: transform 0.3s ease, border-color 0.3s ease, background 0.3s ease;
+    }
+
+    .tag-cloud span:hover {
+      transform: translateY(-4px);
+      border-color: #ffcc00;
+      background: rgba(255,204,0,0.12);
+    }
+
+    /* Timeline */
+    .timeline {
+      position: relative;
+      margin-top: 50px;
+      padding-left: 30px;
+      border-left: 2px solid rgba(255,255,255,0.2);
+    }
+
+    .timeline-item {
+      position: relative;
+      padding: 0 0 42px 26px;
+      opacity: 0;
+      transform: translateX(-20px);
+      transition: opacity 0.7s ease, transform 0.7s ease;
+    }
+
+    .timeline-item.visible {
+      opacity: 1;
+      transform: translateX(0);
+    }
+
+    .timeline-item::before {
+      content: '';
+      position: absolute;
+      left: -37px;
+      top: 4px;
+      width: 14px; height: 14px;
+      border-radius: 50%;
+      background: #ffcc00;
+      box-shadow: 0 0 0 4px rgba(255,204,0,0.2);
+    }
+
+    .timeline-item h4 { margin: 0 0 6px; color: #ffcc00; font-size: 1.1em; }
+    .timeline-item p { margin: 0; color: rgba(255,255,255,0.85); line-height: 1.6; font-size: 0.95em; }
+
+    /* Stats */
+    .stats-grid {
+      display: grid;
+      grid-template-columns: repeat(auto-fit, minmax(150px, 1fr));
+      gap: 20px;
+      margin-top: 40px;
+    }
+
+    .stat-card {
+      text-align: center;
+      padding: 28px 14px;
+      border-radius: 16px;
+      background: rgba(255,255,255,0.07);
+      border: 1px solid rgba(255,255,255,0.15);
+      backdrop-filter: blur(14px);
+    }
+
+    .stat-num {
+      font-size: 2.2em;
+      font-weight: bold;
+      color: #ffcc00;
+    }
+
+    .stat-lbl {
+      margin-top: 6px;
+      font-size: 0.85em;
+      color: rgba(255,255,255,0.8);
+      text-transform: uppercase;
+      letter-spacing: 1px;
+    }
+
+    /* Big quote */
+    .big-quote {
+      text-align: center;
+      padding: 60px 24px;
+    }
+
+    .big-quote p {
+      font-size: 2em;
+      font-style: italic;
+      max-width: 780px;
+      margin: 0 auto;
+      line-height: 1.5;
+      text-shadow: 0 4px 20px rgba(0,0,0,0.5);
+    }
+
+    /* CTA button (reuses existing gallery link) */
+    .cta-btn {
+      display: inline-block;
+      background: #ffcc00;
+      color: black;
+      padding: 14px 34px;
+      border-radius: 30px;
+      text-decoration: none;
+      font-weight: bold;
+      margin-top: 26px;
+      transition: transform 0.35s ease, box-shadow 0.35s ease;
+      box-shadow: 0 8px 26px rgba(255,204,0,0.35);
+    }
+
+    .cta-btn:hover {
+      transform: translateY(-3px) scale(1.03);
+      box-shadow: 0 12px 32px rgba(255,204,0,0.5);
+    }
+
+    footer {
+      text-align: center;
+      padding: 20px;
+      background: rgba(0,0,0,0.6);
+      backdrop-filter: blur(6px);
+    }
+
+    @media (max-width: 600px) {
+      .about h2 { font-size: 2.1em; }
+      .story-section h3 { font-size: 1.6em; }
+      nav { padding: 14px 18px; flex-wrap: wrap; gap: 10px; }
     }
   </style>
 </head>
 
-<body style="
-  background-image: url('AJ1.jpg');
-  background-size: cover;
-  background-position: center;
-  background-repeat: no-repeat;
-  background-attachment: fixed;
-  background-color: black;
-">
+<body>
+
+<div class="wallpaper"></div>
 
 <nav>
   <h1 class="logo"> Art by alafi jonathan(A-Jonah)</h1>
@@ -37,18 +347,155 @@
   </ul>
 </nav>
 
+<!-- Hero -->
 <section class="about">
+  <span class="eyebrow">The Artist</span>
   <h2>About the Artist</h2>
   <p>
-    Hi, I’m <strong>Alafi jonathan</strong> an artist passionate about expressing stories through
+    Hi, I'm <strong>Alafi Jonathan</strong> — an artist passionate about expressing stories through
     colors, patterns, and imagination. My work blends traditional and digital art forms,
     exploring culture, creativity, and emotion.
   </p>
+  <p class="hero-quote">"Every artwork is a piece of a larger story I'm still telling."</p>
+</section>
+
+<!-- The Story -->
+<section class="story-section" data-reveal>
+  <div class="section-inner">
+    <span class="eyebrow">Where It Began</span>
+    <h3>The Story</h3>
+    <p class="lead">
+      It started small — a pencil, a blank page, and a curiosity about what could be made from
+      nothing. Over time, that curiosity turned into discipline, and discipline turned into a
+      voice. Every collection since has been another chapter in that same, ongoing story:
+      learning to see the world a little more closely, and finding a way to hand that vision to
+      someone else.
+    </p>
+  </div>
+</section>
+
+<!-- Artistic Philosophy -->
+<section class="story-section" data-reveal>
+  <div class="section-inner glass-panel">
+    <span class="eyebrow">Philosophy</span>
+    <h3>Artistic Philosophy</h3>
+    <p class="lead">
+      Art, at its best, doesn't explain — it reveals. Every piece here is an attempt to hold a
+      feeling still long enough for someone else to recognize it. Creating isn't about
+      perfection; it's about honesty, and letting each work carry a little bit of truth that
+      words alone couldn't say.
+    </p>
+  </div>
+</section>
+
+<!-- Creative Process -->
+<section class="story-section" data-reveal>
+  <div class="section-inner">
+    <span class="eyebrow">Behind the Work</span>
+    <h3>Creative Process</h3>
+    <div class="card-grid">
+      <div class="glass-card">
+        <div class="icon"></div>
+        <h4>Inspiration</h4>
+        <p>An idea catches hold, often somewhere unexpected.</p>
+      </div>
+      <div class="glass-card">
+        <div class="icon"></div>
+        <h4>Sketching</h4>
+        <p>Rough lines find the shape of the idea before anything else does.</p>
+      </div>
+      <div class="glass-card">
+        <div class="icon"></div>
+        <h4>Creation</h4>
+        <p>Color, texture, and detail slowly bring the piece to life.</p>
+      </div>
+      <div class="glass-card">
+        <div class="icon"></div>
+        <h4>Final Artwork</h4>
+        <p>A finished piece, ready to become part of someone else's story.</p>
+      </div>
+    </div>
+  </div>
+</section>
+
+<!-- Sources of Inspiration -->
+<section class="story-section" data-reveal>
+  <div class="section-inner">
+    <span class="eyebrow">Where It Comes From</span>
+    <h3>Sources of Inspiration</h3>
+    <p class="lead">Inspiration rarely announces itself — it's found, then followed.</p>
+    <div class="tag-cloud">
+      <span>Nature</span>
+      <span>Culture</span>
+      <span>People</span>
+      <span>Dreams</span>
+      <span>Emotion</span>
+      <span>Daily Life</span>
+      <span>Imagination</span>
+    </div>
+  </div>
+</section>
+
+<!-- Timeline -->
+<section class="story-section" data-reveal>
+  <div class="section-inner">
+    <span class="eyebrow">The Path So Far</span>
+    <h3>Artistic Journey</h3>
+    <div class="timeline">
+      <div class="timeline-item" data-reveal><h4>Beginning</h4><p>The first sketches — simple, curious, unpolished.</p></div>
+      <div class="timeline-item" data-reveal><h4>Learning</h4><p>Studying technique, form, and the fundamentals of craft.</p></div>
+      <div class="timeline-item" data-reveal><h4>Growth</h4><p>Finding a distinct voice across painting, sketching, and digital work.</p></div>
+      <div class="timeline-item" data-reveal><h4>Exploration</h4><p>Branching into sculpture, comics, and graphic design.</p></div>
+      <div class="timeline-item" data-reveal><h4>Present Day</h4><p>Continuing to create, share, and grow with every new piece.</p></div>
+    </div>
+  </div>
+</section>
+
+<!-- Featured Achievements -->
+<section class="story-section" data-reveal>
+  <div class="section-inner">
+    <span class="eyebrow">In Numbers</span>
+    <h3>Featured Achievements</h3>
+    <div class="stats-grid">
+      <div class="stat-card"><div class="stat-num">5+</div><div class="stat-lbl">Years Creating</div></div>
+      <div class="stat-card"><div class="stat-num">7</div><div class="stat-lbl">Art Categories</div></div>
+      <div class="stat-card"><div class="stat-num">100+</div><div class="stat-lbl">Completed Works</div></div>
+      <div class="stat-card"><div class="stat-num">3</div><div class="stat-lbl">Current Projects</div></div>
+    </div>
+  </div>
+</section>
+
+<!-- Big Quote -->
+<section class="big-quote" data-reveal>
+  <div class="section-inner">
+    <p>"Art is not what you see, but what you make others see."</p>
+  </div>
+</section>
+
+<!-- Final CTA -->
+<section class="story-section" data-reveal style="text-align:center; padding-bottom:160px;">
+  <div class="section-inner">
+    <p class="lead">Now that you've discovered the story behind the artist, experience the artwork itself.</p>
+    <a href="gallery.html" class="cta-btn">Visit the Gallery</a>
+  </div>
 </section>
 
 <footer>
-  © 2026 Alafi jonathan 🎨arts | All Rights Reserved
+  © 2026 Alafi jonathan arts | All Rights Reserved
 </footer>
+
+<script>
+  const revealTargets = document.querySelectorAll('[data-reveal]');
+  const revealObserver = new IntersectionObserver((entries) => {
+    entries.forEach(entry => {
+      if (entry.isIntersecting) {
+        entry.target.classList.add('visible');
+        revealObserver.unobserve(entry.target);
+      }
+    });
+  }, { threshold: 0.15 });
+  revealTargets.forEach(el => revealObserver.observe(el));
+</script>
 
 </body>
 </html>
