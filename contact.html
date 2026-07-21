@@ -7,41 +7,350 @@
   <link rel="stylesheet" href="style.css">
 
   <style>
-    .contact {
-      padding: 80px 40px;
+    * { box-sizing: border-box; }
+
+    body {
+      margin: 0;
+      font-family: Arial, sans-serif;
+      color: white;
+      min-height: 100vh;
+      overflow-x: hidden;
+    }
+
+    /* ===== FIXED WALLPAPER (same AJ2.jpg, untouched) ===== */
+    .wallpaper {
+      position: fixed;
+      top: 0; left: 0;
+      width: 100%; height: 100%;
+      background-image: url('AJ2.jpg');
+      background-size: cover;
+      background-position: center;
+      background-repeat: no-repeat;
+      background-color: black;
+      z-index: -2;
+    }
+
+    .wallpaper::after {
+      content: '';
+      position: absolute;
+      inset: 0;
+      background: linear-gradient(180deg, rgba(0,0,0,0.6) 0%, rgba(0,0,0,0.35) 22%, rgba(0,0,0,0.65) 100%);
+      z-index: -1;
+    }
+
+    nav {
+      display: flex;
+      justify-content: space-between;
+      align-items: center;
+      padding: 15px 40px;
+      background: rgba(0, 0, 0, 0.5);
+      position: sticky;
+      top: 0;
+      z-index: 500;
+      backdrop-filter: blur(10px);
+    }
+
+    .logo { font-size: 1.5em; margin: 0; }
+    nav ul { list-style: none; display: flex; gap: 20px; margin: 0; padding: 0; }
+    nav a { color: white; text-decoration: none; font-weight: bold; transition: opacity 0.25s ease; }
+    nav a:hover { opacity: 0.75; }
+    nav a.active { text-decoration: underline; }
+
+    @keyframes fadeInUp {
+      from { opacity: 0; transform: translateY(28px); }
+      to   { opacity: 1; transform: translateY(0); }
+    }
+
+    /* ===== HERO ===== */
+    .contact-hero {
       text-align: center;
+      padding: 150px 20px 70px;
     }
 
-    .contact h2 {
-      font-size: 2em;
-      margin-bottom: 30px;
-    }
-
-    .contact p {
-      font-size: 1.2em;
+    .contact-hero .eyebrow {
+      letter-spacing: 4px;
+      text-transform: uppercase;
+      font-size: 0.8em;
+      color: #ffcc00;
       margin-bottom: 16px;
+      opacity: 0;
+      animation: fadeInUp 1s ease forwards 0.1s;
     }
 
-    .contact a {
+    .contact-hero h2 {
+      font-size: 2.8em;
+      margin-bottom: 18px;
+      text-shadow: 0 4px 20px rgba(0,0,0,0.6);
+      opacity: 0;
+      animation: fadeInUp 1s ease forwards 0.3s;
+    }
+
+    .contact-hero p {
+      font-size: 1.15em;
+      max-width: 620px;
+      margin: 0 auto;
+      line-height: 1.75;
+      color: rgba(255,255,255,0.9);
+      opacity: 0;
+      animation: fadeInUp 1s ease forwards 0.5s;
+    }
+
+    /* ===== GENERIC SECTION ===== */
+    .story-section {
+      padding: 90px 24px;
+      max-width: 1000px;
+      margin: 0 auto;
+    }
+
+    .story-section .section-inner {
+      opacity: 0;
+      transform: translateY(40px);
+      transition: opacity 0.9s ease, transform 0.9s ease;
+    }
+
+    .story-section.visible .section-inner {
+      opacity: 1;
+      transform: translateY(0);
+    }
+
+    .story-section .eyebrow {
+      letter-spacing: 3px;
+      text-transform: uppercase;
+      font-size: 0.75em;
+      color: #ffcc00;
+      display: block;
+      text-align: center;
+      margin-bottom: 12px;
+    }
+
+    .story-section h3 {
+      font-size: 2.1em;
+      text-align: center;
+      margin: 0 0 30px;
+      text-shadow: 0 4px 18px rgba(0,0,0,0.5);
+    }
+
+    .story-section .lead {
+      text-align: center;
+      max-width: 680px;
+      margin: 0 auto 10px;
+      font-size: 1.05em;
+      line-height: 1.75;
+      color: rgba(255,255,255,0.86);
+    }
+
+    /* Contact cards */
+    .card-grid {
+      display: grid;
+      grid-template-columns: repeat(auto-fit, minmax(220px, 1fr));
+      gap: 22px;
+      margin-top: 10px;
+    }
+
+    .glass-card {
+      background: rgba(255,255,255,0.07);
+      border: 1px solid rgba(255,255,255,0.15);
+      border-radius: 18px;
+      padding: 30px 24px;
+      text-align: center;
+      backdrop-filter: blur(16px);
+      -webkit-backdrop-filter: blur(16px);
+      box-shadow: 0 8px 32px rgba(0,0,0,0.25);
+      transition: transform 0.4s ease, border-color 0.4s ease, box-shadow 0.4s ease;
+    }
+
+    .glass-card:hover {
+      transform: translateY(-8px);
+      border-color: rgba(255,204,0,0.5);
+      box-shadow: 0 16px 40px rgba(0,0,0,0.4);
+    }
+
+    .glass-card .icon { font-size: 2em; margin-bottom: 12px; }
+    .glass-card h4 { margin: 0 0 12px; color: #ffcc00; font-size: 1.05em; }
+
+    .glass-card a, .glass-card p {
       color: #ff9a9e;
       text-decoration: none;
       font-weight: bold;
+      word-break: break-word;
     }
 
-    .contact a:hover {
-      text-decoration: underline;
+    .glass-card a:hover { text-decoration: underline; }
+
+    /* Why reach out */
+    .reason-grid {
+      display: grid;
+      grid-template-columns: repeat(auto-fit, minmax(180px, 1fr));
+      gap: 18px;
+      margin-top: 10px;
+    }
+
+    .reason-card {
+      background: rgba(255,255,255,0.06);
+      border: 1px solid rgba(255,255,255,0.14);
+      border-radius: 14px;
+      padding: 20px 16px;
+      text-align: center;
+      font-size: 0.95em;
+      color: rgba(255,255,255,0.88);
+      transition: transform 0.3s ease, border-color 0.3s ease;
+    }
+
+    .reason-card:hover {
+      transform: translateY(-4px);
+      border-color: rgba(255,204,0,0.5);
+    }
+
+    /* Availability */
+    .availability-list {
+      list-style: none;
+      padding: 0;
+      margin: 30px auto 0;
+      max-width: 420px;
+      display: grid;
+      gap: 14px;
+    }
+
+    .availability-list li {
+      background: rgba(255,255,255,0.06);
+      border: 1px solid rgba(255,255,255,0.14);
+      border-radius: 12px;
+      padding: 14px 20px;
+      font-size: 1em;
+    }
+
+    .availability-list li::before {
+      content: '✓ ';
+      color: #ffcc00;
+      font-weight: bold;
+    }
+
+    /* Response time */
+    .response-panel {
+      background: rgba(255,255,255,0.07);
+      border: 1px solid rgba(255,255,255,0.15);
+      border-radius: 18px;
+      padding: 30px;
+      text-align: center;
+      max-width: 560px;
+      margin: 20px auto 0;
+      backdrop-filter: blur(14px);
+    }
+
+    /* Instagram follow */
+    .insta-panel {
+      text-align: center;
+    }
+
+    .insta-icon {
+      font-size: 3em;
+      margin-bottom: 14px;
+      display: inline-block;
+      animation: pulseGlow 3s ease-in-out infinite;
+    }
+
+    @keyframes pulseGlow {
+      0%, 100% { text-shadow: 0 0 16px rgba(255,204,0,0.4); }
+      50% { text-shadow: 0 0 28px rgba(255,204,0,0.75); }
+    }
+
+    .insta-link {
+      display: inline-block;
+      margin-top: 18px;
+      color: #ff9a9e;
+      font-weight: bold;
+      font-size: 1.15em;
+      text-decoration: none;
+    }
+
+    .insta-link:hover { text-decoration: underline; }
+
+    /* Artistic quote */
+    .big-quote {
+      text-align: center;
+      padding: 60px 24px;
+    }
+
+    .big-quote p {
+      font-size: 1.8em;
+      font-style: italic;
+      max-width: 720px;
+      margin: 0 auto;
+      line-height: 1.5;
+      text-shadow: 0 4px 20px rgba(0,0,0,0.5);
+    }
+
+    /* Final section */
+    .final-section {
+      text-align: center;
+      padding-bottom: 160px;
+    }
+
+    .final-section .thanks {
+      font-size: 1.2em;
+      margin-bottom: 30px;
+      color: rgba(255,255,255,0.92);
+    }
+
+    .btn-row {
+      display: flex;
+      gap: 18px;
+      justify-content: center;
+      flex-wrap: wrap;
+    }
+
+    .cta-btn, .cta-btn-outline {
+      display: inline-block;
+      padding: 13px 30px;
+      border-radius: 30px;
+      text-decoration: none;
+      font-weight: bold;
+      transition: transform 0.35s ease, box-shadow 0.35s ease, background 0.35s ease, color 0.35s ease;
+    }
+
+    .cta-btn {
+      background: #ffcc00;
+      color: black;
+      box-shadow: 0 8px 26px rgba(255,204,0,0.35);
+    }
+
+    .cta-btn:hover {
+      transform: translateY(-3px) scale(1.03);
+      box-shadow: 0 12px 32px rgba(255,204,0,0.5);
+    }
+
+    .cta-btn-outline {
+      background: rgba(255,255,255,0.1);
+      color: white;
+      border: 1px solid rgba(255,255,255,0.3);
+      backdrop-filter: blur(12px);
+    }
+
+    .cta-btn-outline:hover {
+      background: #ffcc00;
+      color: black;
+      border-color: #ffcc00;
+      transform: translateY(-3px) scale(1.03);
+    }
+
+    footer {
+      text-align: center;
+      padding: 20px;
+      background: rgba(0,0,0,0.6);
+      backdrop-filter: blur(6px);
+    }
+
+    @media (max-width: 600px) {
+      .contact-hero h2 { font-size: 2.1em; }
+      .story-section h3 { font-size: 1.6em; }
+      nav { padding: 14px 18px; flex-wrap: wrap; gap: 10px; }
     }
   </style>
 </head>
 
-<body style="
-  background-image: url('AJ2.jpg');
-  background-size: cover;
-  background-position: center;
-  background-repeat: no-repeat;
-  background-attachment: fixed;
-  background-color: black;
-">
+<body>
+
+<div class="wallpaper"></div>
 
 <nav>
   <h1 class="logo"> Art by alafi jonathan(A-Jonah)</h1>
@@ -53,15 +362,126 @@
   </ul>
 </nav>
 
-<section class="contact">
-  <h2>Contact Me</h2>
-  <p>Email: <a href="mailto:muhwezipetros@gmail.com">jonathanalafi@gmail.com OR muhwezipetros@gmail.com</a></p>
-  <p>Instagram: <a href="https://www.instagram.com/alafi_jonathan_vuciri" target="_blank">@alafi_jonathan_vuciri</a></p>
+<!-- Hero -->
+<section class="contact-hero">
+  <span class="eyebrow">Get In Touch</span>
+  <h2>Let's Connect</h2>
+  <p>Whether it's a collaboration, a question, or simply a conversation about art — I'd love to hear from you.</p>
+</section>
+
+<!-- Contact Cards -->
+<section class="story-section" data-reveal>
+  <div class="section-inner">
+    <span class="eyebrow">Reach Me Directly</span>
+    <h3>Contact Details</h3>
+    <div class="card-grid">
+      <div class="glass-card">
+        <div class="icon">📧</div>
+        <h4>Email</h4>
+        <a href="mailto:muhwezipetros@gmail.com">muhwezipetros@gmail.com</a>
+      </div>
+      <div class="glass-card">
+        <div class="icon">📷</div>
+        <h4>Instagram</h4>
+        <a href="https://www.instagram.com/alafi_jonathan_vuciri" target="_blank">@alafi_jonathan_vuciri</a>
+      </div>
+      <div class="glass-card">
+        <div class="icon">🌐</div>
+        <h4>More Platforms</h4>
+        <p style="color: rgba(255,255,255,0.6); font-weight: normal;">Coming soon</p>
+      </div>
+    </div>
+  </div>
+</section>
+
+<!-- Why Reach Out -->
+<section class="story-section" data-reveal>
+  <div class="section-inner">
+    <span class="eyebrow">Let's Talk About</span>
+    <h3>Why Reach Out?</h3>
+    <div class="reason-grid">
+      <div class="reason-card">Collaborations</div>
+      <div class="reason-card">Exhibitions</div>
+      <div class="reason-card">Creative Conversations</div>
+      <div class="reason-card">Art Discussions</div>
+      <div class="reason-card">Media Enquiries</div>
+      <div class="reason-card">Networking</div>
+    </div>
+  </div>
+</section>
+
+<!-- Availability -->
+<section class="story-section" data-reveal>
+  <div class="section-inner" style="text-align:center;">
+    <span class="eyebrow">Open To</span>
+    <h3>Availability</h3>
+    <p class="lead">Currently available for:</p>
+    <ul class="availability-list">
+      <li>Collaborations</li>
+      <li>Exhibitions</li>
+      <li>Creative Projects</li>
+      <li>Creative Conversations</li>
+    </ul>
+  </div>
+</section>
+
+<!-- Response Time -->
+<section class="story-section" data-reveal>
+  <div class="section-inner" style="text-align:center;">
+    <span class="eyebrow">What to Expect</span>
+    <h3>Response Time</h3>
+    <div class="response-panel">
+      <p style="margin:0; font-size:1.1em; color: rgba(255,255,255,0.9);">I usually respond within 24–48 hours. Thank you for your patience while I balance the studio and the inbox.</p>
+    </div>
+  </div>
+</section>
+
+<!-- Follow the Journey -->
+<section class="story-section" data-reveal>
+  <div class="section-inner insta-panel">
+    <span class="eyebrow">Stay Connected</span>
+    <h3>Follow the Journey</h3>
+    <div class="insta-icon">📷</div>
+    <p class="lead">New work, behind-the-scenes moments, and the process in between — follow along on Instagram.</p>
+    <a href="https://www.instagram.com/alafi_jonathan_vuciri" target="_blank" class="insta-link">@alafi_jonathan_vuciri →</a>
+  </div>
+</section>
+
+<!-- Artistic Quote -->
+<section class="big-quote" data-reveal>
+  <div class="section-inner">
+    <p>"Every masterpiece begins with a single idea, and every meaningful connection begins with a simple hello."</p>
+  </div>
+</section>
+
+<!-- Final Section -->
+<section class="story-section final-section" data-reveal>
+  <div class="section-inner">
+    <p class="thanks">Thank you for visiting my artistic world.</p>
+    <div class="btn-row">
+      <a href="gallery.html" class="cta-btn">Visit the Gallery</a>
+      <a href="about.html" class="cta-btn-outline">About the Artist</a>
+    </div>
+  </div>
 </section>
 
 <footer>
   © 2026 Alafi jonathan arts | All Rights Reserved
 </footer>
 
+<script>
+  const revealTargets = document.querySelectorAll('[data-reveal]');
+  const revealObserver = new IntersectionObserver((entries) => {
+    entries.forEach(entry => {
+      if (entry.isIntersecting) {
+        entry.target.classList.add('visible');
+        revealObserver.unobserve(entry.target);
+      }
+    });
+  }, { threshold: 0.15 });
+  revealTargets.forEach(el => revealObserver.observe(el));
+</script>
+
 </body>
 </html>
+
