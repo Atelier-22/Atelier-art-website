@@ -13,7 +13,7 @@
 // ============================================================
 
 import {
-  ensureGuestAuth, watchAuth, isOwner, slugId,
+  ensureGuestAuth, slugId,
   watchLikeCount, likeArtwork, getLikedIds,
   watchComments, addComment, watchCategoryArtworks
 } from "./firebase-config.js";
@@ -30,7 +30,6 @@ function getCategory() {
 const CATEGORY = getCategory();
 
 let currentUser = null;
-let currentIsOwner = false;
 
 function escapeHtml(str) {
   const d = document.createElement('div');
@@ -64,9 +63,13 @@ function buildCard(img, forcedArtId) {
       <span class="heart">🤍</span> <span class="like-count">0</span>
     </button>
     <button class="comment-toggle" type="button">💬 Comments</button>
-    <a class="owner-dl-btn" download style="display:none;">⬇ Download</a>
   `;
   card.appendChild(actions);
+
+  const errorEl = document.createElement('div');
+  errorEl.className = 'social-error';
+  errorEl.style.cssText = 'display:none; color:#ff8080; font-size:0.8em; text-align:center; padding:4px 10px 0;';
+  card.appendChild(errorEl);
 
   const panel = document.createElement('div');
   panel.className = 'comments-panel';
@@ -84,13 +87,20 @@ function buildCard(img, forcedArtId) {
   return { card, img, artId };
 }
 
+function showError(errorEl, message) {
+  errorEl.textContent = message;
+  errorEl.style.display = 'block';
+  clearTimeout(errorEl._hideTimer);
+  errorEl._hideTimer = setTimeout(() => { errorEl.style.display = 'none'; }, 5000);
+}
+
 function wireCard({ card, img, artId }) {
   const actionsRoot = card.querySelector('.art-actions');
   const panelRoot = card.querySelector('.comments-panel');
+  const errorEl = card.querySelector('.social-error');
   const likeBtn = actionsRoot.querySelector('.like-btn');
   const heartEl = actionsRoot.querySelector('.heart');
   const likeCountEl = actionsRoot.querySelector('.like-count');
-  const dlBtn = actionsRoot.querySelector('.owner-dl-btn');
   const toggleBtn = actionsRoot.querySelector('.comment-toggle');
   const commentsList = panelRoot.querySelector('.comments-list');
   const form = panelRoot.querySelector('.comment-form');
@@ -105,9 +115,15 @@ function wireCard({ card, img, artId }) {
 
   likeBtn.addEventListener('click', async () => {
     likeBtn.disabled = true;
-    const ok = await likeArtwork(artId, CATEGORY, img.src);
-    if (ok) { likeBtn.classList.add('liked'); heartEl.textContent = '❤️'; }
-    else { likeBtn.disabled = false; }
+    try {
+      const ok = await likeArtwork(artId, CATEGORY, img.src);
+      if (ok) { likeBtn.classList.add('liked'); heartEl.textContent = '❤️'; }
+      else { likeBtn.disabled = false; }
+    } catch (err) {
+      console.error('Like failed for', artId, err);
+      likeBtn.disabled = false;
+      showError(errorEl, "Couldn't save your like — please try again.");
+    }
   });
 
   toggleBtn.addEventListener('click', () => {
@@ -125,30 +141,20 @@ function wireCard({ card, img, artId }) {
     const nameEl = form.querySelector('.comment-name');
     const textEl = form.querySelector('.comment-text');
     if (!textEl.value.trim()) return;
-    await addComment(artId, nameEl.value, textEl.value, currentUser ? currentUser.uid : null);
-    textEl.value = '';
+    const submitBtn = form.querySelector('button[type="submit"]');
+    submitBtn.disabled = true;
+    try {
+      await addComment(artId, nameEl.value, textEl.value, currentUser ? currentUser.uid : null);
+      textEl.value = '';
+    } catch (err) {
+      console.error('Comment failed for', artId, err);
+      showError(errorEl, "Couldn't post your comment — please try again.");
+    } finally {
+      submitBtn.disabled = false;
+    }
   });
 
-  refreshOwnerButton(dlBtn, img);
   card.dataset.artId = artId;
-}
-
-function refreshOwnerButton(dlBtn, img) {
-  if (currentIsOwner) {
-    dlBtn.style.display = 'inline-block';
-    dlBtn.href = img.src;
-    dlBtn.download = img.alt || 'artwork';
-  } else {
-    dlBtn.style.display = 'none';
-  }
-}
-
-function refreshAllOwnerButtons() {
-  document.querySelectorAll('.art-card').forEach(card => {
-    const img = card.querySelector('img');
-    const dlBtn = card.querySelector('.owner-dl-btn');
-    if (img && dlBtn) refreshOwnerButton(dlBtn, img);
-  });
 }
 
 function enhanceExistingImages() {
@@ -180,14 +186,8 @@ function renderUploadedArtworks(items) {
 }
 
 document.addEventListener('DOMContentLoaded', async () => {
-  await ensureGuestAuth();
+  currentUser = await ensureGuestAuth();
   enhanceExistingImages();
-
-  watchAuth((user) => {
-    currentUser = user;
-    currentIsOwner = isOwner(user);
-    refreshAllOwnerButtons();
-  });
-
   watchCategoryArtworks(CATEGORY, renderUploadedArtworks);
 });
+
