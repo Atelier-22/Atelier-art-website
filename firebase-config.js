@@ -34,8 +34,8 @@ export const auth = getAuth(app);
 export const db = getFirestore(app);
 
 export const uploadsConfigured =
-  CLOUDINARY_CLOUD_NAME !== "PASTE_YOUR_CLOUD_NAME_HERE" &&
-  CLOUDINARY_UPLOAD_PRESET !== "PASTE_YOUR_UNSIGNED_PRESET_HERE";
+  CLOUDINARY_CLOUD_NAME !== "pmhpabd8" &&
+  CLOUDINARY_UPLOAD_PRESET !== "lpwbmgnq";
 
 async function uploadToCloudinary(file) {
   if (!uploadsConfigured) {
