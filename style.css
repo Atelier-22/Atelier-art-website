@@ -113,6 +113,15 @@ section {
   background: #ff758c;
 }
 
+.admin-link {
+  opacity: 0.55;
+  font-size: 0.9em;
+}
+
+.admin-link:hover {
+  opacity: 1;
+}
+
 /* ===== Footer ===== */
 footer {
   background: #111;
@@ -170,20 +179,6 @@ footer {
 .like-btn.liked {
   background: rgba(255, 90, 90, 0.25);
   border-color: rgba(255, 90, 90, 0.6);
-}
-
-.owner-dl-btn {
-  background: #ffcc00;
-  color: black;
-  padding: 6px 14px;
-  border-radius: 20px;
-  font-weight: bold;
-  font-size: 0.9em;
-  text-decoration: none;
-}
-
-.owner-dl-btn:hover {
-  background: #e6b800;
 }
 
 .comments-panel {
@@ -269,3 +264,4 @@ footer {
 .pswp__button--arrow--right:hover {
   opacity: 1;
 }
+
