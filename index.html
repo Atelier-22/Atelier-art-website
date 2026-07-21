@@ -6,15 +6,34 @@
   <title>Home | Alafi Art Work Website</title>
   <link rel="stylesheet" href="style.css">
   <style>
+    * { box-sizing: border-box; }
+
     body {
       margin: 0;
       font-family: Arial, sans-serif;
       color: white;
+      min-height: 100vh;
+      overflow-x: hidden;
+    }
+
+    /* ===== FIXED WALLPAPER LAYER (same background image, kept as-is) ===== */
+    .wallpaper {
+      position: fixed;
+      top: 0; left: 0;
+      width: 100%; height: 100%;
       background-image: url('1.jpg');
       background-size: cover;
       background-position: center;
       background-repeat: no-repeat;
-      min-height: 100vh;
+      z-index: -2;
+    }
+
+    .wallpaper::after {
+      content: '';
+      position: absolute;
+      inset: 0;
+      background: linear-gradient(180deg, rgba(0,0,0,0.55) 0%, rgba(0,0,0,0.35) 20%, rgba(0,0,0,0.6) 100%);
+      z-index: -1;
     }
 
     nav {
@@ -23,6 +42,10 @@
       align-items: center;
       padding: 15px 40px;
       background: rgba(0, 0, 0, 0.5);
+      position: sticky;
+      top: 0;
+      z-index: 500;
+      backdrop-filter: blur(10px);
     }
 
     .logo {
@@ -33,58 +56,308 @@
       list-style: none;
       display: flex;
       gap: 20px;
+      margin: 0;
+      padding: 0;
     }
 
     nav a {
       color: white;
       text-decoration: none;
       font-weight: bold;
+      transition: opacity 0.25s ease;
     }
+
+    nav a:hover { opacity: 0.75; }
 
     nav a.active {
       text-decoration: underline;
     }
 
+    /* ===== HERO ===== */
     .home {
       text-align: center;
-      padding: 150px 20px;
-      background: rgba(0, 0, 0, 0.4);
+      padding: 160px 20px 200px;
+      position: relative;
+    }
+
+    .home .eyebrow {
+      letter-spacing: 4px;
+      text-transform: uppercase;
+      font-size: 0.8em;
+      color: #ffcc00;
+      margin-bottom: 18px;
+      opacity: 0;
+      animation: fadeInUp 1s ease forwards 0.1s;
     }
 
     .home h2 {
-      font-size: 2.5em;
-      margin-bottom: 10px;
+      font-size: 3em;
+      margin-bottom: 18px;
+      text-shadow: 0 4px 20px rgba(0,0,0,0.6);
+      opacity: 0;
+      animation: fadeInUp 1s ease forwards 0.3s;
     }
 
     .home p {
-      font-size: 1.2em;
-      margin-bottom: 20px;
+      font-size: 1.25em;
+      margin-bottom: 40px;
+      max-width: 640px;
+      margin-left: auto;
+      margin-right: auto;
+      line-height: 1.6;
+      color: rgba(255,255,255,0.9);
+      opacity: 0;
+      animation: fadeInUp 1s ease forwards 0.5s;
     }
 
+    @keyframes fadeInUp {
+      from { opacity: 0; transform: translateY(24px); }
+      to   { opacity: 1; transform: translateY(0); }
+    }
+
+    /* ===== THE EXISTING GALLERY BUTTON (animated, never duplicated) ===== */
     .btn {
       display: inline-block;
       background: #ffcc00;
       color: black;
-      padding: 10px 20px;
+      padding: 14px 34px;
       text-decoration: none;
-      border-radius: 8px;
+      border-radius: 30px;
       font-weight: bold;
+      font-size: 1.05em;
+      opacity: 0;
+      animation: fadeInUp 1s ease forwards 0.7s;
+      transition: transform 0.35s cubic-bezier(.2,.8,.2,1),
+                  box-shadow 0.35s ease,
+                  background 0.35s ease,
+                  color 0.35s ease,
+                  border-color 0.35s ease;
+      box-shadow: 0 6px 24px rgba(255,204,0,0.35);
+      border: 1px solid transparent;
+    }
+
+    .btn:hover {
+      transform: translateY(-3px) scale(1.03);
+      box-shadow: 0 10px 30px rgba(255,204,0,0.5);
+    }
+
+    /* Floating "docked" state — same element, repositioned */
+    .btn.is-floating {
+      position: fixed;
+      z-index: 900;
+      animation: none;
+      opacity: 1;
+      padding: 10px 22px;
+      font-size: 0.9em;
+      background: rgba(255,255,255,0.12);
+      color: white;
+      border: 1px solid rgba(255,255,255,0.35);
+      backdrop-filter: blur(14px);
+      -webkit-backdrop-filter: blur(14px);
+      box-shadow: 0 8px 28px rgba(0,0,0,0.35), 0 0 22px rgba(255,204,0,0.35);
+    }
+
+    .btn.is-floating:hover {
+      background: #ffcc00;
+      color: black;
+      border-color: #ffcc00;
+      transform: translateY(-3px) scale(1.05);
+      box-shadow: 0 10px 30px rgba(255,204,0,0.55);
+    }
+
+    /* ===== SECTIONS ===== */
+    .story-section {
+      position: relative;
+      padding: 110px 24px;
+      max-width: 1100px;
+      margin: 0 auto;
+    }
+
+    .story-section .section-inner {
+      opacity: 0;
+      transform: translateY(40px);
+      transition: opacity 0.9s ease, transform 0.9s ease;
+    }
+
+    .story-section.visible .section-inner {
+      opacity: 1;
+      transform: translateY(0);
+    }
+
+    .story-section .eyebrow {
+      letter-spacing: 3px;
+      text-transform: uppercase;
+      font-size: 0.75em;
+      color: #ffcc00;
+      margin-bottom: 12px;
+      display: block;
+      text-align: center;
+    }
+
+    .story-section h3 {
+      font-size: 2.2em;
+      text-align: center;
+      margin: 0 0 20px;
+      text-shadow: 0 4px 18px rgba(0,0,0,0.5);
+    }
+
+    .story-section > .section-inner > p.lead {
+      text-align: center;
+      max-width: 720px;
+      margin: 0 auto 50px;
+      font-size: 1.1em;
+      line-height: 1.75;
+      color: rgba(255,255,255,0.85);
+    }
+
+    /* Glass card grid */
+    .card-grid {
+      display: grid;
+      grid-template-columns: repeat(auto-fit, minmax(240px, 1fr));
+      gap: 24px;
+    }
+
+    .glass-card {
+      background: rgba(255,255,255,0.07);
+      border: 1px solid rgba(255,255,255,0.15);
+      border-radius: 18px;
+      padding: 30px 24px;
+      backdrop-filter: blur(16px);
+      -webkit-backdrop-filter: blur(16px);
+      box-shadow: 0 8px 32px rgba(0,0,0,0.25);
+      transition: transform 0.4s ease, box-shadow 0.4s ease, border-color 0.4s ease;
+    }
+
+    .glass-card:hover {
+      transform: translateY(-8px);
+      border-color: rgba(255,204,0,0.5);
+      box-shadow: 0 16px 40px rgba(0,0,0,0.4);
+    }
+
+    .glass-card h4 {
+      margin: 0 0 12px;
+      font-size: 1.2em;
+      color: #ffcc00;
+    }
+
+    .glass-card p {
+      margin: 0;
+      font-size: 0.95em;
+      line-height: 1.6;
+      color: rgba(255,255,255,0.85);
+    }
+
+    /* Artwork preview strip */
+    .preview-strip {
+      display: grid;
+      grid-template-columns: repeat(auto-fit, minmax(180px, 1fr));
+      gap: 18px;
+    }
+
+    .preview-strip figure {
+      margin: 0;
+      border-radius: 14px;
+      overflow: hidden;
+      position: relative;
+      aspect-ratio: 1 / 1;
+      background: rgba(255,255,255,0.06);
+      border: 1px solid rgba(255,255,255,0.12);
+    }
+
+    .preview-strip img {
+      width: 100%;
+      height: 100%;
+      object-fit: cover;
+      display: block;
+      transition: transform 0.5s ease;
+    }
+
+    .preview-strip figure:hover img {
+      transform: scale(1.08);
+    }
+
+    .preview-strip figure.img-missing img { display: none; }
+    .preview-strip figure.img-missing::before {
+      content: attr(data-fallback);
+      position: absolute;
+      inset: 0;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      text-align: center;
+      padding: 14px;
+      font-size: 0.85em;
+      color: rgba(255,255,255,0.6);
+      background: linear-gradient(135deg, rgba(255,204,0,0.12), rgba(255,255,255,0.05));
+    }
+
+    /* Split layout (Meet the Artist) */
+    .split {
+      display: grid;
+      grid-template-columns: 1fr 1fr;
+      gap: 40px;
+      align-items: center;
+    }
+
+    @media (max-width: 720px) {
+      .split { grid-template-columns: 1fr; }
+    }
+
+    .split .portrait-frame {
+      aspect-ratio: 4 / 5;
+      border-radius: 20px;
+      overflow: hidden;
+      border: 1px solid rgba(255,255,255,0.15);
+      background: rgba(255,255,255,0.06);
+    }
+
+    .split .portrait-frame img {
+      width: 100%; height: 100%;
+      object-fit: cover;
+      display: block;
+    }
+
+    /* Final invitation */
+    .finale {
+      text-align: center;
+      padding: 140px 24px 220px;
+    }
+
+    .finale h3 {
+      font-size: 2.6em;
+      margin-bottom: 20px;
+      text-shadow: 0 4px 20px rgba(0,0,0,0.6);
+    }
+
+    .finale p {
+      max-width: 560px;
+      margin: 0 auto 10px;
+      color: rgba(255,255,255,0.85);
+      line-height: 1.7;
     }
 
     footer {
       text-align: center;
       padding: 20px;
-      background: rgba(0, 0, 0, 0.5);
+      background: rgba(0, 0, 0, 0.6);
       position: relative;
-      bottom: 0;
       width: 100%;
+      backdrop-filter: blur(6px);
+    }
+
+    @media (max-width: 600px) {
+      .home h2 { font-size: 2.1em; }
+      .story-section h3 { font-size: 1.6em; }
+      nav { padding: 14px 18px; flex-wrap: wrap; gap: 10px; }
     }
   </style>
 </head>
 <body>
 
+  <div class="wallpaper"></div>
+
   <nav>
-    <h1 class="logo"> Alafi Art Work Website</h1>
+    <h1 class="logo">🎨 Alafi Art Work Website</h1>
     <ul>
       <li><a href="index.html" class="active">Home</a></li>
       <li><a href="gallery.html">Gallery</a></li>
@@ -94,15 +367,302 @@
   </nav>
 
   <section class="home">
+    <span class="eyebrow">A Digital Exhibition</span>
     <h2>Welcome to Alafi Art Work</h2>
     <p>Discover a world of creativity through paintings, sketches, and digital art by A-Jonah.</p>
-    <a href="gallery.html" class="btn">Visit the Gallery</a>
+    <a href="gallery.html" class="btn" id="galleryBtn">Visit the Gallery</a>
+  </section>
+
+  <!-- Discover a World of Creativity -->
+  <section class="story-section" data-reveal>
+    <div class="section-inner">
+      <span class="eyebrow">The Journey Begins</span>
+      <h3>Discover a World of Creativity</h3>
+      <p class="lead">
+        Every piece here begins as a quiet idea and grows into something you can stand in
+        front of and feel. This is a space built for slow looking — scroll gently, and let
+        each collection introduce itself.
+      </p>
+      <div class="card-grid">
+        <div class="glass-card">
+          <h4>Paintings</h4>
+          <p>Color and texture layered into scenes that hold a mood long after you look away.</p>
+        </div>
+        <div class="glass-card">
+          <h4>Sketches</h4>
+          <p>Raw first impressions — the honest, unfiltered moment before a piece becomes finished.</p>
+        </div>
+        <div class="glass-card">
+          <h4>Digital Art</h4>
+          <p>Traditional technique reimagined through modern tools and light.</p>
+        </div>
+      </div>
+    </div>
+  </section>
+
+  <!-- Artistic Vision -->
+  <section class="story-section" data-reveal>
+    <div class="section-inner">
+      <span class="eyebrow">Philosophy</span>
+      <h3>Artistic Vision</h3>
+      <p class="lead">
+        Alafi's work moves between realism and imagination — grounded enough to feel familiar,
+        expressive enough to feel alive. Every collection is an invitation to see something
+        ordinary a little differently.
+      </p>
+    </div>
+  </section>
+
+  <!-- Featured Artwork -->
+  <section class="story-section" data-reveal>
+    <div class="section-inner">
+      <span class="eyebrow">A Closer Look</span>
+      <h3>Featured Artwork</h3>
+      <p class="lead">A glimpse of the collection waiting for you in the full gallery.</p>
+      <div class="preview-strip" id="featuredStrip">
+        <figure data-fallback="Painting Collection"><img src="artworks/paintings/painting1.jpg" alt="Featured painting"></figure>
+        <figure data-fallback="Digital Collection"><img src="artworks/digital/digital1.jpg" alt="Featured digital artwork"></figure>
+        <figure data-fallback="Sketch Collection"><img src="artworks/sketches/sketch1.jpg" alt="Featured sketch"></figure>
+        <figure data-fallback="Comics Collection"><img src="artworks/comics/comic1.jpg" alt="Featured comic art"></figure>
+      </div>
+    </div>
+  </section>
+
+  <!-- Portrait Collection -->
+  <section class="story-section" data-reveal>
+    <div class="section-inner">
+      <span class="eyebrow">Faces & Stories</span>
+      <h3>Portrait Collection</h3>
+      <p class="lead">Studies in expression — each portrait an attempt to capture a person mid-thought.</p>
+      <div class="preview-strip" id="portraitStrip">
+        <figure data-fallback="Portrait I"><img src="artworks/portrait1.jpg" alt="Portrait artwork 1"></figure>
+        <figure data-fallback="Portrait II"><img src="artworks/portrait2.jpg" alt="Portrait artwork 2"></figure>
+        <figure data-fallback="Portrait III"><img src="artworks/portrait3.jpg" alt="Portrait artwork 3"></figure>
+      </div>
+    </div>
+  </section>
+
+  <!-- Sculptures -->
+  <section class="story-section" data-reveal>
+    <div class="section-inner">
+      <span class="eyebrow">Form & Dimension</span>
+      <h3>Sculptures</h3>
+      <p class="lead">Where the work steps off the page — shape, weight, and presence explored in three dimensions.</p>
+      <div class="preview-strip" id="sculptureStrip">
+        <figure data-fallback="Sculpture I"><img src="artworks/sculptures/sculpture1.jpg" alt="Sculpture artwork 1"></figure>
+        <figure data-fallback="Sculpture II"><img src="artworks/sculptures/sculpture2.jpg" alt="Sculpture artwork 2"></figure>
+        <figure data-fallback="Sculpture III"><img src="artworks/sculptures/sculpture3.jpg" alt="Sculpture artwork 3"></figure>
+      </div>
+    </div>
+  </section>
+
+  <!-- Creative Process -->
+  <section class="story-section" data-reveal>
+    <div class="section-inner">
+      <span class="eyebrow">Behind the Work</span>
+      <h3>Creative Process</h3>
+      <div class="card-grid">
+        <div class="glass-card">
+          <h4>01 — Observe</h4>
+          <p>Every piece starts with noticing something worth holding onto.</p>
+        </div>
+        <div class="glass-card">
+          <h4>02 — Sketch</h4>
+          <p>Rough lines find the shape of the idea before color enters the picture.</p>
+        </div>
+        <div class="glass-card">
+          <h4>03 — Refine</h4>
+          <p>Layers of detail, light, and texture bring the piece to life.</p>
+        </div>
+      </div>
+    </div>
+  </section>
+
+  <!-- Inspiration -->
+  <section class="story-section" data-reveal>
+    <div class="section-inner">
+      <span class="eyebrow">Where It Comes From</span>
+      <h3>Inspiration</h3>
+      <p class="lead">
+        Culture, imagination, everyday people, and quiet moments — inspiration rarely announces
+        itself. It's found, then followed until it becomes something worth sharing.
+      </p>
+    </div>
+  </section>
+
+  <!-- Why Art Matters -->
+  <section class="story-section" data-reveal>
+    <div class="section-inner">
+      <span class="eyebrow">The Bigger Picture</span>
+      <h3>Why Art Matters</h3>
+      <p class="lead">
+        Art holds what words often can't. It slows people down, sparks conversation, and gives
+        shape to feelings we don't always have language for. That's the experience this gallery
+        hopes to offer, one piece at a time.
+      </p>
+    </div>
+  </section>
+
+  <!-- Meet the Artist -->
+  <section class="story-section" data-reveal>
+    <div class="section-inner">
+      <span class="eyebrow">The Person Behind the Work</span>
+      <h3>Meet the Artist</h3>
+      <div class="split">
+        <div class="portrait-frame">
+          <img src="AJ1.jpg" alt="Alafi Jonathan" onerror="this.closest('.portrait-frame').style.background='linear-gradient(135deg, rgba(255,204,0,0.15), rgba(255,255,255,0.05))'; this.remove();">
+        </div>
+        <div>
+          <p class="lead" style="text-align:left; margin:0;">
+            Alafi Jonathan is an artist working across painting, sketching, digital art, and
+            sculpture — driven by curiosity and a love of storytelling through color and form.
+            Every collection here reflects a continuing exploration of craftsmanship and
+            expression.
+          </p>
+          <a href="about.html" class="btn" style="margin-top:26px; animation:none; opacity:1;">Read the Full Story</a>
+        </div>
+      </div>
+    </div>
+  </section>
+
+  <!-- Gallery Preview -->
+  <section class="story-section" data-reveal>
+    <div class="section-inner">
+      <span class="eyebrow">Almost There</span>
+      <h3>Gallery Preview</h3>
+      <p class="lead">Paintings, sketches, digital art, sculptures, comics, portraits, and graphics — the full collection is one click away.</p>
+      <div class="card-grid">
+        <div class="glass-card"><h4>Paintings</h4><p>Color, mood, and light.</p></div>
+        <div class="glass-card"><h4>Digital Art</h4><p>Craft meets modern tools.</p></div>
+        <div class="glass-card"><h4>Sculptures</h4><p>Presence in three dimensions.</p></div>
+        <div class="glass-card"><h4>Portraits</h4><p>Faces, captured mid-thought.</p></div>
+      </div>
+    </div>
+  </section>
+
+  <!-- Final invitation -->
+  <section class="finale" data-reveal>
+    <div class="section-inner">
+      <span class="eyebrow">Your Journey Starts Here</span>
+      <h3>Step Into the Gallery</h3>
+      <p>Every collection is waiting — take your time, explore freely, and experience the work up close.</p>
+    </div>
   </section>
 
   <footer>
     © 2026 Alafi Art Work | All Rights Reserved
   </footer>
 
+  <script>
+    // ===== Reveal sections on scroll =====
+    const revealTargets = document.querySelectorAll('[data-reveal]');
+    const revealObserver = new IntersectionObserver((entries) => {
+      entries.forEach(entry => {
+        if (entry.isIntersecting) {
+          entry.target.classList.add('visible');
+          revealObserver.unobserve(entry.target);
+        }
+      });
+    }, { threshold: 0.15 });
+    revealTargets.forEach(el => revealObserver.observe(el));
+
+    // ===== Hide any preview image that fails to load, gracefully =====
+    document.querySelectorAll('.preview-strip img').forEach(img => {
+      img.addEventListener('error', () => {
+        img.closest('figure').classList.add('img-missing');
+      }, { once: true });
+    });
+
+    // ===== Animate the existing "Visit the Gallery" hero button into a
+    // floating glass button in the bottom-right corner as the visitor
+    // scrolls past the hero. Same element throughout — never duplicated. =====
+    (function animateGalleryButton() {
+      const btn = document.getElementById('galleryBtn');
+      const hero = document.querySelector('.home');
+      if (!btn || !hero) return;
+
+      let floating = false;
+      let placeholder = null;
+
+      function goFloating() {
+        if (floating) return;
+        floating = true;
+
+        // FLIP: capture current position before moving to fixed
+        const startRect = btn.getBoundingClientRect();
+
+        // Preserve layout space in the hero so nothing jumps
+        placeholder = document.createElement('span');
+        placeholder.style.display = 'inline-block';
+        placeholder.style.width = startRect.width + 'px';
+        placeholder.style.height = startRect.height + 'px';
+        btn.parentNode.insertBefore(placeholder, btn);
+
+        btn.classList.add('is-floating');
+        btn.style.top = startRect.top + 'px';
+        btn.style.left = startRect.left + 'px';
+        btn.style.right = 'auto';
+        btn.style.bottom = 'auto';
+        btn.style.margin = '0';
+        // force reflow so the browser registers the start position first
+        void btn.offsetWidth;
+
+        requestAnimationFrame(() => {
+          btn.style.top = '';
+          btn.style.left = '';
+          btn.style.right = '28px';
+          btn.style.bottom = '28px';
+        });
+      }
+
+      function goHero() {
+        if (!floating) return;
+        floating = false;
+
+        const targetRect = placeholder ? placeholder.getBoundingClientRect() : null;
+        if (targetRect) {
+          btn.style.right = 'auto';
+          btn.style.bottom = 'auto';
+          btn.style.top = targetRect.top + 'px';
+          btn.style.left = targetRect.left + 'px';
+        }
+
+        setTimeout(() => {
+          btn.classList.remove('is-floating');
+          btn.style.top = '';
+          btn.style.left = '';
+          btn.style.right = '';
+          btn.style.bottom = '';
+          btn.style.margin = '';
+          if (placeholder && placeholder.parentNode) {
+            placeholder.parentNode.removeChild(placeholder);
+            placeholder = null;
+          }
+        }, 380);
+      }
+
+      function onScroll() {
+        const heroBottom = hero.getBoundingClientRect().bottom;
+        if (heroBottom < 80) {
+          goFloating();
+        } else {
+          goHero();
+        }
+      }
+
+      window.addEventListener('scroll', onScroll, { passive: true });
+      onScroll();
+    })();
+
+    // ===== Subtle parallax on the fixed wallpaper (very light touch) =====
+    const wallpaper = document.querySelector('.wallpaper');
+    window.addEventListener('scroll', () => {
+      const y = window.scrollY * 0.04;
+      wallpaper.style.transform = 'translateY(' + Math.min(y, 40) + 'px)';
+    }, { passive: true });
+  </script>
+
 </body>
 </html>
+
 
