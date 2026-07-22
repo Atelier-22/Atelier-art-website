@@ -39,3 +39,29 @@ export function watchTotalComments(callback, onError) {
     if (onError) onError(err);
   });
 }
+// Same collection-group query as above, but returns the full
+// comment data (name, text, which artwork) instead of just a
+// count — used for the clickable "view all comments" list.
+export function watchAllComments(callback, onError) {
+  return onSnapshot(collectionGroup(db, "comments"), (snap) => {
+    const items = snap.docs.map((docSnap) => {
+      const data = docSnap.data();
+      const artId = docSnap.ref.parent.parent
+        ? docSnap.ref.parent.parent.id
+        : "unknown";
+      return {
+        id: docSnap.id,
+        artId,
+        name: data.name || "Guest",
+        text: data.text || "",
+        createdAt: (data.createdAt && data.createdAt.toMillis)
+          ? data.createdAt.toMillis() : 0
+      };
+    });
+    items.sort((a, b) => b.createdAt - a.createdAt); // newest first
+    callback(items);
+  }, (err) => {
+    console.error("watchAllComments error:", err);
+    if (onError) onError(err);
+  });
+}
