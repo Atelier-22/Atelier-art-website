@@ -264,4 +264,10 @@ footer {
 .pswp__button--arrow--right:hover {
   opacity: 1;
 }
+.comment-count-badge {
+  margin-left: 6px;
+  font-size: 0.85em;
+  opacity: 0.85;
+}
+
 
