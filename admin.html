@@ -516,6 +516,30 @@
   }
 </script>
 
+<!-- Added: wires up the site-wide totals cards above. Fully separate
+     from the script block above — that one is untouched. -->
+<script type="module">
+  import { watchAuth, isOwner } from './firebase-config.js';
+  import { watchTotalLikes, watchTotalComments } from './admin-stats.js';
+
+  let totalsStarted = false;
+
+  watchAuth((user) => {
+    if (isOwner(user) && !totalsStarted) {
+      totalsStarted = true;
+
+      watchTotalLikes((total) => {
+        document.getElementById('total-likes-num').textContent = total;
+      });
+
+      watchTotalComments((total) => {
+        document.getElementById('total-comments-num').textContent = total;
+      }, () => {
+        document.getElementById('total-comments-num').textContent = '—';
+      });
+    }
+  });
+</script>
+
 </body>
 </html>
-
