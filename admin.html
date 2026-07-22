@@ -6,11 +6,20 @@
   <title>Admin | Alafi Art Work</title>
   <style>
     * { margin: 0; padding: 0; box-sizing: border-box; }
+
+    /* ===== Dynamic blue / yellow / green animated background ===== */
     body {
-      font-family: Arial, sans-serif;
-      background: #0d0d0d;
+      font-family: 'Poppins', Arial, sans-serif;
       color: white;
       min-height: 100vh;
+      background: linear-gradient(120deg, #0f2b52, #1c3d2e, #4a3907, #12283f, #1c3d2e);
+      background-size: 400% 400%;
+      animation: gradientFlow 22s ease infinite;
+    }
+    @keyframes gradientFlow {
+      0%   { background-position: 0% 50%; }
+      50%  { background-position: 100% 50%; }
+      100% { background-position: 0% 50%; }
     }
 
     /* ---- Login Screen ---- */
@@ -19,45 +28,52 @@
       align-items: center;
       justify-content: center;
       min-height: 100vh;
-      background: #0d0d0d;
+      background: transparent;
     }
     #login-box {
-      background: rgba(255,255,255,0.06);
-      border: 1px solid rgba(255,255,255,0.15);
-      border-radius: 16px;
-      padding: 40px 36px;
+      background: rgba(255,255,255,0.08);
+      border: 1px solid rgba(255,255,255,0.18);
+      border-radius: 20px;
+      padding: 44px 38px;
       width: 100%;
       max-width: 380px;
       text-align: center;
+      backdrop-filter: blur(18px);
+      -webkit-backdrop-filter: blur(18px);
+      box-shadow: 0 12px 40px rgba(0,0,0,0.35);
     }
     #login-box h1 { font-size: 1.8em; margin-bottom: 6px; }
-    #login-box p { color: #888; margin-bottom: 28px; font-size: 0.95em; }
+    #login-box p { color: rgba(255,255,255,0.65); margin-bottom: 28px; font-size: 0.95em; }
     #login-box input {
       width: 100%;
       padding: 13px 16px;
-      border-radius: 8px;
-      border: 1px solid rgba(255,255,255,0.2);
-      background: rgba(255,255,255,0.07);
+      border-radius: 10px;
+      border: 1px solid rgba(255,255,255,0.25);
+      background: rgba(255,255,255,0.08);
       color: white;
       font-size: 1em;
       margin-bottom: 14px;
       outline: none;
+      transition: border-color 0.3s ease, background 0.3s ease;
     }
-    #login-box input:focus { border-color: #ffcc00; }
+    #login-box input:focus { border-color: #ffcc00; background: rgba(255,255,255,0.12); }
     #login-btn {
       width: 100%;
       padding: 13px;
-      background: #ffcc00;
+      background: rgba(255,204,0,0.9);
+      backdrop-filter: blur(6px);
       color: black;
       border: none;
-      border-radius: 8px;
+      border-radius: 10px;
       font-weight: bold;
       font-size: 1em;
       cursor: pointer;
+      transition: transform 0.3s ease, box-shadow 0.3s ease, background 0.3s ease;
+      box-shadow: 0 6px 20px rgba(255,204,0,0.3);
     }
-    #login-btn:hover { background: #e6b800; }
+    #login-btn:hover { background: #ffcc00; transform: translateY(-2px); box-shadow: 0 10px 26px rgba(255,204,0,0.45); }
     #login-error {
-      color: #ff6b6b;
+      color: #ff8080;
       font-size: 0.9em;
       margin-top: 12px;
       display: none;
@@ -67,41 +83,52 @@
     #dashboard { display: none; }
 
     header {
-      background: #111;
+      background: rgba(0,0,0,0.3);
+      backdrop-filter: blur(14px);
+      -webkit-backdrop-filter: blur(14px);
       padding: 16px 30px;
       display: flex;
       justify-content: space-between;
       align-items: center;
-      border-bottom: 1px solid #222;
+      border-bottom: 1px solid rgba(255,255,255,0.1);
+      position: sticky;
+      top: 0;
+      z-index: 50;
     }
     header h1 { font-size: 1.2em; color: #ffcc00; }
     .header-links { display: flex; gap: 14px; align-items: center; }
     .header-links a {
-      color: #aaa;
+      color: rgba(255,255,255,0.7);
       text-decoration: none;
       font-size: 0.9em;
+      transition: color 0.25s ease;
     }
-    .header-links a:hover { color: white; }
+    .header-links a:hover { color: #7fd1a3; }
     #logout-btn {
       background: rgba(255,255,255,0.1);
-      border: 1px solid rgba(255,255,255,0.2);
+      border: 1px solid rgba(255,255,255,0.25);
       color: white;
       padding: 7px 16px;
-      border-radius: 8px;
+      border-radius: 20px;
       cursor: pointer;
       font-size: 0.9em;
+      backdrop-filter: blur(8px);
+      transition: background 0.3s ease, transform 0.3s ease, border-color 0.3s ease;
     }
-    #logout-btn:hover { background: rgba(255,255,255,0.2); }
+    #logout-btn:hover { background: rgba(255,120,120,0.25); border-color: rgba(255,120,120,0.5); transform: translateY(-1px); }
 
     main { padding: 30px; max-width: 960px; margin: 0 auto; }
 
     /* Upload section */
     .upload-card {
-      background: rgba(255,255,255,0.04);
-      border: 1px solid rgba(255,255,255,0.1);
-      border-radius: 14px;
+      background: rgba(255,255,255,0.06);
+      border: 1px solid rgba(255,255,255,0.15);
+      border-radius: 18px;
       padding: 28px;
       margin-bottom: 30px;
+      backdrop-filter: blur(16px);
+      -webkit-backdrop-filter: blur(16px);
+      box-shadow: 0 8px 32px rgba(0,0,0,0.25);
     }
     .upload-card h2 { color: #ffcc00; margin-bottom: 20px; font-size: 1.1em; }
 
@@ -114,38 +141,44 @@
     }
     .upload-row select {
       padding: 11px 14px;
-      border-radius: 8px;
-      border: 1px solid rgba(255,255,255,0.2);
-      background: rgba(255,255,255,0.07);
+      border-radius: 10px;
+      border: 1px solid rgba(255,255,255,0.25);
+      background: rgba(255,255,255,0.08);
       color: white;
       font-size: 0.95em;
       flex: 1;
       min-width: 160px;
+      backdrop-filter: blur(6px);
     }
     .choose-label {
-      background: #ffcc00;
-      color: black;
+      background: rgba(90,160,255,0.25);
+      border: 1px solid rgba(90,160,255,0.45);
+      color: white;
       padding: 11px 22px;
-      border-radius: 8px;
+      border-radius: 10px;
       cursor: pointer;
       font-weight: bold;
       font-size: 0.95em;
       white-space: nowrap;
+      backdrop-filter: blur(8px);
+      transition: background 0.3s ease, transform 0.3s ease;
     }
-    .choose-label:hover { background: #e6b800; }
+    .choose-label:hover { background: rgba(90,160,255,0.4); transform: translateY(-2px); }
     #admin-file-input { display: none; }
     #do-upload-btn {
       padding: 11px 22px;
-      background: #28a745;
+      background: rgba(80,200,140,0.25);
+      border: 1px solid rgba(80,200,140,0.5);
       color: white;
-      border: none;
-      border-radius: 8px;
+      border-radius: 10px;
       font-weight: bold;
       font-size: 0.95em;
       cursor: pointer;
       white-space: nowrap;
+      backdrop-filter: blur(8px);
+      transition: background 0.3s ease, transform 0.3s ease;
     }
-    #do-upload-btn:hover { background: #218838; }
+    #do-upload-btn:hover { background: rgba(80,200,140,0.4); transform: translateY(-2px); }
 
     #upload-preview {
       display: flex;
@@ -157,10 +190,10 @@
       width: 70px;
       height: 70px;
       object-fit: cover;
-      border-radius: 7px;
-      border: 2px solid rgba(255,255,255,0.15);
+      border-radius: 9px;
+      border: 2px solid rgba(255,255,255,0.2);
     }
-    #admin-status { font-size: 0.9em; color: #aaa; min-height: 20px; }
+    #admin-status { font-size: 0.9em; color: rgba(255,255,255,0.65); min-height: 20px; }
     #admin-progress-wrap {
       width: 100%; height: 6px;
       background: rgba(255,255,255,0.1);
@@ -184,19 +217,21 @@
       margin-bottom: 30px;
     }
     .stat-card {
-      background: rgba(255,255,255,0.04);
-      border: 1px solid rgba(255,255,255,0.1);
-      border-radius: 12px;
-      padding: 16px 10px;
+      background: rgba(255,255,255,0.06);
+      border: 1px solid rgba(255,255,255,0.15);
+      border-radius: 14px;
+      padding: 18px 10px;
       text-align: center;
       text-decoration: none;
       color: white;
-      transition: 0.2s;
+      transition: transform 0.3s ease, border-color 0.3s ease, background 0.3s ease;
       display: block;
+      backdrop-filter: blur(14px);
+      -webkit-backdrop-filter: blur(14px);
     }
-    .stat-card:hover { border-color: #ffcc00; background: rgba(255,204,0,0.08); }
+    .stat-card:hover { border-color: #ffcc00; background: rgba(255,204,0,0.1); transform: translateY(-4px); }
     .stat-num { font-size: 2em; font-weight: bold; color: #ffcc00; }
-    .stat-lbl { font-size: 0.8em; color: #888; margin-top: 4px; }
+    .stat-lbl { font-size: 0.8em; color: rgba(255,255,255,0.65); margin-top: 4px; }
 
     /* Manage */
     .manage-card { margin-bottom: 30px; }
@@ -211,17 +246,19 @@
     .tab {
       padding: 7px 16px;
       border-radius: 20px;
-      border: 1px solid rgba(255,255,255,0.2);
-      background: rgba(255,255,255,0.04);
+      border: 1px solid rgba(255,255,255,0.25);
+      background: rgba(255,255,255,0.06);
       color: white;
       cursor: pointer;
       font-size: 0.88em;
-      transition: 0.2s;
+      transition: background 0.3s ease, color 0.3s ease, border-color 0.3s ease, transform 0.3s ease;
+      backdrop-filter: blur(8px);
     }
     .tab.active, .tab:hover {
-      background: #ffcc00;
+      background: rgba(255,204,0,0.85);
       color: black;
       border-color: #ffcc00;
+      transform: translateY(-2px);
     }
 
     .manage-grid {
@@ -231,9 +268,10 @@
     }
     .m-card {
       position: relative;
-      border-radius: 10px;
+      border-radius: 12px;
       overflow: hidden;
-      background: #1a1a1a;
+      background: rgba(255,255,255,0.05);
+      border: 1px solid rgba(255,255,255,0.12);
     }
     .m-card img {
       width: 100%;
@@ -245,24 +283,81 @@
       position: absolute;
       top: 6px; right: 6px;
       width: 28px; height: 28px;
-      background: rgba(200,0,0,0.9);
+      background: rgba(220,60,60,0.75);
+      backdrop-filter: blur(6px);
       color: white;
-      border: none;
+      border: 1px solid rgba(255,255,255,0.3);
       border-radius: 50%;
       cursor: pointer;
       font-size: 0.85em;
       display: flex;
       align-items: center;
       justify-content: center;
+      transition: background 0.3s ease, transform 0.3s ease;
     }
-    .m-del:hover { background: #cc0000; }
-    .empty-msg { color: #555; font-size: 0.9em; padding: 20px 0; }
+    .m-del:hover { background: rgba(220,60,60,0.95); transform: scale(1.08); }
+    .empty-msg { color: rgba(255,255,255,0.45); font-size: 0.9em; padding: 20px 0; }
 
     @media (max-width: 560px) {
       main { padding: 16px; }
       .upload-row { flex-direction: column; }
       .upload-row select, .choose-label, #do-upload-btn { width: 100%; text-align: center; }
     }
+
+    /* Clickable "all comments" list panel */
+    #total-comments-card { cursor: pointer; }
+    #total-comments-card:hover { border-color: #ffcc00; background: rgba(255,204,0,0.1); }
+    .comments-list-card {
+      background: rgba(255,255,255,0.06);
+      border: 1px solid rgba(255,255,255,0.15);
+      border-radius: 18px;
+      padding: 22px 24px;
+      margin-bottom: 30px;
+      backdrop-filter: blur(16px);
+      -webkit-backdrop-filter: blur(16px);
+      box-shadow: 0 8px 32px rgba(0,0,0,0.25);
+    }
+    .comments-list-header {
+      display: flex;
+      justify-content: space-between;
+      align-items: center;
+      margin-bottom: 14px;
+    }
+    .comments-list-header h2 { color: #ffcc00; font-size: 1.1em; margin: 0; }
+    .comments-list-header button {
+      background: rgba(255,255,255,0.1);
+      border: 1px solid rgba(255,255,255,0.25);
+      color: white;
+      border-radius: 20px;
+      padding: 5px 14px;
+      cursor: pointer;
+      font-size: 0.85em;
+      backdrop-filter: blur(8px);
+      transition: background 0.3s ease, transform 0.3s ease;
+    }
+    .comments-list-header button:hover { background: rgba(255,120,120,0.25); transform: translateY(-1px); }
+    .comments-list-body {
+      max-height: 420px;
+      overflow-y: auto;
+      display: grid;
+      gap: 10px;
+    }
+    .comment-list-item {
+      background: rgba(255,255,255,0.05);
+      border: 1px solid rgba(255,255,255,0.12);
+      border-radius: 12px;
+      padding: 10px 14px;
+      font-size: 0.9em;
+      word-break: break-word;
+      transition: border-color 0.3s ease, background 0.3s ease;
+    }
+    .comment-list-item:hover { border-color: rgba(90,160,255,0.5); background: rgba(90,160,255,0.08); }
+    .comment-list-item .clc-meta {
+      color: #ffcc00;
+      font-size: 0.82em;
+      margin-bottom: 4px;
+    }
+    .comment-list-item .clc-name { color: white; font-weight: bold; }
   </style>
 </head>
 <body>
@@ -315,16 +410,30 @@
       <div id="admin-progress-wrap"><div id="admin-progress-bar"></div></div>
     </div>
 
-<div class="stats-grid" id="totals-grid">
-  <div class="stat-card">
-    <div class="stat-num" id="total-likes-num">–</div>
-    <div class="stat-lbl">Total Likes</div>
-  </div>
-  <div class="stat-card">
-    <div class="stat-num" id="total-comments-num">–</div>
-    <div class="stat-lbl">Total Comments</div>
-  </div>
-</div>
+    <!-- Added: Site-wide totals (likes + comments across all artwork) -->
+    <div class="stats-grid" id="totals-grid">
+      <div class="stat-card">
+        <div class="stat-num" id="total-likes-num">–</div>
+        <div class="stat-lbl">Total Likes</div>
+      </div>
+      <div class="stat-card" id="total-comments-card">
+        <div class="stat-num" id="total-comments-num">–</div>
+        <div class="stat-lbl">Total Comments (click to view)</div>
+      </div>
+    </div>
+
+    <!-- Added: expandable list of every comment, site-wide -->
+    <div class="comments-list-card" id="comments-list-card" style="display:none;">
+      <div class="comments-list-header">
+        <h2>💬 All Comments</h2>
+        <button id="close-comments-list" type="button">✕ Close</button>
+      </div>
+      <div id="comments-list-body" class="comments-list-body">
+        <div class="empty-msg">Loading…</div>
+      </div>
+    </div>
+
+    <!-- Stats -->
     <div class="stats-grid" id="stats-grid"></div>
 
     <!-- Manage -->
@@ -516,12 +625,34 @@
   }
 </script>
 
-
+<!-- Added: wires up the site-wide totals cards above. Fully separate
+     from the script block above — that one is untouched. -->
 <script type="module">
   import { watchAuth, isOwner } from './firebase-config.js';
-  import { watchTotalLikes, watchTotalComments } from './admin-stats.js';
+  import { watchTotalLikes, watchTotalComments, watchAllComments } from './admin-stats.js';
 
   let totalsStarted = false;
+  let commentsListStarted = false;
+
+  function escapeHtml(str) {
+    const d = document.createElement('div');
+    d.textContent = str || '';
+    return d.innerHTML;
+  }
+
+  function renderCommentsList(items) {
+    const body = document.getElementById('comments-list-body');
+    if (!items.length) {
+      body.innerHTML = '<div class="empty-msg">No comments yet.</div>';
+      return;
+    }
+    body.innerHTML = items.map(c => `
+      <div class="comment-list-item">
+        <div class="clc-meta">On <strong>${escapeHtml(c.artId)}</strong></div>
+        <div><span class="clc-name">${escapeHtml(c.name)}</span>: ${escapeHtml(c.text)}</div>
+      </div>
+    `).join('');
+  }
 
   watchAuth((user) => {
     if (isOwner(user) && !totalsStarted) {
@@ -534,7 +665,28 @@
       watchTotalComments((total) => {
         document.getElementById('total-comments-num').textContent = total;
       }, () => {
+        // Shown only if the collection-group rule hasn't been
+        // published in the Firebase Console yet (see SETUP_README.md)
         document.getElementById('total-comments-num').textContent = '—';
+      });
+
+      // Click "Total Comments" to open/close the full list.
+      document.getElementById('total-comments-card').addEventListener('click', () => {
+        const panel = document.getElementById('comments-list-card');
+        const opening = panel.style.display === 'none';
+        panel.style.display = opening ? 'block' : 'none';
+
+        if (opening && !commentsListStarted) {
+          commentsListStarted = true;
+          watchAllComments(renderCommentsList, () => {
+            document.getElementById('comments-list-body').innerHTML =
+              '<div class="empty-msg">Could not load comments.</div>';
+          });
+        }
+      });
+
+      document.getElementById('close-comments-list').addEventListener('click', () => {
+        document.getElementById('comments-list-card').style.display = 'none';
       });
     }
   });
@@ -542,3 +694,4 @@
 
 </body>
 </html>
+
