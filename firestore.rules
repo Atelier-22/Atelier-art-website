@@ -56,7 +56,18 @@ service cloud.firestore {
             "jonathanalafi@gmail.com",
             "muhwezipetros@gmail.com"
           ];
-      }
+    }
+    }
+
+    // ===== Added: collection-group read for admin totals =====
+    // Individual comment threads are already public above
+    // (artworks/{artId}/comments allows read: if true). This just
+    // extends that same public-read permission to collection-group
+    // queries, i.e. counting comments across every artwork at once
+    // (used by the admin dashboard's "Total Comments" stat).
+    // No new data is exposed — comments were already public.
+    match /{path=**}/comments/{commentId} {
+      allow read: if true;
     }
   }
 }
