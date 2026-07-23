@@ -1,4 +1,4 @@
-// firebase-config.js — shared Firebase + Cloudinary setup for the whole site.
+
 
 import { initializeApp } from "https://www.gstatic.com/firebasejs/10.13.0/firebase-app.js";
 import {
@@ -19,13 +19,13 @@ const firebaseConfig = {
   appId: "1:526806992674:web:58f445a4352c02b9a3877b"
 };
 
-// Only these emails can log into admin.html.
+
 export const ADMIN_EMAILS = [
   "jonathanalafi@gmail.com",
   "muhwezipetros@gmail.com"
 ];
 
-// Cloudinary — free image hosting for uploads.
+.
 const CLOUDINARY_CLOUD_NAME = "pmhpabd8";
 const CLOUDINARY_UPLOAD_PRESET = "lpwbmgnq";
 
@@ -57,7 +57,7 @@ async function uploadToCloudinary(file) {
   return data.secure_url;
 }
 
-/* =================== AUTH =================== */
+
 
 export function ensureGuestAuth() {
   return new Promise((resolve) => {
@@ -83,7 +83,6 @@ export function ownerLogout() {
   return signOut(auth);
 }
 
-/* =================== STABLE ARTWORK IDS =================== */
 
 export function slugId(category, filenameOrTitle) {
   const base = (filenameOrTitle || "artwork")
@@ -93,8 +92,6 @@ export function slugId(category, filenameOrTitle) {
     .replace(/(^-+|-+$)/g, "");
   return `${category}-${base || "artwork"}`;
 }
-
-/* =================== LIKES =================== */
 
 const LIKED_KEY = "alafi_liked_ids";
 
@@ -131,14 +128,14 @@ export async function likeArtwork(artId, category, imageUrl) {
     await updateDoc(artRef, { likes: increment(1) });
   } else {
     await setDoc(artRef, {
-      category, imageUrl: imageUrl || "", likes: 1, createdAt: serverTimestamp()
+      category, imageUrl: imageUrl || "", likes: 1, createdAt: serverTimestamp(), uploaded: false
     }, { merge: true });
   }
   rememberLiked(artId);
   return true;
 }
 
-/* =================== COMMENTS =================== */
+
 
 export function watchComments(artId, callback, onError) {
   const q = query(collection(db, "artworks", artId, "comments"), orderBy("createdAt", "asc"));
@@ -163,8 +160,6 @@ export async function addComment(artId, name, text, uid) {
   });
 }
 
-/* =================== OWNER-ONLY: UPLOAD / MANAGE =================== */
-
 export async function uploadArtwork(category, file, title, description) {
   const imageUrl = await uploadToCloudinary(file);
   const id = slugId(category, title || file.name);
@@ -174,21 +169,22 @@ export async function uploadArtwork(category, file, title, description) {
     description: description || "",
     imageUrl,
     likes: 0,
-    createdAt: serverTimestamp()
-  }, { merge: true });
-  return { id, imageUrl };
-}
+    createdAt: serverTimestamp() ,
+  uploaded: true
+}, { merge: true });
 
 export function watchCategoryArtworks(category, callback) {
   const q = query(collection(db, "artworks"));
   return onSnapshot(q, (snap) => {
     const items = [];
-    snap.forEach(d => { if (d.data().category === category) items.push({ id: d.id, ...d.data() }); });
+    snap.forEach(d => {
+      const data = d.data();
+      if (data.category === category && data.uploaded === true) items.push({ id: d.id, ...data });
+    });
     items.sort((a, b) => (a.createdAt?.seconds || 0) - (b.createdAt?.seconds || 0));
     callback(items);
   });
 }
-
 export async function deleteArtwork(artId) {
   // Removes from Firestore only — the Cloudinary file stays (unsigned
   // uploads can't be deleted from the browser, that's fine at this scale).
