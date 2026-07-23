@@ -1,5 +1,4 @@
 
-
 import { initializeApp } from "https://www.gstatic.com/firebasejs/10.13.0/firebase-app.js";
 import {
   getAuth, onAuthStateChanged, signInAnonymously,
@@ -19,13 +18,11 @@ const firebaseConfig = {
   appId: "1:526806992674:web:58f445a4352c02b9a3877b"
 };
 
-
 export const ADMIN_EMAILS = [
   "jonathanalafi@gmail.com",
   "muhwezipetros@gmail.com"
 ];
 
-.
 const CLOUDINARY_CLOUD_NAME = "pmhpabd8";
 const CLOUDINARY_UPLOAD_PRESET = "lpwbmgnq";
 
@@ -57,8 +54,6 @@ async function uploadToCloudinary(file) {
   return data.secure_url;
 }
 
-
-
 export function ensureGuestAuth() {
   return new Promise((resolve) => {
     const unsub = onAuthStateChanged(auth, (user) => {
@@ -82,7 +77,6 @@ export function ownerLogin(email, password) {
 export function ownerLogout() {
   return signOut(auth);
 }
-
 
 export function slugId(category, filenameOrTitle) {
   const base = (filenameOrTitle || "artwork")
@@ -135,8 +129,6 @@ export async function likeArtwork(artId, category, imageUrl) {
   return true;
 }
 
-
-
 export function watchComments(artId, callback, onError) {
   const q = query(collection(db, "artworks", artId, "comments"), orderBy("createdAt", "asc"));
   return onSnapshot(q, (snap) => {
@@ -169,9 +161,11 @@ export async function uploadArtwork(category, file, title, description) {
     description: description || "",
     imageUrl,
     likes: 0,
-    createdAt: serverTimestamp() ,
-  uploaded: true
-}, { merge: true });
+    createdAt: serverTimestamp(),
+    uploaded: true
+  }, { merge: true });
+  return { id, imageUrl };
+}
 
 export function watchCategoryArtworks(category, callback) {
   const q = query(collection(db, "artworks"));
@@ -179,14 +173,15 @@ export function watchCategoryArtworks(category, callback) {
     const items = [];
     snap.forEach(d => {
       const data = d.data();
-      if (data.category === category && data.uploaded === true) items.push({ id: d.id, ...data });
+      if (data.category === category && data.uploaded === true) {
+        items.push({ id: d.id, ...data });
+      }
     });
     items.sort((a, b) => (a.createdAt?.seconds || 0) - (b.createdAt?.seconds || 0));
     callback(items);
   });
 }
+
 export async function deleteArtwork(artId) {
-  // Removes from Firestore only — the Cloudinary file stays (unsigned
-  // uploads can't be deleted from the browser, that's fine at this scale).
   await deleteDoc(doc(db, "artworks", artId));
 }
