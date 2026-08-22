@@ -1,4 +1,6 @@
 .deep-copilot/
+.claude/
+.firebase/
 node_modules/
 render-test.mjs
 interaction-test.mjs
