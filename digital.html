@@ -1,5 +1,5 @@
 <!DOCTYPE html>
-<html lang="en">
+<html lang="en" data-bg="category">
 <head>
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1.0, viewport-fit=cover">
@@ -12,15 +12,16 @@
   <link rel="preconnect" href="https://fonts.googleapis.com">
   <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
   <link href="https://fonts.googleapis.com/css2?family=Cormorant+Garamond:ital,wght@0,300;0,400;0,500;0,600;1,300;1,400&family=Inter:wght@300;400;500&display=swap" rel="stylesheet">
-  <link rel="stylesheet" href="assets/css/core.css?v=20260822b">
-  <link rel="stylesheet" href="assets/css/gallery.css?v=20260822b">
+  <link rel="stylesheet" href="assets/css/core.css?v=20260823a">
+  <link rel="stylesheet" href="assets/css/gallery.css?v=20260823a">
+  <script src="assets/js/theme-boot.js?v=20260823a"></script>
 </head>
-<body data-category="digital" style="--page-bg:url(2.jpg)">
+<body data-category="digital" data-cfg-bg="backgrounds.category">
 
 <div class="wallpaper" aria-hidden="true"></div>
 
 <nav class="site-nav">
-  <a class="wordmark" href="index.html">Alafi<span>.</span></a>
+  <a class="wordmark" href="index.html"><b data-cfg-text="branding.wordmark">Alafi</b><span data-cfg-text="branding.wordmarkDot">.</span></a>
   <button class="nav-toggle" type="button" aria-expanded="false" aria-controls="nav-links">Menu</button>
   <ul class="nav-links" id="nav-links">
     <li><a href="index.html">Home</a></li>
@@ -56,8 +57,8 @@
 <footer class="site-footer">
   <div class="footer-grid">
     <div>
-      <h4>Alafi Art Work</h4>
-      <p>A digital gallery of original work — built to be wandered through slowly.</p>
+      <h4 data-cfg-text="branding.siteTitle">Alafi Art Work</h4>
+      <p data-cfg-text="branding.footerBlurb">A digital gallery of original work — built to be wandered through slowly.</p>
     </div>
     <div class="footer-col">
       <p class="col-title">Collections</p>
@@ -79,11 +80,11 @@
     </div>
   </div>
   <div class="footer-base">
-    <span>&copy; 2026 Alafi Art Work</span>
-    <span>All rights reserved</span>
+    <span data-cfg-text="branding.copyright">&copy; 2026 Alafi Art Work</span>
+    <span data-cfg-text="branding.rights">All rights reserved</span>
   </div>
 </footer>
 
-<script type="module" src="assets/js/gallery-page.js?v=20260822b"></script>
+<script type="module" src="assets/js/gallery-page.js?v=20260823a"></script>
 </body>
 </html>

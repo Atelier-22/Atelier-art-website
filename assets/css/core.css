@@ -52,6 +52,21 @@
   --gold-edge: rgba(125, 96, 24, 0.5);
   --on-gold: #241f14;
 
+  /* Washes of the page ground. Every scrim laid over a photograph -- the
+     wallpaper, the hero, the sticky nav -- is this colour at some opacity.
+     They are tokens rather than literal rgba() so that changing the ground in
+     Settings carries them along; written as literals, a new background colour
+     left the photograph behind it veiled in the old one, which is the single
+     most visible way a themed site falls apart. */
+  --veil-faint: rgba(230, 223, 209, 0.34);
+  --veil-light: rgba(230, 223, 209, 0.62);
+  --veil-mid: rgba(230, 223, 209, 0.72);
+  --veil-strong: rgba(230, 223, 209, 0.88);
+  --veil-heavy: rgba(230, 223, 209, 0.92);
+  --veil-solid: rgba(230, 223, 209, 0.97);
+  --nav-bg: rgba(245, 241, 233, 0.88);
+  --nav-panel: rgba(250, 247, 241, 0.98);
+
   /* Status inks, deep enough to read as text on paper. */
   --danger: #9d332d;
   --ok: #2c6647;
@@ -173,15 +188,15 @@ a { color: inherit; }
   position: absolute;
   inset: 0;
   background:
-    radial-gradient(130% 90% at 50% 0%, rgba(230, 223, 209, 0.72), rgba(230, 223, 209, 0.9) 70%),
-    linear-gradient(180deg, rgba(230, 223, 209, 0.84) 0%, rgba(230, 223, 209, 0.92) 100%);
+    radial-gradient(130% 90% at 50% 0%, var(--veil-mid), var(--veil-heavy) 70%),
+    linear-gradient(180deg, var(--bg-veil) 0%, var(--veil-heavy) 100%);
 }
 
 /* Phones render a much larger backdrop relative to the viewport, so the
    image is dimmed further to keep body copy legible. */
 @media (max-width: 700px) {
   .wallpaper::after {
-    background: linear-gradient(180deg, rgba(230, 223, 209, 0.93) 0%, rgba(230, 223, 209, 0.95) 100%);
+    background: linear-gradient(180deg, var(--veil-heavy) 0%, var(--veil-solid) 100%);
   }
 }
 
@@ -202,7 +217,7 @@ a { color: inherit; }
 
 .site-nav.is-stuck {
   padding-block: 14px;
-  background: rgba(245, 241, 233, 0.88);
+  background: var(--nav-bg);
   backdrop-filter: blur(18px) saturate(140%);
   -webkit-backdrop-filter: blur(18px) saturate(140%);
   border-bottom-color: var(--hairline);
@@ -220,6 +235,20 @@ a { color: inherit; }
 }
 
 .site-nav .wordmark span { color: var(--gold); }
+
+/* The name is wrapped so the settings page can rewrite it without touching
+   the gold full stop beside it. It is a <b> only because it needed to be an
+   element -- the weight still comes from .wordmark. */
+.site-nav .wordmark b { font-weight: inherit; }
+
+/* When the owner uploads a logo it replaces the wordmark in place, so it is
+   capped to the height the text occupied rather than setting its own. */
+.site-nav .wordmark.has-logo { display: flex; align-items: center; }
+.site-nav .wordmark img {
+  height: clamp(24px, 3.4vh, 38px);
+  width: auto;
+  object-fit: contain;
+}
 
 .nav-links {
   display: flex;
@@ -290,7 +319,7 @@ a { color: inherit; }
     align-items: flex-start;
     gap: 0;
     padding: 96px var(--gutter) 36px;
-    background: rgba(250, 247, 241, 0.99);
+    background: var(--nav-panel);
     backdrop-filter: blur(20px);
     -webkit-backdrop-filter: blur(20px);
     border-bottom: 1px solid var(--hairline);
@@ -498,4 +527,39 @@ a { color: inherit; }
 /* Landscape phones are short: stop full-height blocks from trapping content. */
 @media (max-height: 480px) and (orientation: landscape) {
   .nav-links { padding-top: 72px; overflow-y: auto; max-height: 100vh; }
+}
+
+/* ================= PREVIEW ==================
+   Shown only on a page loaded with ?preview=1. Its whole job is to make it
+   impossible to mistake a draft for the live site -- so it is fixed, it is
+   loud, and it does not scroll away. The nav sits at the top of the viewport,
+   so the banner takes the bottom edge and the page gets padding to match
+   rather than having its last line covered. */
+.preview-banner {
+  position: fixed;
+  left: 0;
+  right: 0;
+  bottom: 0;
+  z-index: 9999;
+  padding: 9px var(--gutter);
+  background: var(--gold-fill);
+  color: var(--on-gold);
+  font-family: var(--body);
+  font-size: 0.72rem;
+  font-weight: 500;
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+  text-align: center;
+  box-shadow: 0 -2px 14px rgba(0, 0, 0, 0.18);
+}
+
+.preview-banner.is-denied {
+  background: var(--danger);
+  color: #fff;
+}
+
+body.is-previewing { padding-bottom: 40px; }
+
+@media (max-width: 560px) {
+  .preview-banner { font-size: 0.62rem; letter-spacing: 0.05em; padding: 8px 12px; }
 }

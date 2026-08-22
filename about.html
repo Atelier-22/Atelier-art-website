@@ -1,5 +1,5 @@
 <!DOCTYPE html>
-<html lang="en">
+<html lang="en" data-bg="about">
 <head>
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1.0, viewport-fit=cover">
@@ -12,16 +12,17 @@
   <link rel="preconnect" href="https://fonts.googleapis.com">
   <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
   <link href="https://fonts.googleapis.com/css2?family=Cormorant+Garamond:ital,wght@0,300;0,400;0,500;0,600;1,300;1,400&family=Inter:wght@300;400;500&display=swap" rel="stylesheet">
-  <link rel="stylesheet" href="assets/css/core.css?v=20260822b">
-  <link rel="stylesheet" href="assets/css/gallery.css?v=20260822b">
-  <link rel="stylesheet" href="assets/css/prose.css?v=20260822b">
+  <link rel="stylesheet" href="assets/css/core.css?v=20260823a">
+  <link rel="stylesheet" href="assets/css/gallery.css?v=20260823a">
+  <link rel="stylesheet" href="assets/css/prose.css?v=20260823a">
+  <script src="assets/js/theme-boot.js?v=20260823a"></script>
 </head>
-<body style="--page-bg:url(AJ2.JPG)">
+<body data-cfg-bg="backgrounds.about">
 
 <div class="wallpaper" aria-hidden="true"></div>
 
 <nav class="site-nav">
-  <a class="wordmark" href="index.html">Alafi<span>.</span></a>
+  <a class="wordmark" href="index.html"><b data-cfg-text="branding.wordmark">Alafi</b><span data-cfg-text="branding.wordmarkDot">.</span></a>
   <button class="nav-toggle" type="button" aria-expanded="false" aria-controls="nav-links">Menu</button>
   <ul class="nav-links" id="nav-links">
     <li><a href="index.html">Home</a></li>
@@ -37,9 +38,9 @@
   <header class="page-head">
     <div class="shell">
       <p class="crumbs"><a href="index.html">Home</a> <span>/</span> <span>About</span></p>
-      <h1>About the Artist</h1>
-      <p class="page-tagline">The person behind the work</p>
-      <p class="page-blurb">Hi, I&rsquo;m Alafi Jonathan &mdash; an artist passionate about expressing stories through colour, pattern, and imagination. My work blends traditional and digital forms, exploring culture, creativity, and emotion.</p>
+      <h1 data-cfg-text="about.title">About the Artist</h1>
+      <p class="page-tagline" data-cfg-text="about.tagline">The person behind the work</p>
+      <p class="page-blurb" data-cfg-text="about.blurb">Hi, I&rsquo;m Alafi Jonathan &mdash; an artist passionate about expressing stories through colour, pattern, and imagination. My work blends traditional and digital forms, exploring culture, creativity, and emotion.</p>
     </div>
   </header>
 
@@ -47,68 +48,18 @@
     <div class="shell">
       <div class="split-feature" data-reveal>
         <div class="split-media" data-reveal="left">
-          <img src="AJ1.jpg" alt="Alafi Jonathan" loading="lazy">
+          <img src="AJ1.jpg" alt="Alafi Jonathan" loading="lazy" data-cfg-src="about.portrait">
         </div>
-        <blockquote class="pull-quote" data-reveal="right">
+        <blockquote class="pull-quote" data-reveal="right" data-cfg-text="about.quote">
           Every artwork is a piece of a larger story I&rsquo;m still telling.
         </blockquote>
       </div>
 
-      <article class="prose" data-reveal>
-        <span class="eyebrow">Where it began</span>
-        <h2>The Story</h2>
-        <p>It started small &mdash; a pencil, a blank page, and a curiosity about what could be made from nothing. Over time, that curiosity turned into discipline, and discipline turned into a voice. Every collection since has been another chapter in that same, ongoing story: learning to see the world a little more closely, and finding a way to hand that vision to someone else.</p>
-      </article>
-
-      <article class="prose" data-reveal>
-        <span class="eyebrow">Philosophy</span>
-        <h2>Artistic Philosophy</h2>
-        <p>Art, at its best, doesn&rsquo;t explain &mdash; it reveals. Every piece here is an attempt to hold a feeling still long enough for someone else to recognise it. Creating isn&rsquo;t about perfection; it&rsquo;s about honesty, and letting each work carry a little bit of truth that words alone couldn&rsquo;t say.</p>
-      </article>
-
-      <article class="prose" data-reveal>
-        <span class="eyebrow">Behind the work</span>
-        <h2>Creative Process</h2>
-        <ol class="step-list">
-          <li data-reveal="scale"><b>Inspiration</b><span>An idea catches hold, often somewhere unexpected.</span></li>
-          <li data-reveal="scale" style="--reveal-delay:90ms"><b>Sketching</b><span>Rough lines find the shape of the idea before anything else does.</span></li>
-          <li data-reveal="scale" style="--reveal-delay:180ms"><b>Creation</b><span>Colour, texture, and detail slowly bring the piece to life.</span></li>
-          <li data-reveal="scale" style="--reveal-delay:270ms"><b>Final artwork</b><span>A finished piece, ready to become part of someone else&rsquo;s story.</span></li>
-        </ol>
-      </article>
-
-      <article class="prose" data-reveal>
-        <span class="eyebrow">Where it comes from</span>
-        <h2>Sources of Inspiration</h2>
-        <p>Inspiration rarely announces itself &mdash; it&rsquo;s found, then followed.</p>
-        <ul class="tag-cloud">
-          <li>Nature</li><li>Culture</li><li>People</li><li>Dreams</li>
-          <li>Emotion</li><li>Daily life</li><li>Imagination</li>
-        </ul>
-      </article>
-
-      <article class="prose" data-reveal>
-        <span class="eyebrow">The path so far</span>
-        <h2>Artistic Journey</h2>
-        <ol class="timeline">
-          <li data-reveal="left"><b>Beginning</b><span>The first sketches &mdash; simple, curious, unpolished.</span></li>
-          <li data-reveal="left" style="--reveal-delay:80ms"><b>Learning</b><span>Studying technique, form, and the fundamentals of craft.</span></li>
-          <li data-reveal="left" style="--reveal-delay:160ms"><b>Growth</b><span>Finding a distinct voice across painting, sketching, and digital work.</span></li>
-          <li data-reveal="left" style="--reveal-delay:240ms"><b>Exploration</b><span>Branching into sculpture, comics, and graphic design.</span></li>
-          <li data-reveal="left" style="--reveal-delay:320ms"><b>Present day</b><span>Continuing to create, share, and grow with every new piece.</span></li>
-        </ol>
-      </article>
-
-      <article class="prose" data-reveal>
-        <span class="eyebrow">In numbers</span>
-        <h2>Where Things Stand</h2>
-        <div class="figure-row">
-          <div><b>5+</b><small>Years creating</small></div>
-          <div><b>7</b><small>Art categories</small></div>
-          <div><b>100+</b><small>Completed works</small></div>
-          <div><b>3</b><small>Current projects</small></div>
-        </div>
-      </article>
+      <!-- Every section below is written and ordered from the admin Settings
+           page. The markup that used to live here is now the shipped default
+           in site-config.js, so an untouched database renders exactly the page
+           this file used to contain. -->
+      <div id="about-blocks"></div>
 
       <div class="prose-cta" data-reveal>
         <a class="link-btn is-solid" href="gallery.html">See the work &#8594;</a>
@@ -121,8 +72,8 @@
 <footer class="site-footer">
   <div class="footer-grid">
     <div>
-      <h4>Alafi Art Work</h4>
-      <p>A digital gallery of original work — built to be wandered through slowly.</p>
+      <h4 data-cfg-text="branding.siteTitle">Alafi Art Work</h4>
+      <p data-cfg-text="branding.footerBlurb">A digital gallery of original work — built to be wandered through slowly.</p>
     </div>
     <div class="footer-col">
       <p class="col-title">Collections</p>
@@ -144,11 +95,11 @@
     </div>
   </div>
   <div class="footer-base">
-    <span>&copy; 2026 Alafi Art Work</span>
-    <span>All rights reserved</span>
+    <span data-cfg-text="branding.copyright">&copy; 2026 Alafi Art Work</span>
+    <span data-cfg-text="branding.rights">All rights reserved</span>
   </div>
 </footer>
 
-<script type="module" src="assets/js/page.js?v=20260822b"></script>
+<script type="module" src="assets/js/page.js?v=20260823a"></script>
 </body>
 </html>

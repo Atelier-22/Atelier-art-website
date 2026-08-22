@@ -1,5 +1,7 @@
-import { DEFAULT_ART_CATEGORIES, LOCAL_SEEDS, mergeCategories, categoryHref } from "./site-data.js?v=20260822b";
-import { observeReveals, onScrollFrame, sectionProgress, initNav, prefersReducedMotion } from "./reveal.js?v=20260822b";
+import { DEFAULT_ART_CATEGORIES, LOCAL_SEEDS, mergeCategories, categoryHref } from "./site-data.js?v=20260823a";
+import { observeReveals, onScrollFrame, sectionProgress, initNav, prefersReducedMotion } from "./reveal.js?v=20260823a";
+import { initContent, renderHeroCanvas } from "./site-content.js?v=20260823a";
+import { previewHref } from "./site-config.js?v=20260823a";
 
 const TILE_LAYOUT = ["t-hero", "t-tall", "t-strip", "t-strip", "t-strip"];
 const FRAMES_PER_TILE = 3;
@@ -44,7 +46,7 @@ function seedPool(category) {
 function buildTile(category, layoutClass, tileIndex) {
   const tile = document.createElement("a");
   tile.className = `tile ${layoutClass}`;
-  tile.href = categoryHref(category);
+  tile.href = previewHref(categoryHref(category));
   tile.dataset.depth = String(PARALLAX_DEPTH[tileIndex] || 0);
   tile.setAttribute("aria-label", `View the ${category.label} collection`);
 
@@ -212,7 +214,7 @@ function buildSection(category, index) {
     <h2>${category.label}</h2>
     <p class="collection-tagline">${category.tagline}</p>
     <p class="blurb">${category.blurb}</p>
-    <a class="link-btn" href="${categoryHref(category)}">Explore ${category.label} <span class="arrow">&#8594;</span></a>
+    <a class="link-btn" href="${previewHref(categoryHref(category))}">Explore ${category.label} <span class="arrow">&#8594;</span></a>
     <span class="collection-count" data-count></span>
   `;
 
@@ -279,12 +281,17 @@ function wireScrollMotion(sections) {
   });
 }
 
+let heroTimer = null;
+
 function wireHeroCanvas() {
   const canvas = document.querySelector(".hero-canvas");
   if (!canvas) return;
   const imgs = Array.from(canvas.querySelectorAll("img"));
   if (!imgs.length) return;
 
+  // The reel is rebuilt whenever the owner changes the picture list, so the
+  // previous timer has to go with the elements it was advancing.
+  clearInterval(heroTimer);
   imgs[0].classList.add("is-current");
   if (imgs.length < 2 || prefersReducedMotion) return;
 
@@ -305,12 +312,12 @@ function wireHeroCanvas() {
   };
 
   preload(imgs[1].currentSrc || imgs[1].src);
-  setInterval(advance, 7000);
+  heroTimer = setInterval(advance, 7000);
 }
 
 async function upgradeFromFirestore(sections) {
   try {
-    const { fetchUploadedArtworks } = await import("../../firebase-config.js?v=20260822b");
+    const { fetchUploadedArtworks } = await import("../../firebase-config.js?v=20260823a");
     const byCategory = await fetchUploadedArtworks();
     let changed = false;
 
@@ -339,8 +346,16 @@ function init() {
 
   observeReveals(document);
   let detachScroll = wireScrollMotion(sections);
-  wireHeroCanvas();
   upgradeFromFirestore(sections);
+
+  // Theme, copy, hero pictures, and the story block. The first call happens
+  // synchronously from the cached config, so the hero is wired before the
+  // first frame rather than a beat after it.
+  initContent((config) => {
+    renderHeroCanvas(config);
+    wireHeroCanvas();
+    observeReveals(document);
+  });
 
   loadCategoryOrder().then((remote) => {
     if (!remote || sameOrder(remote, categories)) return;
@@ -370,7 +385,7 @@ function sameOrder(a, b) {
 
 async function loadCategoryOrder() {
   try {
-    const { fetchCategories } = await import("./data.js?v=20260822b");
+    const { fetchCategories } = await import("./data.js?v=20260823a");
     return mergeCategories(await fetchCategories("art"));
   } catch (err) {
     console.warn("Category order unavailable, using defaults.", err);

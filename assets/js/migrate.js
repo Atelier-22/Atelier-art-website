@@ -1,5 +1,6 @@
-import { db } from "../../firebase-config.js?v=20260822b";
-import { publicIdFromUrl, slugify, logChange } from "./data.js?v=20260822b";
+import { db } from "../../firebase-config.js?v=20260823a";
+import { publicIdFromUrl, slugify, logChange, archivePieceId } from "./data.js?v=20260823a";
+import { LOCAL_SEEDS, CATEGORY_BY_SLUG } from "./site-data.js?v=20260823a";
 import {
   collection, doc, getDocs, writeBatch, serverTimestamp
 } from "https://www.gstatic.com/firebasejs/10.13.0/firebase-firestore.js";
@@ -177,7 +178,115 @@ async function planComicCategorySeed() {
   return { label: "Comic genres", writes, notes: [`seeding ${GENRES.length} genres (all editable in admin)`] };
 }
 
+/**
+ * Gives every bundled image a record of its own.
+ *
+ * Until this runs, the images that ship with the site are drawn from a list in
+ * site-data.js and the owner cannot do anything to them but add a title —
+ * there is no document to delete, reorder, or point somewhere else. Afterwards
+ * the collection pages are built from these records, and all three become
+ * ordinary writes.
+ *
+ * Merged, never overwritten: many of these documents already exist, holding a
+ * title the owner typed and a like count visitors left. `uploaded` is
+ * deliberately left alone — that flag is what marks a genuine upload, and
+ * setting it here would make each piece appear twice.
+ */
+async function planArchiveSeed() {
+  const snap = await getDocs(collection(db, "artworks"));
+  const existing = new Map(snap.docs.map(d => [d.id, d.data()]));
+
+  const writes = [];
+  const notes = [];
+  let alreadyDone = 0;
+
+  Object.keys(LOCAL_SEEDS).forEach((slug) => {
+    (LOCAL_SEEDS[slug] || []).forEach((src, i) => {
+      const id = archivePieceId(slug, i);
+      const current = existing.get(id) || {};
+      const patch = {};
+
+      if (current.category !== slug) patch.category = slug;
+      if (current.archive !== true) patch.archive = true;
+      if (typeof current.status !== "string") patch.status = "published";
+      if (typeof current.order !== "number") patch.order = i;
+
+      // Only claim the bundled path if nothing is there yet. A piece the owner
+      // has already repointed at a Cloudinary upload must not be dragged back
+      // to the file it started as.
+      if (!current.imageUrl) patch.imageUrl = src;
+
+      if (Object.keys(patch).length) writes.push({ ref: doc(db, "artworks", id), data: patch });
+      else alreadyDone++;
+    });
+  });
+
+  const total = Object.values(LOCAL_SEEDS).reduce((n, list) => n + list.length, 0);
+  notes.push(`${total} bundled images across ${Object.keys(LOCAL_SEEDS).length} collections`);
+  if (alreadyDone) notes.push(`${alreadyDone} already have a record`);
+  if (writes.length) notes.push("after this they can be hidden, replaced, and reordered from Artworks");
+
+  return { label: "Bundled images -> managed records", writes, notes };
+}
+
+/**
+ * Order matters in one place: the archive seed has to run before planArtworks.
+ * planArtworks stamps a missing status as "archived" for anything not flagged
+ * `uploaded`, which is right for a stray like-counter and catastrophic for a
+ * bundled piece — it would hide the shipped gallery. Seeding first gives every
+ * bundled record an explicit "published", which planArtworks then leaves
+ * alone.
+ */
+/**
+ * Turns the shipped sample comic into a real document.
+ *
+ * It used to live in comics.js and be rendered whenever the collection was
+ * empty, which made it impossible to delete: removing it emptied the
+ * collection, which was the condition that brought it straight back. As a
+ * document it behaves like every other story.
+ *
+ * Only ever written once. If it has been deleted, it stays deleted -- the
+ * check is on the collection being empty, not on this id being absent.
+ */
+async function planSampleComic() {
+  const snap = await getDocs(collection(db, "comics"));
+  if (!snap.empty) {
+    return {
+      label: "Sample story",
+      writes: [],
+      notes: [`${snap.size} ${snap.size === 1 ? "story" : "stories"} already published, leaving untouched`]
+    };
+  }
+
+  const pages = (LOCAL_SEEDS.comics || []).slice();
+  if (!pages.length) return { label: "Sample story", writes: [], notes: ["no bundled comic pages"] };
+
+  return {
+    label: "Sample story -> a real document",
+    writes: [{
+      ref: doc(db, "comics", "from-the-sketchbook"),
+      merge: false,
+      data: {
+        title: "From the Sketchbook",
+        categorySlug: "drama",
+        description: "Three loose pages pulled straight from the working sketchbook — the sample that ships with the site.",
+        coverUrl: pages[0],
+        pages,
+        likes: 0,
+        order: 0,
+        status: "published",
+        featured: false,
+        createdAt: serverTimestamp(),
+        updatedAt: serverTimestamp()
+      }
+    }],
+    notes: [`${pages.length} pages — editable and deletable from Comics once written`]
+  };
+}
+
 const STEPS = [
+  planArchiveSeed,
+  planSampleComic,
   planArtworks,
   planComics,
   planCategoryRename,
