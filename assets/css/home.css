@@ -20,14 +20,16 @@
   height: 100%;
   object-fit: cover;
   opacity: 0;
+  z-index: 0;
   position: absolute;
   inset: 0;
   transform: scale(1.06);
   animation: heroDrift 22s ease-in-out infinite alternate;
-  transition: opacity 2.2s var(--ease);
+  transition: opacity 1.6s var(--ease);
 }
 
-.hero-canvas img.is-current { opacity: 1; }
+.hero-canvas img.is-outgoing { opacity: 1; z-index: 1; transition: none; }
+.hero-canvas img.is-current { opacity: 1; z-index: 2; }
 
 @keyframes heroDrift {
   from { transform: scale(1.04) translate3d(0, 0, 0); }
@@ -275,6 +277,9 @@
   height: 100%;
 }
 
+/* True crossfade: the outgoing frame stays fully opaque underneath while the
+   incoming one fades in on top. Fading both at once would let the dark tile
+   background show through at the midpoint, which reads as a black flash. */
 .tile-frames img {
   position: absolute;
   inset: 0;
@@ -282,11 +287,18 @@
   height: 100%;
   object-fit: cover;
   opacity: 0;
+  z-index: 0;
   transform: scale(1.02);
-  transition: opacity 0.85s var(--ease), transform 1.4s var(--ease-out);
+  transition: opacity var(--slide-fade, 900ms) var(--ease), transform 1.4s var(--ease-out);
 }
 
-.tile-frames img.is-current { opacity: 1; }
+.tile-frames img.is-outgoing {
+  opacity: 1;
+  z-index: 1;
+  transition: transform 1.4s var(--ease-out);
+}
+
+.tile-frames img.is-current { opacity: 1; z-index: 2; }
 
 .tile:hover .tile-frames img.is-current,
 .tile:focus-visible .tile-frames img.is-current { transform: scale(1.09); }

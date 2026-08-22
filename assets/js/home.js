@@ -3,8 +3,24 @@ import { observeReveals, onScrollFrame, sectionProgress, initNav, prefersReduced
 
 const TILE_LAYOUT = ["t-hero", "t-tall", "t-strip", "t-strip", "t-strip"];
 const FRAMES_PER_TILE = 3;
-const HOVER_INTERVAL = 1600;
+const HOVER_INTERVAL = 2600;
+const FADE_MS = 900;
+const HERO_FADE_MS = 1600;
 const PARALLAX_DEPTH = [0, 46, -30, 22, -18];
+
+const decoded = new Set();
+
+/** Resolves only once the bitmap is actually ready to paint. */
+function preload(src) {
+  if (!src || decoded.has(src)) return Promise.resolve();
+  return new Promise((resolve) => {
+    const probe = new Image();
+    const done = () => { decoded.add(src); resolve(); };
+    probe.onload = () => (probe.decode ? probe.decode().then(done, done) : done());
+    probe.onerror = done;
+    probe.src = src;
+  });
+}
 
 const pools = new Map();
 let categories = DEFAULT_ART_CATEGORIES;
@@ -61,22 +77,27 @@ function paintTile(tile, reel) {
   }
   tile.classList.remove("is-empty");
 
+  tile._index = 0;
+  tile._pending = 0;
+
   reel.forEach((item, i) => {
     const img = document.createElement("img");
-    img.src = item.src;
     img.alt = item.title;
-    img.loading = "lazy";
     img.decoding = "async";
     img.draggable = false;
+    if (i === 0) {
+      img.src = item.src;
+      img.loading = "lazy";
+    } else {
+      img.dataset.src = item.src;
+    }
     img.addEventListener("error", () => dropFrame(tile, img), { once: true });
     tile._frames.appendChild(img);
-
-    const dot = document.createElement("i");
-    tile._dots.appendChild(dot);
+    tile._dots.appendChild(document.createElement("i"));
   });
 
   if (reel.length < 2) tile._dots.style.display = "none";
-  setFrame(tile, 0);
+  applyFrame(tile, 0);
 }
 
 function dropFrame(tile, img) {
@@ -89,17 +110,61 @@ function dropFrame(tile, img) {
     tile.classList.add("is-empty");
     return;
   }
-  setFrame(tile, 0);
+  tile._index = 0;
+  tile._pending = null;
+  applyFrame(tile, 0);
 }
 
+/**
+ * Requests a frame. The swap is deferred until that frame has decoded, so the
+ * slideshow never cuts to an unpainted image. If a newer frame is requested
+ * while this one is still loading, the stale request is dropped.
+ */
 function setFrame(tile, index) {
   const imgs = tile._frames.children;
   if (!imgs.length) return;
   const next = ((index % imgs.length) + imgs.length) % imgs.length;
-  if (tile._index === next && imgs[next].classList.contains("is-current")) return;
-  tile._index = next;
+  if (tile._pending === next) return;
+  tile._pending = next;
 
-  Array.from(imgs).forEach((img, i) => img.classList.toggle("is-current", i === next));
+  const target = imgs[next];
+  const src = target.dataset.src || target.getAttribute("src");
+
+  if (decoded.has(src) || (target.complete && target.naturalWidth)) {
+    applyFrame(tile, next);
+    return;
+  }
+  preload(src).then(() => {
+    if (tile._pending === next) applyFrame(tile, next);
+  });
+}
+
+function applyFrame(tile, next) {
+  const imgs = Array.from(tile._frames.children);
+  const target = imgs[next];
+  if (!target) return;
+
+  if (target.dataset.src) {
+    target.src = target.dataset.src;
+    delete target.dataset.src;
+  }
+
+  const outgoing = imgs[tile._index];
+  tile._index = next;
+  tile._pending = next;
+
+  imgs.forEach(img => img.classList.remove("is-current"));
+  target.classList.remove("is-outgoing");
+
+  // Hold the previous frame opaque beneath the incoming one for the length of
+  // the fade, so there is never a moment where the backdrop shows through.
+  if (outgoing && outgoing !== target) {
+    outgoing.classList.add("is-outgoing");
+    clearTimeout(outgoing._holdTimer);
+    outgoing._holdTimer = setTimeout(() => outgoing.classList.remove("is-outgoing"), FADE_MS);
+  }
+
+  target.classList.add("is-current");
   Array.from(tile._dots.children).forEach((dot, i) => dot.classList.toggle("is-on", i === next));
 
   const item = tile._reel[next];
@@ -107,6 +172,10 @@ function setFrame(tile, index) {
     tile._caption.querySelector("strong").textContent = item.title;
     tile._caption.querySelector("small").textContent = item.category;
   }
+
+  // Warm the neighbouring frame so the next advance is instant too.
+  const ahead = imgs[(next + 1) % imgs.length];
+  if (ahead?.dataset.src) preload(ahead.dataset.src);
 }
 
 function wireHover(tile) {
@@ -214,17 +283,29 @@ function wireHeroCanvas() {
   const canvas = document.querySelector(".hero-canvas");
   if (!canvas) return;
   const imgs = Array.from(canvas.querySelectorAll("img"));
-  if (imgs.length < 2 || prefersReducedMotion) {
-    imgs[0]?.classList.add("is-current");
-    return;
-  }
-  let i = 0;
+  if (!imgs.length) return;
+
   imgs[0].classList.add("is-current");
-  setInterval(() => {
-    imgs[i].classList.remove("is-current");
-    i = (i + 1) % imgs.length;
-    imgs[i].classList.add("is-current");
-  }, 6500);
+  if (imgs.length < 2 || prefersReducedMotion) return;
+
+  let i = 0;
+  const advance = async () => {
+    const nextIndex = (i + 1) % imgs.length;
+    const next = imgs[nextIndex];
+    await preload(next.currentSrc || next.src);
+
+    const outgoing = imgs[i];
+    i = nextIndex;
+
+    next.classList.remove("is-outgoing");
+    next.classList.add("is-current");
+    outgoing.classList.remove("is-current");
+    outgoing.classList.add("is-outgoing");
+    setTimeout(() => outgoing.classList.remove("is-outgoing"), HERO_FADE_MS);
+  };
+
+  preload(imgs[1].currentSrc || imgs[1].src);
+  setInterval(advance, 7000);
 }
 
 async function upgradeFromFirestore(sections) {

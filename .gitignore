@@ -3,3 +3,4 @@ node_modules/
 render-test.mjs
 interaction-test.mjs
 package-lock.json
+slide-test.mjs
