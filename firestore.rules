@@ -3,14 +3,16 @@ rules_version = '2';
 // ============================================================================
 // Alafi Art Work — Firestore Security Rules
 //
-// This is the enforcement layer for the whole project. The site is hosted on
-// GitHub Pages, so there is no server to check permissions: anything not
-// blocked here can be done by anyone who opens devtools. Every write below is
-// gated on a verified admin identity, never on a frontend flag.
+// This is the enforcement layer for the whole project. The site is a static
+// bundle on Firebase Hosting, so there is no server to check permissions:
+// anything not blocked here can be done by anyone who opens devtools. Every
+// write below is gated on a verified admin identity, never on a frontend flag.
 //
-// PUBLISH THESE ONLY AFTER RUNNING THE MIGRATION (Admin -> Maintenance).
-// Public reads require status == "published"; documents created before the
-// migration have no status field and will become invisible until stamped.
+// Public reads require status == "published", so any document written before
+// that field existed is invisible until it is stamped. The existing artwork
+// documents were stamped when these rules were first deployed; if you ever
+// restore older data, run the migration (Admin -> Maintenance) before
+// publishing this file again.
 // ============================================================================
 
 service cloud.firestore {
@@ -57,6 +59,26 @@ service cloud.firestore {
       return signedIn()
         && request.resource.data.diff(resource.data).affectedKeys().hasOnly(['likes'])
         && request.resource.data.likes == resource.data.likes + 1;
+    }
+
+    // The counter document a visitor creates on the very first like of a
+    // piece. It may hold a count and nothing else, so this cannot be used to
+    // smuggle content into the collection, and the fixed shape lets the same
+    // rule serve artworks and comics.
+    function isLikeSeed() {
+      return signedIn()
+        && request.resource.data.keys().hasOnly(['likes', 'status', 'createdAt'])
+        && request.resource.data.likes == 1
+        && request.resource.data.status == "published";
+    }
+
+    // A single-document read of something that isn't there. Without this a
+    // visitor cannot open a piece nobody has liked yet: there is no counter
+    // document, so isPublished() has no resource to inspect and the read is
+    // refused instead of simply reporting a count of zero. Queries are
+    // unaffected -- resource is never null when matching a listed document.
+    function notFound() {
+      return resource == null;
     }
 
     function isValidComment() {
@@ -109,8 +131,8 @@ service cloud.firestore {
     // filters, and Firestore rejects a query it cannot prove safe.
 
     match /artworks/{artId} {
-      allow read: if isAdmin() || isPublished();
-      allow create: if isAdmin() && incomingIsValidStatus();
+      allow read: if isAdmin() || notFound() || isPublished();
+      allow create: if (isAdmin() && incomingIsValidStatus()) || isLikeSeed();
       allow delete: if isAdmin();
       allow update: if isAdmin() || isLikeIncrement();
 
@@ -126,8 +148,8 @@ service cloud.firestore {
     // A comic holds chapters; a chapter holds ordered pages.
 
     match /comics/{comicId} {
-      allow read: if isAdmin() || isPublished();
-      allow create: if isAdmin() && incomingIsValidStatus();
+      allow read: if isAdmin() || notFound() || isPublished();
+      allow create: if (isAdmin() && incomingIsValidStatus()) || isLikeSeed();
       allow delete: if isAdmin();
       allow update: if isAdmin() || isLikeIncrement();
 

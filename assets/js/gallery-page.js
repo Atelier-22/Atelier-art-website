@@ -120,12 +120,7 @@ function wireCard(el, item) {
   likeBtn.addEventListener("click", async () => {
     likeBtn.disabled = true;
     try {
-      const ok = await toggleLike("artworks", item.id, {
-        category: slug,
-        title: item.title,
-        imageUrl: item.imageUrl,
-        uploaded: !item.archive
-      });
+      const ok = await toggleLike("artworks", item.id);
       if (ok) {
         likeBtn.classList.add("is-liked");
         heart.innerHTML = "&#9829;";

@@ -313,7 +313,11 @@ export function watchArtworks(categorySlug, callback, onError) {
   return onSnapshot(ref, (snap) => {
     const items = snap.docs
       .map(d => normaliseArtwork(d.id, d.data()))
-      .filter(a => a.imageUrl)
+      // Only genuine uploads belong in the grid. The collection also holds
+      // like counters for the local archive pieces, and the older ones carry
+      // a category and an imageUrl -- without this they would come back as a
+      // second, titleless copy of a piece already on the page.
+      .filter(a => a.imageUrl && a.uploaded)
       .sort((a, b) => b.createdAt - a.createdAt);
     callback(items);
   }, (err) => {
@@ -394,24 +398,38 @@ function normaliseComic(id, data) {
   };
 }
 
-export function watchComics(callback, onError) {
-  return onSnapshot(collection(db, "comics"), (snap) => {
-    const items = snap.docs
-      .map(d => normaliseComic(d.id, d.data()))
-      .sort((a, b) => a.order - b.order || b.createdAt - a.createdAt);
-    callback(items);
+/**
+ * Rules are not filters: a visitor may only read published comics, so the
+ * public listing has to say so in the query or Firestore refuses it outright.
+ * The admin views need the drafts too, hence the flag rather than two copies.
+ * The pages filter keeps guest-created like counters out of the shelves, the
+ * same way watchArtworks keeps them out of the grid.
+ */
+function readComics(publishedOnly) {
+  return publishedOnly
+    ? query(collection(db, "comics"), where("status", "==", "published"))
+    : collection(db, "comics");
+}
+
+function shelfItems(snap, publishedOnly) {
+  return snap.docs
+    .map(d => normaliseComic(d.id, d.data()))
+    .filter(c => !publishedOnly || c.coverUrl || c.pages.length)
+    .sort((a, b) => a.order - b.order || b.createdAt - a.createdAt);
+}
+
+export function watchComics(callback, onError, { publishedOnly = false } = {}) {
+  return onSnapshot(readComics(publishedOnly), (snap) => {
+    callback(shelfItems(snap, publishedOnly));
   }, (err) => {
     console.error("watchComics error:", err);
     onError?.(err);
   });
 }
 
-export async function fetchComics() {
+export async function fetchComics({ publishedOnly = true } = {}) {
   try {
-    const snap = await getDocs(collection(db, "comics"));
-    return snap.docs
-      .map(d => normaliseComic(d.id, d.data()))
-      .sort((a, b) => a.order - b.order || b.createdAt - a.createdAt);
+    return shelfItems(await getDocs(readComics(publishedOnly)), publishedOnly);
   } catch (err) {
     console.warn("fetchComics failed.", err);
     return [];
@@ -475,15 +493,35 @@ function rememberLiked(id) {
   try { localStorage.setItem(LIKED_KEY, JSON.stringify(liked)); } catch { /* private mode */ }
 }
 
-export async function toggleLike(collectionName, id, seedData) {
+/**
+ * Liking a piece that nobody has liked yet has to create its counter document
+ * first. The security rules pin that payload to an exact set of keys, so the
+ * shape is built here and never taken from the caller: the old code spread a
+ * caller-supplied object in, which sent `title` as well, and `hasOnly` refused
+ * every single first-ever like. A counter needs nothing but a count, and
+ * keeping it minimal lets one rule cover artworks and comics alike.
+ */
+function likeSeed() {
+  return { likes: 1, status: "published", createdAt: serverTimestamp() };
+}
+
+export async function toggleLike(collectionName, id) {
   if (hasLiked(id)) return false;
   const ref = doc(db, collectionName, id);
-  const snap = await getDoc(ref);
-  if (snap.exists()) {
+
+  if ((await getDoc(ref)).exists()) {
     await updateDoc(ref, { likes: increment(1) });
   } else {
-    await setDoc(ref, { ...seedData, likes: 1, createdAt: serverTimestamp() }, { merge: true });
+    try {
+      await setDoc(ref, likeSeed());
+    } catch (err) {
+      // Someone liked the same piece between our read and our write, so the
+      // create was refused: the document exists now. Count it instead.
+      if (!(await getDoc(ref)).exists()) throw err;
+      await updateDoc(ref, { likes: increment(1) });
+    }
   }
+
   rememberLiked(id);
   return true;
 }

@@ -136,11 +136,7 @@ function buildReader() {
     const btn = el.querySelector(".reader-like");
     btn.disabled = true;
     try {
-      const ok = await toggleLike("comics", reader.story.id, {
-        title: reader.story.title,
-        categorySlug: reader.story.categorySlug,
-        coverUrl: reader.story.coverUrl
-      });
+      const ok = await toggleLike("comics", reader.story.id);
       if (ok) {
         btn.classList.add("is-liked");
         btn.querySelector(".heart").innerHTML = "&#9829;";
@@ -441,7 +437,7 @@ async function init() {
   }, () => {
     comics = [LOCAL_STORY];
     render();
-  });
+  }, { publishedOnly: true });
 }
 
 init();
