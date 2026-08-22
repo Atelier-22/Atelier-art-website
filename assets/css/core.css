@@ -25,7 +25,11 @@
    panels below would stay visible when toggled. Make the attribute win. */
 [hidden] { display: none !important; }
 
-html { scroll-behavior: smooth; -webkit-text-size-adjust: 100%; }
+html {
+  scroll-behavior: smooth;
+  -webkit-text-size-adjust: 100%;
+  overflow-x: clip;
+}
 
 body {
   margin: 0;
@@ -34,7 +38,7 @@ body {
   font-family: var(--body);
   font-size: 16px;
   line-height: 1.65;
-  overflow-x: hidden;
+  overflow-x: clip;
   -webkit-font-smoothing: antialiased;
 }
 
@@ -56,6 +60,38 @@ a { color: inherit; }
   max-width: var(--measure);
   margin-inline: auto;
   padding-inline: var(--gutter);
+}
+
+
+/* ---------- Photographic backdrop ----------
+   Sits above the page canvas but behind all content, so the artwork
+   wallpaper shows through every transparent section. */
+.wallpaper {
+  position: fixed;
+  inset: 0;
+  z-index: -1;
+  pointer-events: none;
+  background-image: var(--page-bg);
+  background-size: cover;
+  background-position: var(--page-bg-pos, center);
+  background-repeat: no-repeat;
+}
+
+.wallpaper::after {
+  content: "";
+  position: absolute;
+  inset: 0;
+  background:
+    radial-gradient(130% 90% at 50% 0%, rgba(7, 7, 10, 0.62), rgba(7, 7, 10, 0.9) 70%),
+    linear-gradient(180deg, rgba(7, 7, 10, 0.78) 0%, rgba(7, 7, 10, 0.86) 100%);
+}
+
+/* Phones render a much larger backdrop relative to the viewport, so the
+   image is dimmed further to keep body copy legible. */
+@media (max-width: 700px) {
+  .wallpaper::after {
+    background: linear-gradient(180deg, rgba(7, 7, 10, 0.9) 0%, rgba(7, 7, 10, 0.93) 100%);
+  }
 }
 
 /* ---------- Navigation ---------- */
@@ -312,4 +348,48 @@ a { color: inherit; }
 
 @media (max-width: 760px) {
   .footer-grid { grid-template-columns: 1fr; gap: 36px; }
+}
+
+/* ================= TOUCH & SMALL SCREENS ================= */
+
+/* Anything a finger has to hit gets a real target on touch devices. */
+@media (pointer: coarse) {
+  .nav-toggle,
+  .link-btn,
+  .like-btn,
+  .comment-toggle,
+  .chip {
+    min-height: 44px;
+  }
+
+  .nav-links a { min-height: 44px; display: flex; align-items: center; }
+}
+
+@media (max-width: 700px) {
+  :root { --gutter: 18px; }
+
+  body { font-size: 15px; }
+
+  .site-nav { padding: 14px var(--gutter); }
+  .site-nav.is-stuck { padding-block: 12px; }
+  .site-nav .wordmark { font-size: 1.15rem; }
+
+  .nav-toggle {
+    padding: 10px 16px;
+    font-size: 0.68rem;
+  }
+
+  .footer-grid { gap: 30px; }
+  .site-footer { padding: 52px var(--gutter) 34px; }
+  .footer-base { margin-top: 34px; font-size: 0.68rem; }
+}
+
+@media (max-width: 380px) {
+  :root { --gutter: 14px; }
+  .site-nav .wordmark { font-size: 1.05rem; }
+}
+
+/* Landscape phones are short: stop full-height blocks from trapping content. */
+@media (max-height: 480px) and (orientation: landscape) {
+  .nav-links { padding-top: 72px; overflow-y: auto; max-height: 100vh; }
 }

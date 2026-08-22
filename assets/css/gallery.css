@@ -397,3 +397,39 @@
   text-transform: uppercase;
   color: var(--gold);
 }
+
+/* ================= SMALL SCREENS ================= */
+@media (max-width: 700px) {
+  .page-head {
+    padding: calc(clamp(70px, 12vh, 110px) + 28px) 0 clamp(30px, 5vh, 50px);
+  }
+
+  .page-head h1 { font-size: clamp(2.3rem, 12vw, 3.4rem); }
+  .page-head .page-blurb { font-size: 0.95rem; }
+
+  .crumbs { font-size: 0.6rem; letter-spacing: 0.14em; flex-wrap: wrap; }
+
+  .gallery-body { padding: 34px 0 64px; }
+
+  .gallery-grid { gap: 16px; }
+
+  .art-body { padding: 16px 16px 18px; }
+  .art-title { font-size: 1.1rem; }
+
+  .art-actions { gap: 8px; }
+  .like-btn, .comment-toggle { padding: 9px 14px; font-size: 0.66rem; }
+
+  .comments-list { max-height: 200px; }
+
+  /* Index cards can't rely on hover, so the description is always shown. */
+  .index-card { aspect-ratio: 4 / 3; }
+  .index-card-body { padding: 20px; }
+  .index-card-body p { max-height: 6em; opacity: 1; }
+  .index-card img { filter: brightness(0.5) saturate(0.95); }
+}
+
+@media (max-width: 380px) {
+  .art-body { padding: 14px; }
+  .lb-close { top: 12px; width: 42px; height: 42px; }
+  .lb-counter { top: 22px; font-size: 0.62rem; }
+}

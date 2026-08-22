@@ -472,3 +472,39 @@
   from { transform: translateX(0); }
   to   { transform: translateX(-50%); }
 }
+
+/* ================= SMALL SCREENS ================= */
+@media (max-width: 700px) {
+  .hero { min-height: 92vh; min-height: 92svh; }
+  .hero-inner { padding-bottom: 42px; }
+  .hero .eyebrow { margin-bottom: 18px; font-size: 0.6rem; letter-spacing: 0.22em; }
+  .hero h1 { font-size: clamp(2.6rem, 13vw, 4rem); margin-bottom: 24px; max-width: none; }
+
+  .hero-foot { gap: 22px; padding-top: 22px; }
+  .hero-foot p { font-size: 0.92rem; }
+  .hero-meta { gap: 22px; width: 100%; }
+  .hero-meta div span { font-size: 1.7rem; }
+  .hero-meta div small { font-size: 0.56rem; letter-spacing: 0.18em; }
+
+  .manifesto { padding: 62px 0; }
+  .manifesto blockquote { font-size: clamp(1.5rem, 8vw, 2.2rem); max-width: none; }
+  .manifesto .attrib { margin-top: 26px; font-size: 0.62rem; }
+  .manifesto .attrib::before { width: 34px; }
+
+  .collection { padding: 44px 0; }
+  .collection-inner { gap: 26px; }
+  .collection-index { margin-bottom: 14px; font-size: 0.78rem; }
+  .collection-intro h2 { font-size: clamp(2.2rem, 11vw, 3rem); }
+  .collection-intro p.blurb { margin-bottom: 24px; font-size: 0.93rem; max-width: none; }
+  .collection-count { margin-top: 18px; font-size: 0.6rem; }
+
+  .mosaic { gap: 10px; }
+
+  .artist { padding: 62px 0; }
+  .artist-grid { gap: 28px; }
+  .artist-copy h2 { font-size: clamp(2rem, 10vw, 2.8rem); margin: 10px 0 18px; }
+
+  .finale { padding: 78px 0; }
+  .finale h2 { font-size: clamp(2.2rem, 12vw, 3.4rem); }
+  .marquee span { font-size: clamp(4rem, 22vw, 7rem); }
+}

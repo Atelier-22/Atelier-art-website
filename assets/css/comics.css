@@ -382,3 +382,40 @@
   .reader-next { right: 12%; }
   .reader-thumbs { display: none; }
 }
+
+/* ================= SMALL SCREENS ================= */
+@media (max-width: 700px) {
+  .chip-row { padding-block: 22px 26px; gap: 8px; }
+  .chip { padding: 10px 15px; font-size: 0.64rem; letter-spacing: 0.12em; }
+
+  .shelf { padding: 40px 0; }
+  .shelf-head { margin-bottom: 22px; }
+  .shelf-head h2 { font-size: clamp(1.9rem, 10vw, 2.6rem); }
+  .shelf-blurb { font-size: 0.92rem; }
+
+  /* Rails stay swipeable but show a hint of the next cover. */
+  .story-rail {
+    grid-auto-columns: minmax(150px, 62vw);
+    gap: 14px;
+    margin-inline: calc(-1 * var(--gutter));
+    padding-inline: var(--gutter);
+  }
+
+  .story-meta strong { font-size: 1.05rem; }
+  .story-enter { opacity: 1; transform: none; left: 16px; bottom: 16px; font-size: 0.58rem; }
+
+  .reader-bar { padding: 12px var(--gutter); }
+  .reader-title { font-size: 0.98rem; }
+  .reader-stage { padding: 10px var(--gutter) 62px; }
+  .reader-foot { padding: 0 var(--gutter) 12px; }
+  .reader-social { gap: 8px; }
+  .reader-comments .comments-list { max-height: 150px; }
+
+  .reader-nav { bottom: 74px; width: 46px; height: 46px; }
+}
+
+@media (max-width: 380px) {
+  .story-rail { grid-auto-columns: minmax(140px, 70vw); }
+  .reader-prev { left: 8%; }
+  .reader-next { right: 8%; }
+}

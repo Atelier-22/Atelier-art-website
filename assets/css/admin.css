@@ -185,11 +185,124 @@ body.admin { background: #0a0a0d; }
 
 .admin-mobile-bar { display: none; }
 
+/* The sidebar becomes a sticky top bar with a swipeable tab strip. */
 @media (max-width: 900px) {
   .admin-shell { grid-template-columns: 1fr; }
-  .admin-side { position: static; height: auto; flex-direction: row; align-items: center; flex-wrap: wrap; }
-  .admin-menu { grid-auto-flow: column; grid-auto-columns: max-content; overflow-x: auto; }
-  .admin-side-foot { margin: 0; grid-auto-flow: column; }
+
+  .admin-side {
+    position: sticky;
+    top: 0;
+    z-index: 60;
+    height: auto;
+    overflow: visible;
+    display: grid;
+    grid-template-columns: 1fr auto;
+    grid-template-areas: "brand foot" "menu menu";
+    gap: 12px;
+    padding: 12px 16px 0;
+    border-right: 0;
+    border-bottom: 1px solid var(--edge);
+    background: rgba(16, 16, 22, 0.96);
+    backdrop-filter: blur(14px);
+    -webkit-backdrop-filter: blur(14px);
+  }
+
+  .admin-brand { grid-area: brand; padding-inline: 0; font-size: 1.15rem; }
+  .admin-brand small { letter-spacing: 0.2em; }
+
+  .admin-side-foot {
+    grid-area: foot;
+    margin: 0;
+    display: flex;
+    align-items: center;
+    gap: 4px;
+  }
+
+  .admin-side-foot #who { display: none; }
+  .side-link { padding: 8px 10px; font-size: 0.68rem; white-space: nowrap; }
+
+  .admin-menu {
+    grid-area: menu;
+    grid-auto-flow: column;
+    grid-auto-columns: max-content;
+    gap: 2px;
+    overflow-x: auto;
+    scrollbar-width: none;
+    margin-inline: -16px;
+    padding-inline: 16px;
+  }
+
+  .admin-menu::-webkit-scrollbar { display: none; }
+
+  .admin-menu button {
+    white-space: nowrap;
+    border-radius: 0;
+    padding: 12px 14px;
+    min-height: 46px;
+    box-shadow: none;
+    border-bottom: 2px solid transparent;
+  }
+
+  .admin-menu button.is-active {
+    background: none;
+    box-shadow: none;
+    border-bottom-color: var(--gold);
+  }
+
+  .admin-main { padding: 24px 16px 70px; }
+  .admin-topbar { margin-bottom: 22px; }
+}
+
+@media (max-width: 700px) {
+  .panel { padding: 20px 16px; border-radius: 4px; }
+  .panel > h2 { font-size: 1.2rem; }
+
+  .login-box { padding: 32px 22px; }
+
+  .stat-row { grid-template-columns: repeat(auto-fit, minmax(130px, 1fr)); gap: 10px; }
+  .stat { padding: 16px 16px; }
+  .stat b { font-size: 2rem; }
+
+  .dropzone { padding: 26px 14px; }
+
+  .manage-grid { grid-template-columns: repeat(auto-fill, minmax(150px, 1fr)); gap: 12px; }
+  .m-card-body { padding: 10px 12px; }
+  .m-card-body h4 { font-size: 0.9rem; }
+  .m-card-actions { padding: 0 12px 12px; gap: 5px; }
+
+  /* Rows stack so the action buttons never crush the label. */
+  .row {
+    grid-template-columns: auto 1fr;
+    gap: 12px;
+    padding: 14px;
+  }
+
+  .row-actions {
+    grid-column: 1 / -1;
+    justify-content: flex-start;
+  }
+
+  .row-comment { grid-template-columns: 1fr; }
+
+  .toolbar { gap: 8px; }
+  .toolbar .grow { min-width: 100%; }
+  .btn { padding: 11px 16px; }
+
+  .modal { padding: 14px; align-items: flex-end; }
+  .modal-box { padding: 24px 20px; max-height: 88vh; border-radius: 6px 6px 0 0; }
+  .modal-actions { flex-direction: column-reverse; }
+  .modal-actions .btn { width: 100%; justify-content: center; }
+
+  .toast-host { right: 12px; left: 12px; bottom: 12px; max-width: none; }
+}
+
+/* Touch targets for the small icon controls. */
+@media (pointer: coarse) {
+  .btn, .side-link, .admin-menu button { min-height: 44px; }
+  .row .handle button { width: 34px; height: 28px; }
+  .thumb .kill { width: 26px; height: 26px; }
+  .thumb .move button { width: 24px; height: 24px; }
+  .comment-del { width: 30px; height: 30px; }
 }
 
 /* ============ CARDS & GRID ============ */
