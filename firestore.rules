@@ -128,7 +128,16 @@ service cloud.firestore {
 
     // ---- Artworks --------------------------------------------------------
     // Public list queries MUST filter on status == "published"; rules are not
-    // filters, and Firestore rejects a query it cannot prove safe.
+    // filters, and Firestore rejects a query it cannot prove safe. The one
+    // exception is the admin preview, which reads drafts as a signed-in admin.
+    //
+    // Note on `hidden`: taking a bundled piece off the site sets hidden: true
+    // rather than changing its status, so the document keeps coming back from
+    // the public query and the page can tell "the owner hid this" apart from
+    // "these records were never created". That means a hidden piece is still
+    // readable, which is deliberate and costs nothing -- its image is a file
+    // served from Hosting either way. Anything that must not be readable
+    // belongs in a draft, not behind this flag.
 
     match /artworks/{artId} {
       allow read: if isAdmin() || notFound() || isPublished();

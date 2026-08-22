@@ -1,5 +1,5 @@
-import { db, auth, getApp } from "../../firebase-config.js?v=20260822b";
-import { DEFAULT_ART_CATEGORIES, DEFAULT_COMIC_CATEGORIES } from "./site-data.js?v=20260822b";
+import { db, auth, getApp } from "../../firebase-config.js?v=20260823a";
+import { DEFAULT_ART_CATEGORIES, DEFAULT_COMIC_CATEGORIES } from "./site-data.js?v=20260823a";
 import {
   doc, getDoc, getDocs, setDoc, addDoc, deleteDoc, updateDoc, writeBatch,
   collection, collectionGroup, onSnapshot, query, orderBy, where, limit,
@@ -292,6 +292,12 @@ function normaliseArtwork(id, data) {
     // the unfilled truth is carried alongside it.
     hasTitle: typeof data.title === "string" && data.title.trim() !== "",
     archive: data.archive === true,
+    // Hiding is a flag rather than a status change on purpose. Flipping status
+    // to "archived" would drop the document out of the public query, and the
+    // page would then have no way to tell "the owner hid this" apart from "the
+    // records were never created" -- and would helpfully put the hidden piece
+    // back by falling through to the bundled list.
+    hidden: data.hidden === true,
     description: data.description || "",
     imageUrl: data.imageUrl || "",
     likes: data.likes || 0,
@@ -327,6 +333,45 @@ export function watchArtworks(categorySlug, callback, onError) {
     callback(items);
   }, (err) => {
     console.error("watchArtworks error:", err);
+    onError?.(err);
+  });
+}
+
+/**
+ * One listener for everything a collection page shows: the pieces the owner
+ * uploaded, and the pieces that shipped with the site.
+ *
+ * The bundled images used to be an array in site-data.js, which meant the page
+ * drew them whether or not the owner wanted them there — they could be given a
+ * title and nothing else. Now each one has a record, and this query is what
+ * the grid is built from, so hiding one, replacing its picture, or moving it
+ * up the page are all just writes.
+ *
+ * `archive` comes back empty until the records have been seeded (Admin ->
+ * Maintenance). The caller falls back to the bundled list in that case, so a
+ * database that has never been migrated still renders the site it always did.
+ */
+export function watchGalleryPieces(categorySlug, callback, onError, { includeDrafts = false } = {}) {
+  const base = [collection(db, "artworks"), where("category", "==", categorySlug)];
+  // Preview runs as the owner, who may read drafts; a visitor may not, and
+  // Firestore refuses the unfiltered query for them rather than trimming it.
+  const ref = includeDrafts
+    ? query(...base)
+    : query(...base, where("status", "==", "published"));
+
+  return onSnapshot(ref, (snap) => {
+    const all = snap.docs.map(d => normaliseArtwork(d.id, d.data()));
+
+    callback({
+      uploaded: all
+        .filter(a => a.imageUrl && a.uploaded)
+        .sort((a, b) => b.createdAt - a.createdAt),
+      archive: all
+        .filter(a => a.imageUrl && !a.uploaded && a.archive)
+        .sort((a, b) => a.order - b.order)
+    });
+  }, (err) => {
+    console.error("watchGalleryPieces error:", err);
     onError?.(err);
   });
 }
@@ -409,6 +454,75 @@ export async function saveArchivePiece(id, { categorySlug, title, description })
 
 export async function deleteArtwork(id) {
   await deleteDoc(doc(db, "artworks", id));
+}
+
+/* ------------------------------------------------------------------ */
+/*  Archive pieces — the images that shipped with the site             */
+/* ------------------------------------------------------------------ */
+
+/** Takes a piece off the site without destroying its record. Reversible. */
+export async function setArchiveVisibility(id, visible) {
+  await updateDoc(doc(db, "artworks", id), { hidden: !visible });
+  await logChange(visible ? "archive.show" : "archive.hide", id, "");
+}
+
+/**
+ * Swaps the picture. The record keeps its identity, so the title, the likes,
+ * and the comment thread all stay attached to the piece rather than to the
+ * file that used to represent it.
+ */
+export async function replaceArchiveImage(id, { imageUrl, publicId }) {
+  await updateDoc(doc(db, "artworks", id), { imageUrl, publicId: publicId || null });
+  await logChange("archive.replace", id, imageUrl);
+}
+
+export async function reorderArchivePieces(orderedIds) {
+  const batch = writeBatch(db);
+  orderedIds.forEach((id, i) => batch.update(doc(db, "artworks", id), { order: i }));
+  await batch.commit();
+}
+
+/**
+ * Copies one category's bundled images into Cloudinary and repoints their
+ * records at the uploaded copies.
+ *
+ * This is the step that lets the artworks/ folder eventually leave the repo.
+ * It is deliberately per-category and manual: it is a hundred megabytes of
+ * uploads across the whole site, and doing it a folder at a time is something
+ * the owner can start, watch finish, and stop.
+ *
+ * Idempotent — a piece already pointing at Cloudinary is skipped, so an
+ * interrupted run is resumed by running it again.
+ */
+export async function moveArchiveToCloudinary(pieces, onProgress) {
+  const pending = pieces.filter(p => p.imageUrl && !/^https?:/i.test(p.imageUrl));
+  let done = 0;
+  const failures = [];
+
+  for (const piece of pending) {
+    try {
+      const response = await fetch(piece.imageUrl);
+      if (!response.ok) throw new Error(`could not read ${piece.imageUrl}`);
+      const blob = await response.blob();
+      const name = piece.imageUrl.split("/").pop();
+      const file = new File([blob], name, { type: blob.type || "image/jpeg" });
+
+      const asset = await uploadAndRecord(file, {
+        usedFor: "archive",
+        onProgress: (p) => onProgress?.(done + p, pending.length, name)
+      });
+
+      await replaceArchiveImage(piece.id, { imageUrl: asset.url, publicId: asset.publicId });
+    } catch (err) {
+      console.error("archive migration failed for", piece.id, err);
+      failures.push(`${piece.id}: ${err.message}`);
+    }
+    done++;
+    onProgress?.(done, pending.length, "");
+  }
+
+  await logChange("archive.toCloudinary", pieces[0]?.category || "", `${done - failures.length} of ${pending.length} moved`);
+  return { moved: done - failures.length, total: pending.length, failures };
 }
 
 /* ------------------------------------------------------------------ */

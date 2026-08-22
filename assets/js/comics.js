@@ -1,29 +1,27 @@
-import { ensureGuestAuth, watchAuth, isOwner } from "../../firebase-config.js?v=20260822b";
+import { ensureGuestAuth, watchAuth, isOwner } from "../../firebase-config.js?v=20260823a";
 import {
   watchCategories, watchComics, watchLikes, toggleLike, hasLiked,
   watchComments, addComment, deleteComment
-} from "./data.js?v=20260822b";
-import { DEFAULT_COMIC_CATEGORIES } from "./site-data.js?v=20260822b";
-import { observeReveals, initNav } from "./reveal.js?v=20260822b";
+} from "./data.js?v=20260823a";
+import { DEFAULT_COMIC_CATEGORIES } from "./site-data.js?v=20260823a";
+import { observeReveals, initNav } from "./reveal.js?v=20260823a";
+import { initContent } from "./site-content.js?v=20260823a";
 
 const shelvesHost = document.getElementById("comic-shelves");
 const emptyHost = document.getElementById("comics-empty");
 const filterHost = document.getElementById("comic-filters");
 
-const LOCAL_STORY = {
-  id: "local-sketchbook",
-  title: "From the Sketchbook",
-  categorySlug: "drama",
-  description: "Three loose pages pulled straight from the working sketchbook — the archive sample that ships with the site.",
-  coverUrl: "artworks/comics/comic1.jpg",
-  pages: ["artworks/comics/comic1.jpg", "artworks/comics/comic2.jpg", "artworks/comics/comic3.jpg"],
-  likes: 0,
-  order: 0,
-  local: true
-};
+/**
+ * The sample story used to be hard-coded here and shown whenever the database
+ * had no comics in it. That made it undeletable: removing it emptied the
+ * collection, which was the exact condition that brought it back. It is now
+ * seeded as a real document by the migration (Admin -> Maintenance), so it can
+ * be retitled, reordered, or thrown away like any other story, and an empty
+ * shelf is allowed to actually be empty.
+ */
 
 let categories = DEFAULT_COMIC_CATEGORIES.map((c, i) => ({ ...c, name: c.label, order: i }));
-let comics = [LOCAL_STORY];
+let comics = [];
 let activeFilter = "all";
 let owner = false;
 
@@ -421,6 +419,8 @@ async function init() {
     render();
   });
 
+  initContent(() => observeReveals(document));
+
   await ensureGuestAuth().catch(() => null);
   watchAuth((user) => { owner = isOwner(user); });
 
@@ -431,11 +431,11 @@ async function init() {
   });
 
   watchComics((items) => {
-    comics = items.length ? items : [LOCAL_STORY];
+    comics = items;
     render();
     openFromHash();
   }, () => {
-    comics = [LOCAL_STORY];
+    comics = [];
     render();
   }, { publishedOnly: true });
 }

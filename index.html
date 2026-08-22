@@ -1,5 +1,5 @@
 <!DOCTYPE html>
-<html lang="en">
+<html lang="en" data-bg="home">
 <head>
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1.0, viewport-fit=cover">
@@ -12,15 +12,16 @@
   <link rel="preconnect" href="https://fonts.googleapis.com">
   <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
   <link href="https://fonts.googleapis.com/css2?family=Cormorant+Garamond:ital,wght@0,300;0,400;0,500;0,600;1,300;1,400&family=Inter:wght@300;400;500&display=swap" rel="stylesheet">
-  <link rel="stylesheet" href="assets/css/core.css?v=20260822b">
-  <link rel="stylesheet" href="assets/css/home.css?v=20260822b">
+  <link rel="stylesheet" href="assets/css/core.css?v=20260823a">
+  <link rel="stylesheet" href="assets/css/home.css?v=20260823a">
+  <script src="assets/js/theme-boot.js?v=20260823a"></script>
 </head>
-<body data-page="home" style="--page-bg:url(2.jpg)">
+<body data-page="home" data-cfg-bg="backgrounds.home">
 
 <div class="wallpaper" aria-hidden="true"></div>
 
 <nav class="site-nav">
-  <a class="wordmark" href="index.html">Alafi<span>.</span></a>
+  <a class="wordmark" href="index.html"><b data-cfg-text="branding.wordmark">Alafi</b><span data-cfg-text="branding.wordmarkDot">.</span></a>
   <button class="nav-toggle" type="button" aria-expanded="false" aria-controls="nav-links">Menu</button>
   <ul class="nav-links" id="nav-links">
     <li><a href="index.html" aria-current="page">Home</a></li>
@@ -41,15 +42,15 @@
   </div>
 
   <div class="hero-inner">
-    <span class="eyebrow" data-reveal="fade">A Digital Exhibition — Est. 2026</span>
+    <span class="eyebrow" data-reveal="fade" data-cfg-text="home.heroEyebrow">A Digital Exhibition — Est. 2026</span>
     <h1>
-      <span class="reveal-mask"><span>Every piece</span></span>
-      <span class="reveal-mask" style="--reveal-delay:120ms"><span>is a <em>room</em></span></span>
-      <span class="reveal-mask" style="--reveal-delay:240ms"><span>you walk into.</span></span>
+      <span class="reveal-mask"><span data-cfg-html="home.heroLine1">Every piece</span></span>
+      <span class="reveal-mask" style="--reveal-delay:120ms"><span data-cfg-html="home.heroLine2">is a <em>room</em></span></span>
+      <span class="reveal-mask" style="--reveal-delay:240ms"><span data-cfg-html="home.heroLine3">you walk into.</span></span>
     </h1>
 
     <div class="hero-foot" data-reveal="fade" style="--reveal-delay:520ms">
-      <p>Seven collections by Alafi Jonathan — paint, graphite, pixel, and stone. Take your time. The gallery reveals itself as you go.</p>
+      <p data-cfg-text="home.heroBlurb">Seven collections by Alafi Jonathan — paint, graphite, pixel, and stone. Take your time. The gallery reveals itself as you go.</p>
       <div class="hero-meta">
         <div><span>07</span><small>Collections</small></div>
         <div><span>120+</span><small>Works</small></div>
@@ -63,8 +64,8 @@
 
 <main>
   <section class="manifesto shell" data-reveal>
-    <blockquote>Art holds what words <b>can't</b> — it slows you down until you notice.</blockquote>
-    <p class="attrib">The Curator's Note</p>
+    <blockquote data-cfg-html="home.manifesto">Art holds what words <b>can't</b> — it slows you down until you notice.</blockquote>
+    <p class="attrib" data-cfg-text="home.manifestoAttrib">The Curator's Note</p>
   </section>
 
   <div class="collections" id="collections"></div>
@@ -72,26 +73,32 @@
   <section class="artist shell" data-reveal>
     <div class="artist-grid">
       <div class="artist-portrait" data-reveal="left">
-        <img src="AJ1.jpg" alt="Alafi Jonathan in the studio" loading="lazy">
+        <img src="AJ1.jpg" alt="Alafi Jonathan in the studio" loading="lazy" data-cfg-src="home.artistPortrait">
       </div>
       <div class="artist-copy" data-reveal="right">
-        <span class="eyebrow">The Person Behind the Work</span>
-        <h2>Alafi Jonathan</h2>
-        <p>An artist working across painting, sketching, digital art, and sculpture — driven by curiosity and a love of storytelling through colour and form.</p>
-        <p>Every collection here reflects a continuing exploration of craftsmanship and expression, made in public, one piece at a time.</p>
+        <span class="eyebrow" data-cfg-text="home.artistEyebrow">The Person Behind the Work</span>
+        <h2 data-cfg-text="home.artistName">Alafi Jonathan</h2>
+        <div data-artist-copy>
+          <p>An artist working across painting, sketching, digital art, and sculpture — driven by curiosity and a love of storytelling through colour and form.</p>
+          <p>Every collection here reflects a continuing exploration of craftsmanship and expression, made in public, one piece at a time.</p>
+        </div>
         <a class="link-btn" href="about.html">Read the Full Story <span class="arrow">&#8594;</span></a>
       </div>
     </div>
   </section>
+
+  <!-- The artist's own story, written and edited from the admin Settings page.
+       Rendered by site-content.js; hidden entirely when there is nothing in it. -->
+  <section class="story" id="story-section" hidden></section>
 
   <section class="finale">
     <div class="marquee" aria-hidden="true">
       <span>Paintings · Sketches · Digital · Sculpture · Portraits · Graphics · Comics · Paintings · Sketches · Digital · Sculpture · Portraits · Graphics · Comics · </span>
     </div>
     <div class="shell" data-reveal>
-      <span class="eyebrow">Your Journey Starts Here</span>
-      <h2>Step Into the Gallery</h2>
-      <p>Every collection is waiting. Explore freely, and see the work up close.</p>
+      <span class="eyebrow" data-cfg-text="home.finaleEyebrow">Your Journey Starts Here</span>
+      <h2 data-cfg-text="home.finaleTitle">Step Into the Gallery</h2>
+      <p data-cfg-text="home.finaleBlurb">Every collection is waiting. Explore freely, and see the work up close.</p>
       <a class="link-btn is-solid" href="gallery.html">Enter the Full Gallery <span class="arrow">&#8594;</span></a>
     </div>
   </section>
@@ -100,8 +107,8 @@
 <footer class="site-footer">
   <div class="footer-grid">
     <div>
-      <h4>Alafi Art Work</h4>
-      <p>A digital gallery of original work — built to be wandered through slowly.</p>
+      <h4 data-cfg-text="branding.siteTitle">Alafi Art Work</h4>
+      <p data-cfg-text="branding.footerBlurb">A digital gallery of original work — built to be wandered through slowly.</p>
     </div>
     <div class="footer-col">
       <p class="col-title">Collections</p>
@@ -123,11 +130,11 @@
     </div>
   </div>
   <div class="footer-base">
-    <span>© 2026 Alafi Art Work</span>
-    <span>All rights reserved</span>
+    <span data-cfg-text="branding.copyright">© 2026 Alafi Art Work</span>
+    <span data-cfg-text="branding.rights">All rights reserved</span>
   </div>
 </footer>
 
-<script type="module" src="assets/js/home.js?v=20260822b"></script>
+<script type="module" src="assets/js/home.js?v=20260823a"></script>
 </body>
 </html>

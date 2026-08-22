@@ -1,11 +1,13 @@
-import { ensureGuestAuth, watchAuth, isOwner } from "../../firebase-config.js?v=20260822b";
+import { ensureGuestAuth, watchAuth, isOwner } from "../../firebase-config.js?v=20260823a";
 import {
-  watchArtworks, watchPieceMeta, toggleLike, hasLiked,
+  watchGalleryPieces, watchPieceMeta, toggleLike, hasLiked,
   watchComments, addComment, deleteComment, fetchCategories, archivePieceId
-} from "./data.js?v=20260822b";
-import { LOCAL_SEEDS, CATEGORY_BY_SLUG, currentCategorySlug } from "./site-data.js?v=20260822b";
-import { bindGallery } from "./lightbox.js?v=20260822b";
-import { observeReveals, initNav } from "./reveal.js?v=20260822b";
+} from "./data.js?v=20260823a";
+import { isPreview } from "./site-config.js?v=20260823a";
+import { LOCAL_SEEDS, CATEGORY_BY_SLUG, currentCategorySlug } from "./site-data.js?v=20260823a";
+import { bindGallery } from "./lightbox.js?v=20260823a";
+import { observeReveals, initNav } from "./reveal.js?v=20260823a";
+import { initContent } from "./site-content.js?v=20260823a";
 
 const slug = currentCategorySlug();
 const grid = document.getElementById("gallery-grid");
@@ -21,20 +23,43 @@ function escapeHtml(str) {
   return d.innerHTML;
 }
 
-function localItems() {
-  const seeds = LOCAL_SEEDS[slug] || [];
+function placeholderFor(i) {
   const label = CATEGORY_BY_SLUG[slug]?.label || slug;
-  return seeds.map((src, i) => {
-    const placeholder = `${label.replace(/s$/, "")} No. ${String(i + 1).padStart(2, "0")}`;
+  return `${label.replace(/s$/, "")} No. ${String(i + 1).padStart(2, "0")}`;
+}
+
+/**
+ * The bundled images, drawn straight from the shipped list.
+ *
+ * This is now only the fallback for a database where the archive records have
+ * not been seeded yet. Once they exist the grid is built from them instead, so
+ * that a piece the owner hid stays hidden rather than reappearing from here.
+ */
+function localItems() {
+  return (LOCAL_SEEDS[slug] || []).map((src, i) => ({
+    id: archivePieceId(slug, i),
+    // Only a placeholder. If the owner has named this piece, the title that
+    // arrives from its document replaces this on the first snapshot -- and
+    // the placeholder is kept so clearing the name falls back to it.
+    title: placeholderFor(i),
+    placeholder: placeholderFor(i),
+    imageUrl: src,
+    description: "",
+    archive: true
+  }));
+}
+
+/** The same shape, built from the records the admin panel manages. */
+function recordItems(records) {
+  return records.map((record) => {
+    const index = Number(String(record.id).split("-").pop()) - 1;
+    const placeholder = placeholderFor(Number.isFinite(index) ? index : 0);
     return {
-      id: archivePieceId(slug, i),
-      // Only a placeholder. If the owner has named this piece, the title that
-      // arrives from its document replaces this on the first snapshot -- and
-      // the placeholder is kept so clearing the name falls back to it.
-      title: placeholder,
+      id: record.id,
+      title: record.hasTitle ? record.title : placeholder,
       placeholder,
-      imageUrl: src,
-      description: "",
+      imageUrl: record.imageUrl,
+      description: record.description,
       archive: true
     };
   });
@@ -233,36 +258,43 @@ function removeCard(id) {
 }
 
 /**
- * Reconciles the uploaded set against what's on screen instead of tearing the
- * grid down and rebuilding it. The old renderer rebuilt every card on every
+ * Reconciles what's on screen against the snapshot instead of tearing the grid
+ * down and rebuilding it. The old renderer rebuilt every card on every
  * snapshot — and a like triggers a snapshot — which re-registered listeners
  * without unsubscribing and made cards visibly restack.
  */
-function syncUploaded(items) {
-  const incoming = new Set(items.map(i => i.id));
+function sync({ uploaded, archive }) {
+  // A non-empty archive list means the records exist, so they are the truth
+  // about which bundled pieces belong on the page and in what order. Empty
+  // means they have never been seeded, and the shipped list stands in.
+  const archiveItems = archive.length
+    ? recordItems(archive.filter(a => !a.hidden))
+    : localItems();
 
-  cards.forEach((entry, id) => {
-    if (!entry.item.archive && !incoming.has(id)) removeCard(id);
-  });
+  const ordered = [...uploaded, ...archiveItems];
+  const incoming = new Set(ordered.map(i => i.id));
 
-  items.forEach((item) => {
+  cards.forEach((_, id) => { if (!incoming.has(id)) removeCard(id); });
+
+  ordered.forEach((item) => {
     const existing = cards.get(item.id);
     if (!existing) {
       addCard(item);
       return;
     }
     if (existing.item.title !== item.title || existing.item.imageUrl !== item.imageUrl) {
-      existing.item = item;
+      existing.item = { ...existing.item, ...item };
       existing.el.querySelector(".art-title").textContent = item.title;
       const img = existing.el.querySelector("img");
       if (img.getAttribute("src") !== item.imageUrl) img.src = item.imageUrl;
     }
   });
 
-  // Seat the uploaded cards ahead of the local archive, newest first.
-  // Prepending them one at a time would reverse the snapshot order.
+  // Seat every card in snapshot order: uploads newest-first, then the archive
+  // in whatever order the owner arranged. Moving each one after the previous
+  // keeps the sequence; prepending one at a time would reverse it.
   let anchor = null;
-  items.forEach((item) => {
+  ordered.forEach((item) => {
     const el = cards.get(item.id)?.el;
     if (!el) return;
     if (anchor) anchor.after(el);
@@ -299,6 +331,7 @@ async function paintHeader() {
 
 async function init() {
   initNav();
+  initContent();
   if (!grid) return;
 
   await paintHeader();
@@ -317,9 +350,12 @@ async function init() {
     document.body.classList.toggle("is-owner", owner);
   });
 
-  watchArtworks(slug, syncUploaded, () => {
+  // In preview the owner may also read drafts, so unpublished pieces show up
+  // alongside the live ones — which is the point of previewing before
+  // publishing an upload.
+  watchGalleryPieces(slug, sync, () => {
     if (emptyEl) emptyEl.hidden = cards.size > 0;
-  });
+  }, { includeDrafts: isPreview() });
 }
 
 init();

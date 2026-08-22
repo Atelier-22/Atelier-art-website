@@ -12,8 +12,9 @@
   <link rel="preconnect" href="https://fonts.googleapis.com">
   <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
   <link href="https://fonts.googleapis.com/css2?family=Cormorant+Garamond:ital,wght@0,300;0,400;0,500;0,600&family=Inter:wght@300;400;500&display=swap" rel="stylesheet">
-  <link rel="stylesheet" href="assets/css/core.css?v=20260822b">
-  <link rel="stylesheet" href="assets/css/admin.css?v=20260822b">
+  <link rel="stylesheet" href="assets/css/core.css?v=20260823a">
+  <link rel="stylesheet" href="assets/css/admin.css?v=20260823a">
+  <link rel="stylesheet" href="assets/css/settings.css?v=20260823a">
 </head>
 <body class="admin">
 
@@ -61,6 +62,14 @@
       <button type="button" data-view="categories"
               data-title="Categories" data-sub="Two independent systems &mdash; gallery collections and comic genres.">
         <span class="ico">&#9750;</span> Categories
+      </button>
+      <button type="button" data-view="settings"
+              data-title="Settings" data-sub="Colours, type, branding, and every piece of copy on the site &mdash; all in one place.">
+        <span class="ico">&#9788;</span> Settings
+      </button>
+      <button type="button" data-view="preview"
+              data-title="Preview" data-sub="The real site, showing your unpublished draft, before anyone else sees it.">
+        <span class="ico">&#9673;</span> Preview
       </button>
       <button type="button" data-view="maintenance"
               data-title="Maintenance" data-sub="Schema migration, admin identity, and the change log.">
@@ -156,14 +165,21 @@
       </div>
 
       <div class="panel">
-        <h2>Name the archive pieces</h2>
-        <p class="panel-sub">These are the pieces that came with the site. Until you name one it is listed by its number &mdash; give it a real title and say what it means, and that is what visitors see.</p>
+        <h2>The pieces that came with the site</h2>
+        <p class="panel-sub">Name them, replace the picture, reorder them, hide one, or delete it &mdash; the same control you have over anything you upload yourself.</p>
+
+        <div class="alert is-warn" id="archive-notice" hidden>
+          These pieces don&rsquo;t have records yet, so for now you can only give them titles.
+          Run the migration under <b>Maintenance</b> and every one of them becomes fully manageable.
+        </div>
 
         <div class="toolbar">
           <select id="archive-filter"></select>
           <div class="grow"><input type="search" id="archive-search" placeholder="Search titles"></div>
           <span class="status-line" id="archive-count" style="margin:0"></span>
+          <button class="btn is-small" id="archive-migrate" hidden>Move this collection to Cloudinary</button>
         </div>
+        <p class="status-line" id="archive-migrate-status"></p>
 
         <div class="manage-grid" id="archive-grid"></div>
       </div>
@@ -256,6 +272,43 @@
       </div>
     </section>
 
+    <!-- Every site-wide setting, on one page. The form itself is generated
+         from the schema in admin-settings.js, which is what keeps it from
+         being spread across four views again the next time one is added. -->
+    <section class="admin-view" id="view-settings">
+      <div class="settings-tabs" id="settings-tabs"></div>
+      <div id="settings-body"></div>
+    </section>
+
+    <section class="admin-view" id="view-preview">
+      <div class="panel preview-panel">
+        <div class="toolbar preview-toolbar">
+          <select id="preview-page" aria-label="Page to preview"></select>
+          <div class="device-switch" id="preview-devices">
+            <button type="button" data-device="phone">Phone</button>
+            <button type="button" data-device="tablet">Tablet</button>
+            <button type="button" data-device="desktop" class="is-active">Desktop</button>
+          </div>
+          <span class="status-line" id="preview-scale" style="margin:0"></span>
+          <div class="grow"></div>
+          <button class="btn is-small" id="preview-reload">Reload</button>
+          <button class="btn is-small" id="preview-open">Open in a tab &#8599;</button>
+        </div>
+
+        <div class="preview-stage" id="preview-stage">
+          <div class="preview-frame-wrap">
+            <iframe id="preview-frame" title="Live preview of the site"></iframe>
+          </div>
+        </div>
+
+        <p class="form-note">
+          This is the real site reading your unpublished draft &mdash; not a mock-up. Edits in
+          Settings appear here within a second or two, and visitors keep seeing the published
+          site until you press Publish.
+        </p>
+      </div>
+    </section>
+
     <section class="admin-view" id="view-maintenance">
       <div class="panel">
         <h2>Admin identity</h2>
@@ -306,9 +359,19 @@
         <div class="rows" id="comment-rows"></div>
       </div>
     </section>
+
+    <!-- One publish bar for both Settings and Preview. Two would drift, and
+         the state it reports -- how much is waiting to go live -- is one
+         thing, not two. -->
+    <div class="publish-bar" id="publish-bar" hidden>
+      <span class="settings-status" id="settings-status">Loading…</span>
+      <div class="grow"></div>
+      <button class="btn" id="settings-discard" disabled>Discard draft</button>
+      <button class="btn is-primary" id="settings-publish" disabled>Publish changes</button>
+    </div>
   </main>
 </div>
 
-<script type="module" src="assets/js/admin.js?v=20260822b"></script>
+<script type="module" src="assets/js/admin.js?v=20260823a"></script>
 </body>
 </html>

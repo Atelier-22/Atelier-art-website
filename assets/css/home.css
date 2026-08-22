@@ -46,8 +46,8 @@
      of artwork lost its edges, so the waist of the veil is lifted -- the
      slideshow still reads, the words stay solid. */
   background:
-    radial-gradient(120% 80% at 20% 10%, rgba(230,223,209,0.34), transparent 60%),
-    linear-gradient(180deg, rgba(230,223,209,0.88) 0%, rgba(230,223,209,0.62) 42%, rgba(230,223,209,0.97) 100%);
+    radial-gradient(120% 80% at 20% 10%, var(--veil-faint), transparent 60%),
+    linear-gradient(180deg, var(--veil-strong) 0%, var(--veil-light) 42%, var(--veil-solid) 100%);
 }
 
 .hero-inner {
@@ -439,6 +439,75 @@
   .artist-grid { grid-template-columns: 1fr; }
 }
 
+/* ============ STORY ============
+   Sits directly under the artist block and deliberately mirrors it: the
+   portrait is on the left up there, so the copy leads on the left down here
+   and the media answers on the right. Reading down the page, the two sections
+   alternate rather than repeating the same shape twice.
+
+   It carries no top border. The artist section already closed with one, and a
+   second hairline 100px later reads as a gap in the page rather than a join. */
+.story {
+  padding: clamp(90px, 15vh, 170px) 0;
+}
+
+.story-grid {
+  display: grid;
+  grid-template-columns: 1fr 0.85fr;
+  gap: clamp(40px, 6vw, 96px);
+  align-items: center;
+}
+
+/* Media is optional. Without it the copy would stretch to a full-width
+   measure, which is unreadable — so the grid collapses to one column and the
+   text keeps the width it was designed for. */
+.story-grid:not(:has(.story-media)) {
+  grid-template-columns: minmax(0, 62ch);
+}
+
+.story-copy h2 {
+  font-family: var(--display);
+  font-weight: 400;
+  font-size: clamp(2rem, 4.4vw, 3.4rem);
+  line-height: 1.04;
+  margin: 14px 0 24px;
+}
+
+.story-copy p {
+  color: var(--fg-dim);
+  max-width: 52ch;
+  margin: 0 0 20px;
+}
+
+.story-copy .link-btn { margin-top: 10px; }
+
+.story-media {
+  position: relative;
+  overflow: hidden;
+  background: var(--bg-raised);
+  box-shadow: var(--shadow-md);
+}
+
+.story-media img,
+.story-media video {
+  display: block;
+  width: 100%;
+  height: 100%;
+  max-height: 70vh;
+  object-fit: cover;
+}
+
+/* A video needs its own aspect ratio rather than the portrait crop an image
+   gets, or the controls end up cropped off the bottom. */
+.story-media:has(video) { aspect-ratio: 16 / 9; }
+.story-media:has(img) { aspect-ratio: 4 / 5; }
+
+@media (max-width: 860px) {
+  .story-grid { grid-template-columns: 1fr; }
+  .story-grid:not(:has(.story-media)) { grid-template-columns: 1fr; }
+  .story-media:has(img) { aspect-ratio: 4 / 3; }
+}
+
 /* ============ FINALE ============ */
 .finale {
   position: relative;
@@ -521,6 +590,11 @@
   .artist { padding: 62px 0; }
   .artist-grid { gap: 28px; }
   .artist-copy h2 { font-size: clamp(2rem, 10vw, 2.8rem); margin: 10px 0 18px; }
+
+  .story { padding: 56px 0; }
+  .story-grid { gap: 28px; }
+  .story-copy h2 { font-size: clamp(1.9rem, 9vw, 2.6rem); margin: 10px 0 18px; }
+  .story-copy p { font-size: 0.95rem; }
 
   .finale { padding: 78px 0; }
   .finale h2 { font-size: clamp(2.2rem, 12vw, 3.4rem); }

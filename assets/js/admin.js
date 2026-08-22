@@ -1,17 +1,20 @@
-import { watchAuth, isOwner, ownerLogin, ownerLogout } from "../../firebase-config.js?v=20260822b";
+import { watchAuth, isOwner, ownerLogin, ownerLogout } from "../../firebase-config.js?v=20260823a";
 import {
   watchCategories, seedDefaultCategories, createCategory, updateCategory,
   reorderCategories, deleteCategory,
   watchAllArtworks, createArtwork, updateArtwork, deleteArtwork,
-  archivePieceId, saveArchivePiece,
+  archivePieceId, saveArchivePiece, setArchiveVisibility, replaceArchiveImage,
+  reorderArchivePieces, moveArchiveToCloudinary, publicIdFromUrl,
   watchComics, createComic, updateComic, deleteComic, reorderComics,
   watchAllComments, deleteComment, uploadImage,
   grantAdminClaim, watchChangeLog, logChange
-} from "./data.js?v=20260822b";
-import { categoryHref, LOCAL_SEEDS, CATEGORY_BY_SLUG } from "./site-data.js?v=20260822b";
-
-const $ = (sel, root = document) => root.querySelector(sel);
-const $$ = (sel, root = document) => Array.from(root.querySelectorAll(sel));
+} from "./data.js?v=20260823a";
+import { categoryHref, LOCAL_SEEDS, CATEGORY_BY_SLUG } from "./site-data.js?v=20260823a";
+import {
+  $, $$, escapeHtml, relativeTime, toast, modal, confirmDelete
+} from "./admin-ui.js?v=20260823a";
+import { initSettings, setSettingsCategories, pickImage } from "./admin-settings.js?v=20260823a";
+import { initPreview, setPreviewCategories, onPreviewShown } from "./admin-preview.js?v=20260823a";
 
 const state = {
   artCategories: [],
@@ -27,119 +30,6 @@ const state = {
   comicFilter: "all",
   ready: false
 };
-
-function escapeHtml(str) {
-  const d = document.createElement("div");
-  d.textContent = str ?? "";
-  return d.innerHTML;
-}
-
-function relativeTime(seconds) {
-  if (!seconds) return "just now";
-  const diff = Date.now() / 1000 - seconds;
-  const units = [[31536000, "yr"], [2592000, "mo"], [604800, "wk"], [86400, "d"], [3600, "h"], [60, "m"]];
-  for (const [size, label] of units) {
-    if (diff >= size) return `${Math.floor(diff / size)}${label} ago`;
-  }
-  return "just now";
-}
-
-/* ------------------------------------------------------------------ */
-/*  Toasts                                                             */
-/* ------------------------------------------------------------------ */
-
-const toastHost = document.createElement("div");
-toastHost.className = "toast-host";
-document.body.appendChild(toastHost);
-
-function toast(message, kind = "") {
-  const el = document.createElement("div");
-  el.className = `toast ${kind ? `is-${kind}` : ""}`;
-  el.textContent = message;
-  toastHost.appendChild(el);
-  setTimeout(() => {
-    el.style.opacity = "0";
-    el.style.transition = "opacity .3s";
-    setTimeout(() => el.remove(), 320);
-  }, 4200);
-}
-
-/* ------------------------------------------------------------------ */
-/*  Modal — every destructive action routes through confirmDelete      */
-/* ------------------------------------------------------------------ */
-
-function modal({ title, body, confirmLabel = "Confirm", danger = false, onConfirm, confirmPhrase }) {
-  const overlay = document.createElement("div");
-  overlay.className = "modal";
-  overlay.innerHTML = `
-    <div class="modal-box" role="dialog" aria-modal="true">
-      <h3>${escapeHtml(title)}</h3>
-      <div class="modal-sub">${body}</div>
-      ${confirmPhrase ? `
-        <div class="confirm-guard">
-          <p>This can't be undone. Type <code>${escapeHtml(confirmPhrase)}</code> to confirm.</p>
-          <input type="text" class="guard-input" autocomplete="off" placeholder="${escapeHtml(confirmPhrase)}">
-        </div>` : ""}
-      <div class="modal-actions">
-        <button class="btn" data-cancel>Cancel</button>
-        <button class="btn ${danger ? "is-danger" : "is-primary"}" data-confirm ${confirmPhrase ? "disabled" : ""}>
-          ${escapeHtml(confirmLabel)}
-        </button>
-      </div>
-    </div>
-  `;
-  document.body.appendChild(overlay);
-  requestAnimationFrame(() => overlay.classList.add("is-open"));
-
-  const confirmBtn = $("[data-confirm]", overlay);
-  const guard = $(".guard-input", overlay);
-
-  if (guard) {
-    guard.addEventListener("input", () => {
-      confirmBtn.disabled = guard.value.trim() !== confirmPhrase;
-    });
-    guard.focus();
-  } else {
-    confirmBtn.focus();
-  }
-
-  function close() {
-    overlay.classList.remove("is-open");
-    document.removeEventListener("keydown", onKey);
-    setTimeout(() => overlay.remove(), 320);
-  }
-
-  function onKey(e) { if (e.key === "Escape") close(); }
-  document.addEventListener("keydown", onKey);
-
-  $("[data-cancel]", overlay).addEventListener("click", close);
-  overlay.addEventListener("click", (e) => { if (e.target === overlay) close(); });
-
-  confirmBtn.addEventListener("click", async () => {
-    confirmBtn.disabled = true;
-    try {
-      await onConfirm();
-      close();
-    } catch (err) {
-      console.error(err);
-      toast(err.message || "That didn't work.", "error");
-      confirmBtn.disabled = false;
-    }
-  });
-
-  return { close, overlay };
-}
-
-function confirmDelete({ what, name, extra = "", onConfirm }) {
-  return modal({
-    title: `Delete this ${what}?`,
-    body: `<b>${escapeHtml(name)}</b> will be permanently removed from the site.${extra ? ` ${extra}` : ""}`,
-    confirmLabel: `Delete ${what}`,
-    danger: true,
-    confirmPhrase: "DELETE",
-    onConfirm
-  });
-}
 
 /* ------------------------------------------------------------------ */
 /*  Auth                                                               */
@@ -180,6 +70,9 @@ watchAuth((user) => {
 /*  Navigation                                                         */
 /* ------------------------------------------------------------------ */
 
+/** Views where an unpublished draft is the thing being worked on. */
+const DRAFT_VIEWS = new Set(["settings", "preview"]);
+
 $$(".admin-menu button").forEach((btn) => {
   btn.addEventListener("click", () => {
     state.view = btn.dataset.view;
@@ -187,6 +80,8 @@ $$(".admin-menu button").forEach((btn) => {
     $$(".admin-view").forEach(v => v.classList.toggle("is-active", v.id === `view-${state.view}`));
     $("#view-title").textContent = btn.dataset.title;
     $("#view-sub").textContent = btn.dataset.sub;
+    $("#publish-bar").hidden = !DRAFT_VIEWS.has(state.view);
+    if (state.view === "preview") onPreviewShown();
     window.scrollTo({ top: 0, behavior: "smooth" });
   });
 });
@@ -455,16 +350,56 @@ function archivePlaceholder(slug, i) {
   return `${label.replace(/s$/, "")} No. ${String(i + 1).padStart(2, "0")}`;
 }
 
+/**
+ * True once every bundled piece has a record of its own. Until then these
+ * pieces are drawn from a list in the code and there is nothing to delete,
+ * reorder, or repoint — only a title to attach.
+ */
+function archiveSeeded(slug) {
+  return state.artworks.some(a => a.archive && a.category === slug && a.imageUrl);
+}
+
+/**
+ * The pieces for a collection, preferring their records and falling back to
+ * the shipped list. Both paths produce the same shape so the card renderer
+ * does not have to know which one it got.
+ */
 function archivePieces(slug) {
+  if (archiveSeeded(slug)) {
+    return state.artworks
+      .filter(a => a.archive && a.category === slug && a.imageUrl)
+      .sort((a, b) => a.order - b.order)
+      .map((record, position) => {
+        const index = Number(String(record.id).split("-").pop()) - 1;
+        return {
+          id: record.id,
+          slug,
+          position,
+          imageUrl: record.imageUrl,
+          title: record.hasTitle ? record.title : "",
+          placeholder: archivePlaceholder(slug, Number.isFinite(index) ? index : position),
+          description: record.description,
+          likes: record.likes,
+          hidden: record.hidden,
+          publicId: record.publicId,
+          onCloudinary: /^https?:/i.test(record.imageUrl),
+          managed: true
+        };
+      });
+  }
+
   return (LOCAL_SEEDS[slug] || []).map((src, i) => {
     const id = archivePieceId(slug, i);
     const saved = state.artworks.find(a => a.id === id);
     return {
-      id, slug, index: i, imageUrl: src,
+      id, slug, position: i, imageUrl: src,
       title: saved?.hasTitle ? saved.title : "",
       placeholder: archivePlaceholder(slug, i),
       description: saved?.description || "",
-      likes: saved?.likes || 0
+      likes: saved?.likes || 0,
+      hidden: false,
+      onCloudinary: false,
+      managed: false
     };
   });
 }
@@ -475,32 +410,130 @@ function renderArchive() {
 
   const slug = state.archiveFilter || archiveCategories()[0] || "";
   const term = state.archiveSearch.trim().toLowerCase();
+  const all = archivePieces(slug);
+  const seeded = all.some(p => p.managed);
 
-  const list = archivePieces(slug).filter(p =>
+  const list = all.filter(p =>
     !term || p.title.toLowerCase().includes(term) || p.placeholder.toLowerCase().includes(term));
 
-  const named = archivePieces(slug).filter(p => p.title).length;
-  const total = (LOCAL_SEEDS[slug] || []).length;
-  $("#archive-count").textContent = total ? `${named} of ${total} named` : "";
+  const named = all.filter(p => p.title).length;
+  const onCloud = all.filter(p => p.onCloudinary).length;
+  $("#archive-count").textContent = all.length
+    ? `${named} of ${all.length} named · ${onCloud} of ${all.length} on Cloudinary`
+    : "";
+
+  // The notice is the difference between "these cannot be managed" and "these
+  // cannot be managed YET", which is worth spelling out rather than leaving
+  // the owner to wonder why the buttons are missing.
+  const notice = $("#archive-notice");
+  if (notice) {
+    notice.hidden = seeded;
+    $("#archive-migrate").hidden = !seeded;
+  }
 
   host.innerHTML = list.length ? "" : '<p class="empty-note">Nothing matches that search.</p>';
 
   list.forEach((piece) => {
     const el = document.createElement("article");
-    el.className = "m-card";
+    el.className = `m-card${piece.hidden ? " is-hidden-piece" : ""}`;
     el.innerHTML = `
       ${piece.likes ? `<span class="m-badge">${piece.likes} &#9829;</span>` : ""}
       <img src="${escapeHtml(piece.imageUrl)}" alt="${escapeHtml(piece.title || piece.placeholder)}" loading="lazy">
       <div class="m-card-body">
         <h4>${escapeHtml(piece.title || piece.placeholder)}</h4>
-        <p>${piece.title ? "Named" : "Unnamed"}</p>
+        <p>
+          ${piece.title ? "Named" : "Unnamed"}
+          ${piece.hidden ? ' · <b style="color:var(--danger)">Hidden</b>' : ""}
+          ${piece.onCloudinary ? " · Cloudinary" : ""}
+        </p>
       </div>
       <div class="m-card-actions">
         <button class="btn is-small" data-name>${piece.title ? "Edit" : "Add a title"}</button>
+        ${piece.managed ? `
+          <button class="btn is-small" data-replace>Replace</button>
+          <button class="btn is-small" data-up ${piece.position === 0 ? "disabled" : ""} aria-label="Move earlier">&#9650;</button>
+          <button class="btn is-small" data-down ${piece.position === all.length - 1 ? "disabled" : ""} aria-label="Move later">&#9660;</button>
+          <button class="btn is-small" data-visible>${piece.hidden ? "Show" : "Hide"}</button>
+          <button class="btn is-small is-danger" data-del>Delete</button>` : ""}
       </div>
     `;
+
     $("[data-name]", el).addEventListener("click", () => nameArchivePiece(piece));
+
+    if (piece.managed) {
+      $("[data-replace]", el).addEventListener("click", async () => {
+        const next = await pickImage(piece.imageUrl);
+        if (!next) return;
+        await replaceArchiveImage(piece.id, { imageUrl: next, publicId: publicIdFromUrl(next) });
+        toast("Picture replaced — its title, likes and comments are untouched.", "ok");
+      });
+
+      const move = async (delta) => {
+        const ids = all.map(p => p.id);
+        const i = piece.position;
+        [ids[i + delta], ids[i]] = [ids[i], ids[i + delta]];
+        await reorderArchivePieces(ids);
+      };
+      $("[data-up]", el).addEventListener("click", () => move(-1));
+      $("[data-down]", el).addEventListener("click", () => move(1));
+
+      $("[data-visible]", el).addEventListener("click", async () => {
+        await setArchiveVisibility(piece.id, piece.hidden);
+        toast(piece.hidden ? "Back on the site." : "Hidden from the site — you can put it back.", "ok");
+      });
+
+      $("[data-del]", el).addEventListener("click", () => {
+        confirmDelete({
+          what: "piece",
+          name: piece.title || piece.placeholder,
+          extra: "Its likes and comments go with it. To take it off the site without losing them, use Hide instead.",
+          onConfirm: async () => {
+            await deleteArtwork(piece.id);
+            toast("Piece deleted.", "ok");
+          }
+        });
+      });
+    }
+
     host.appendChild(el);
+  });
+}
+
+/**
+ * Copies a whole collection's bundled files into Cloudinary. Offered per
+ * collection rather than site-wide because it is roughly a hundred megabytes
+ * across the seven of them, and a folder at a time is something you can watch
+ * finish.
+ */
+function migrateCategoryToCloudinary() {
+  const slug = state.archiveFilter || archiveCategories()[0] || "";
+  const pieces = archivePieces(slug).filter(p => p.managed);
+  const pending = pieces.filter(p => !p.onCloudinary);
+
+  if (!pending.length) {
+    toast("This collection is already on Cloudinary.", "ok");
+    return;
+  }
+
+  modal({
+    title: `Move ${CATEGORY_BY_SLUG[slug]?.label || slug} to Cloudinary?`,
+    body: `<b>${pending.length}</b> image${pending.length === 1 ? "" : "s"} will be uploaded to Cloudinary,
+           and each piece will start using the uploaded copy.<br><br>
+           Nothing is deleted and nothing on the site changes visually. It is safe to
+           re-run &mdash; anything already moved is skipped &mdash; and safe to interrupt.`,
+    confirmLabel: "Start the move",
+    onConfirm: async () => {
+      const status = $("#archive-migrate-status");
+      status.textContent = "Starting…";
+      const { moved, total, failures } = await moveArchiveToCloudinary(pending, (done, count, name) => {
+        status.textContent = `Moved ${Math.floor(done)} of ${count}${name ? ` — ${name}` : ""}…`;
+      });
+      status.textContent = failures.length
+        ? `${moved} of ${total} moved. ${failures.length} failed — see the console.`
+        : `All ${moved} moved to Cloudinary.`;
+      if (failures.length) console.warn(failures);
+      toast(failures.length ? "Finished with some failures." : "Collection moved to Cloudinary.", failures.length ? "error" : "ok");
+    }
   });
 }
 
@@ -542,6 +575,8 @@ $("#archive-search")?.addEventListener("input", (e) => {
   state.archiveSearch = e.target.value;
   renderArchive();
 });
+
+$("#archive-migrate")?.addEventListener("click", migrateCategoryToCloudinary);
 
 /* ------------------------------------------------------------------ */
 /*  Comic upload — cover + ordered page sequence                       */
@@ -1070,7 +1105,7 @@ $("#migrate-dry").addEventListener("click", async () => {
   btn.disabled = true;
   $("#migrate-report").innerHTML = '<p class="empty-note">Scanning…</p>';
   try {
-    const { dryRun } = await import("./migrate.js?v=20260822b");
+    const { dryRun } = await import("./migrate.js?v=20260823a");
     const { plans, totalWrites } = await dryRun();
     renderMigrationReport(plans, false);
     $("#migrate-run").disabled = totalWrites === 0;
@@ -1092,7 +1127,7 @@ $("#migrate-run").addEventListener("click", () => {
     body: "This writes <b>status</b>, <b>featured</b>, and Cloudinary <b>public IDs</b> onto your existing documents, copies categories into artCategories, seeds comic genres, and backfills the media library.<br><br>It is additive and idempotent — nothing is deleted, and re-running it is harmless.",
     confirmLabel: "Run migration",
     onConfirm: async () => {
-      const { apply } = await import("./migrate.js?v=20260822b");
+      const { apply } = await import("./migrate.js?v=20260823a");
       const { results, totalWrites } = await apply((label) => {
         $("#migrate-report").innerHTML = `<p class="empty-note">Migrating: ${escapeHtml(label)}…</p>`;
       });
@@ -1133,6 +1168,10 @@ function boot() {
     renderArtworks();
     renderArchive();
     renderOverview();
+    // The settings page needs one cover picker per collection, and the
+    // preview needs every collection in its page list.
+    setSettingsCategories(items);
+    setPreviewCategories(items);
   });
 
   watchCategories("comics", (items) => {
@@ -1174,4 +1213,14 @@ function boot() {
   renderArtFiles();
   renderComicPages();
   renderComicCover();
+
+  // Settings and preview come up last: the preview frame loads a full copy of
+  // the site, and there is no reason for that to compete with the panels the
+  // owner is looking at first.
+  initSettings().catch((err) => {
+    console.error("Settings failed to load:", err);
+    $("#settings-body").innerHTML =
+      '<p class="empty-note">Settings could not be loaded. Check that the updated rules are published.</p>';
+  });
+  initPreview();
 }
