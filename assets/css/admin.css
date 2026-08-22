@@ -1,12 +1,23 @@
+/* The studio runs on the same surface system as the public site; these are
+   just the admin's names for it. Panels are the raised surface, wells are
+   the field surface, and edges are the strong hairline -- a management
+   screen is dense with controls, and a 13% border does not tell you where
+   one thing ends and the next begins. */
 :root {
-  --panel: #f6f2ea;
-  --panel-2: #efeae0;
-  --edge: rgba(28, 26, 22, 0.13);
-  --danger: #a8403b;
-  --ok: #2f6d4d;
+  --panel: var(--bg-raised);
+  --panel-2: var(--field);
+  --edge: var(--hairline);
+  --edge-strong: var(--hairline-strong);
+
+  /* List rows live inside panels, so they cannot be the same surface as the
+     panel or the list dissolves into the card. One step down. */
+  --panel-inset: #f1ece1;
 }
 
-body.admin { background: #e7e1d5; }
+/* The page ground sits below every panel so the panels read as sheets laid
+   on a desk. Same reason the chrome is tinted rather than white: a screen
+   that is one flat sheet gives you nothing to orient by. */
+body.admin { background: var(--bg); }
 
 /* ============ LOGIN ============ */
 .login-screen {
@@ -23,6 +34,7 @@ body.admin { background: #e7e1d5; }
   border: 1px solid var(--edge);
   border-radius: 6px;
   padding: 46px 40px;
+  box-shadow: var(--shadow-md);
 }
 
 .login-box h1 {
@@ -32,41 +44,52 @@ body.admin { background: #e7e1d5; }
   margin: 0 0 6px;
 }
 
-.login-box .sub { color: var(--fg-faint); font-size: 0.82rem; margin: 0 0 32px; letter-spacing: 0.06em; }
+.login-box .sub { color: var(--fg-dim); font-size: 0.82rem; margin: 0 0 32px; letter-spacing: 0.06em; }
 
 .field { display: grid; gap: 7px; margin-bottom: 16px; }
 
+/* Labels are the map of a form. At 0.64rem in wide caps they need the
+   darker secondary ink, not the faintest one. */
 .field label {
-  font-size: 0.64rem;
-  letter-spacing: 0.24em;
+  font-size: 0.66rem;
+  letter-spacing: 0.2em;
   text-transform: uppercase;
-  color: var(--fg-faint);
+  color: var(--fg-dim);
+  font-weight: 500;
 }
 
 .field input,
 .field select,
 .field textarea {
   width: 100%;
-  background: var(--panel-2);
-  border: 1px solid var(--edge);
+  background: var(--field);
+  border: 1px solid var(--field-edge);
   border-radius: 3px;
   color: var(--fg);
   padding: 12px 14px;
   font-family: inherit;
   font-size: 0.92rem;
   outline: none;
-  transition: border-color 0.3s var(--ease);
+  transition: border-color 0.3s var(--ease), box-shadow 0.3s var(--ease);
 }
 
 .field textarea { min-height: 92px; resize: vertical; }
 
+/* Focus is a ring, not a hue shift. A border that only changes colour is
+   easy to miss when you are tabbing through a long form. */
 .field input:focus,
 .field select:focus,
-.field textarea:focus { border-color: rgba(125, 96, 24, 0.65); }
+.field textarea:focus {
+  border-color: var(--gold);
+  box-shadow: 0 0 0 3px var(--gold-soft);
+}
 
-.field select option { background: var(--panel-2); }
+.field input::placeholder,
+.field textarea::placeholder { color: var(--fg-faint); }
 
-.form-note { color: var(--fg-faint); font-size: 0.76rem; margin: -4px 0 0; }
+.field select option { background: var(--panel); color: var(--fg); }
+
+.form-note { color: var(--fg-dim); font-size: 0.76rem; margin: -4px 0 0; }
 
 .alert {
   border-radius: 3px;
@@ -76,9 +99,9 @@ body.admin { background: #e7e1d5; }
   border: 1px solid;
 }
 
-.alert.is-error { color: var(--danger); border-color: rgba(168, 64, 59, 0.42); background: rgba(168, 64, 59, 0.09); }
-.alert.is-warn { color: var(--gold); border-color: rgba(125, 96, 24, 0.4); background: var(--gold-soft); }
-.alert.is-ok { color: var(--ok); border-color: rgba(47, 109, 77, 0.42); background: rgba(47, 109, 77, 0.09); }
+.alert.is-error { color: var(--danger); border-color: rgba(157, 51, 45, 0.45); background: rgba(157, 51, 45, 0.09); }
+.alert.is-warn { color: #6a4f10; border-color: rgba(125, 96, 24, 0.45); background: var(--gold-soft); }
+.alert.is-ok { color: var(--ok); border-color: rgba(44, 102, 71, 0.45); background: rgba(44, 102, 71, 0.09); }
 
 /* ============ SHELL ============ */
 .admin-shell {
@@ -87,9 +110,14 @@ body.admin { background: #e7e1d5; }
   min-height: 100vh;
 }
 
+/* The sidebar is the one piece of chrome that has to be unmistakable -- it
+   is what tells you at a glance that this is the studio and not the public
+   site. It gets the raised surface, a firm edge, and a shadow that separates
+   it from the content column no matter how pale the screen. */
 .admin-side {
   background: var(--panel);
-  border-right: 1px solid var(--edge);
+  border-right: 1px solid var(--edge-strong);
+  box-shadow: var(--shadow-sm);
   padding: 26px 18px;
   display: flex;
   flex-direction: column;
@@ -98,6 +126,7 @@ body.admin { background: #e7e1d5; }
   top: 0;
   height: 100vh;
   overflow-y: auto;
+  z-index: 10;
 }
 
 .admin-brand {
@@ -107,7 +136,19 @@ body.admin { background: #e7e1d5; }
 }
 
 .admin-brand span { color: var(--gold); }
-.admin-brand small { display: block; font-family: var(--body); font-size: 0.6rem; letter-spacing: 0.24em; text-transform: uppercase; color: var(--fg-faint); margin-top: 4px; }
+
+/* "Studio" is the standing answer to "where am I?", so it is set in the
+   accent rather than the faintest ink available. */
+.admin-brand small {
+  display: block;
+  font-family: var(--body);
+  font-size: 0.6rem;
+  letter-spacing: 0.24em;
+  text-transform: uppercase;
+  color: var(--gold);
+  font-weight: 500;
+  margin-top: 4px;
+}
 
 .admin-menu { display: grid; gap: 3px; }
 
@@ -123,28 +164,34 @@ body.admin { background: #e7e1d5; }
   color: var(--fg-dim);
   padding: 12px 14px;
   font-family: inherit;
-  font-size: 0.82rem;
+  font-size: 0.84rem;
   letter-spacing: 0.04em;
   cursor: pointer;
   transition: background 0.3s var(--ease), color 0.3s var(--ease);
 }
 
-.admin-menu button:hover { background: rgba(28, 26, 22, 0.06); color: var(--fg); }
+.admin-menu button:hover { background: rgba(28, 26, 22, 0.07); color: var(--fg); }
 
+/* A 13%-tint wash and a 2px sliver was the whole "you are here" signal, and
+   on paper it read as nothing. The current section is now a solid block:
+   gold bar, filled ground, ink at full strength, label in medium. */
 .admin-menu button.is-active {
   background: var(--gold-soft);
-  color: var(--gold);
-  box-shadow: inset 2px 0 0 var(--gold);
+  color: var(--fg);
+  font-weight: 500;
+  box-shadow: inset 3px 0 0 var(--gold);
 }
 
-.admin-menu .ico { width: 18px; text-align: center; opacity: 0.8; }
+.admin-menu button.is-active .ico { color: var(--gold); opacity: 1; }
+
+.admin-menu .ico { width: 18px; text-align: center; opacity: 0.75; }
 
 .admin-side-foot { margin-top: auto; display: grid; gap: 8px; }
 
 .side-link {
   display: block;
   text-decoration: none;
-  color: var(--fg-faint);
+  color: var(--fg-dim);
   font-size: 0.74rem;
   letter-spacing: 0.12em;
   padding: 10px 14px;
@@ -152,8 +199,9 @@ body.admin { background: #e7e1d5; }
   transition: color 0.3s var(--ease), background 0.3s var(--ease);
 }
 
-.side-link:hover { color: var(--fg); background: rgba(28, 26, 22, 0.06); }
-.side-link.is-danger:hover { color: var(--danger); }
+.side-link:hover { color: var(--fg); background: rgba(28, 26, 22, 0.07); }
+.side-link.is-danger { color: var(--danger); }
+.side-link.is-danger:hover { color: var(--danger); background: rgba(157, 51, 45, 0.09); }
 
 .admin-main { padding: 34px clamp(20px, 3.4vw, 46px) 90px; min-width: 0; }
 
@@ -171,9 +219,10 @@ body.admin { background: #e7e1d5; }
   font-weight: 400;
   font-size: clamp(1.9rem, 3.4vw, 2.8rem);
   margin: 0;
+  line-height: 1.1;
 }
 
-.admin-topbar p { margin: 6px 0 0; color: var(--fg-faint); font-size: 0.84rem; }
+.admin-topbar p { margin: 8px 0 0; color: var(--fg-dim); font-size: 0.86rem; }
 
 .admin-view { display: none; }
 .admin-view.is-active { display: block; animation: viewIn 0.45s var(--ease-out); }
@@ -201,10 +250,11 @@ body.admin { background: #e7e1d5; }
     gap: 12px;
     padding: 12px 16px 0;
     border-right: 0;
-    border-bottom: 1px solid var(--edge);
-    background: rgba(246, 242, 234, 0.97);
+    border-bottom: 1px solid var(--edge-strong);
+    background: rgba(250, 247, 241, 0.98);
     backdrop-filter: blur(14px);
     -webkit-backdrop-filter: blur(14px);
+    box-shadow: var(--shadow-sm);
   }
 
   .admin-brand { grid-area: brand; padding-inline: 0; font-size: 1.15rem; }
@@ -244,65 +294,14 @@ body.admin { background: #e7e1d5; }
   }
 
   .admin-menu button.is-active {
-    background: none;
+    background: var(--gold-soft);
+    color: var(--fg);
     box-shadow: none;
     border-bottom-color: var(--gold);
   }
 
   .admin-main { padding: 24px 16px 70px; }
   .admin-topbar { margin-bottom: 22px; }
-}
-
-@media (max-width: 700px) {
-  .panel { padding: 20px 16px; border-radius: 4px; }
-  .panel > h2 { font-size: 1.2rem; }
-
-  .login-box { padding: 32px 22px; }
-
-  .stat-row { grid-template-columns: repeat(auto-fit, minmax(130px, 1fr)); gap: 10px; }
-  .stat { padding: 16px 16px; }
-  .stat b { font-size: 2rem; }
-
-  .dropzone { padding: 26px 14px; }
-
-  .manage-grid { grid-template-columns: repeat(auto-fill, minmax(150px, 1fr)); gap: 12px; }
-  .m-card-body { padding: 10px 12px; }
-  .m-card-body h4 { font-size: 0.9rem; }
-  .m-card-actions { padding: 0 12px 12px; gap: 5px; }
-
-  /* Rows stack so the action buttons never crush the label. */
-  .row {
-    grid-template-columns: auto 1fr;
-    gap: 12px;
-    padding: 14px;
-  }
-
-  .row-actions {
-    grid-column: 1 / -1;
-    justify-content: flex-start;
-  }
-
-  .row-comment { grid-template-columns: 1fr; }
-
-  .toolbar { gap: 8px; }
-  .toolbar .grow { min-width: 100%; }
-  .btn { padding: 11px 16px; }
-
-  .modal { padding: 14px; align-items: flex-end; }
-  .modal-box { padding: 24px 20px; max-height: 88vh; border-radius: 6px 6px 0 0; }
-  .modal-actions { flex-direction: column-reverse; }
-  .modal-actions .btn { width: 100%; justify-content: center; }
-
-  .toast-host { right: 12px; left: 12px; bottom: 12px; max-width: none; }
-}
-
-/* Touch targets for the small icon controls. */
-@media (pointer: coarse) {
-  .btn, .side-link, .admin-menu button { min-height: 44px; }
-  .row .handle button { width: 34px; height: 28px; }
-  .thumb .kill { width: 26px; height: 26px; }
-  .thumb .move button { width: 24px; height: 24px; }
-  .comment-del { width: 30px; height: 30px; }
 }
 
 /* ============ CARDS & GRID ============ */
@@ -312,16 +311,25 @@ body.admin { background: #e7e1d5; }
   border-radius: 5px;
   padding: 26px 28px;
   margin-bottom: 24px;
+  box-shadow: var(--shadow-sm);
 }
 
+/* A rule under the heading gives each panel a top edge you can actually see,
+   so a column of them reads as separate cards rather than continuous text. */
 .panel > h2 {
   font-family: var(--display);
   font-weight: 500;
-  font-size: 1.4rem;
-  margin: 0 0 4px;
+  font-size: 1.45rem;
+  margin: 0 0 6px;
 }
 
-.panel > .panel-sub { color: var(--fg-faint); font-size: 0.82rem; margin: 0 0 24px; }
+.panel > .panel-sub {
+  color: var(--fg-dim);
+  font-size: 0.84rem;
+  margin: 0 0 22px;
+  padding-bottom: 18px;
+  border-bottom: 1px solid var(--edge);
+}
 
 .form-grid { display: grid; grid-template-columns: repeat(auto-fit, minmax(240px, 1fr)); gap: 0 20px; }
 .form-grid .span-2 { grid-column: 1 / -1; }
@@ -341,10 +349,16 @@ body.admin { background: #e7e1d5; }
   text-decoration: none;
   color: inherit;
   display: block;
-  transition: border-color 0.35s var(--ease), transform 0.35s var(--ease);
+  box-shadow: var(--shadow-sm);
+  transition: border-color 0.35s var(--ease), transform 0.35s var(--ease),
+              box-shadow 0.35s var(--ease);
 }
 
-a.stat:hover, button.stat:hover { border-color: rgba(125, 96, 24, 0.5); transform: translateY(-3px); }
+a.stat:hover, button.stat:hover {
+  border-color: var(--gold-edge);
+  transform: translateY(-3px);
+  box-shadow: var(--shadow-md);
+}
 
 .stat b {
   display: block;
@@ -358,10 +372,10 @@ a.stat:hover, button.stat:hover { border-color: rgba(125, 96, 24, 0.5); transfor
 .stat small {
   display: block;
   margin-top: 8px;
-  font-size: 0.62rem;
-  letter-spacing: 0.22em;
+  font-size: 0.64rem;
+  letter-spacing: 0.2em;
   text-transform: uppercase;
-  color: var(--fg-faint);
+  color: var(--fg-dim);
 }
 
 button.stat { width: 100%; text-align: left; font-family: inherit; cursor: pointer; }
@@ -379,23 +393,40 @@ button.stat { width: 100%; text-align: left; font-family: inherit; cursor: point
 
 .toolbar input[type="search"],
 .toolbar select {
-  background: var(--panel-2);
-  border: 1px solid var(--edge);
+  background: var(--field);
+  border: 1px solid var(--field-edge);
   border-radius: 3px;
   color: var(--fg);
   padding: 10px 14px;
   font-family: inherit;
   font-size: 0.86rem;
   outline: none;
-  width: 100%;
+  transition: border-color 0.3s var(--ease), box-shadow 0.3s var(--ease);
 }
 
+/* The search sits in a .grow wrapper and should fill it. A bare select is a
+   flex child of the toolbar itself, so width:100% made it demand the whole
+   row and wrap onto a line of its own, next to nothing. */
+.toolbar .grow input[type="search"] { width: 100%; }
+.toolbar > select { flex: 0 1 auto; min-width: 170px; max-width: 260px; }
+
+.toolbar input[type="search"]:focus,
+.toolbar select:focus {
+  border-color: var(--gold);
+  box-shadow: 0 0 0 3px var(--gold-soft);
+}
+
+.toolbar input[type="search"]::placeholder { color: var(--fg-faint); }
+
+/* Transparent with a 13% edge, these were indistinguishable from the panel
+   they sat on -- you could not tell a button from a caption. They get a
+   surface, a real border and a shadow, so anything clickable looks raised. */
 .btn {
   display: inline-flex;
   align-items: center;
   gap: 8px;
-  background: transparent;
-  border: 1px solid var(--edge);
+  background: var(--control);
+  border: 1px solid var(--edge-strong);
   color: var(--fg-dim);
   border-radius: 3px;
   padding: 10px 18px;
@@ -405,20 +436,43 @@ button.stat { width: 100%; text-align: left; font-family: inherit; cursor: point
   text-transform: uppercase;
   cursor: pointer;
   white-space: nowrap;
-  transition: color 0.3s var(--ease), border-color 0.3s var(--ease), background 0.3s var(--ease), opacity 0.3s var(--ease);
+  box-shadow: var(--shadow-sm);
+  transition: color 0.3s var(--ease), border-color 0.3s var(--ease),
+              background 0.3s var(--ease), box-shadow 0.3s var(--ease),
+              opacity 0.3s var(--ease);
 }
 
-.btn:hover:not(:disabled) { color: var(--fg); border-color: rgba(125, 96, 24, 0.55); }
-.btn:disabled { opacity: 0.4; cursor: not-allowed; }
+.btn:hover:not(:disabled) {
+  color: var(--fg);
+  background: var(--control-hover);
+  border-color: var(--gold-edge);
+  box-shadow: var(--shadow-md);
+}
+
+.btn:focus-visible { outline: 2px solid var(--gold); outline-offset: 2px; }
+
+/* Disabled has to read as "not yet", not as "invisible". At 0.4 the label
+   dropped below the panel's own contrast and looked like a rendering fault. */
+.btn:disabled {
+  opacity: 1;
+  color: var(--fg-faint);
+  background: var(--bg-sunken);
+  border-color: var(--edge);
+  box-shadow: none;
+  cursor: not-allowed;
+}
+
 .btn.is-primary { background: var(--gold-fill); border-color: var(--gold); color: var(--on-gold); font-weight: 500; }
-.btn.is-primary:hover:not(:disabled) { background: #e6c273; color: var(--on-gold); }
-.btn.is-danger { color: var(--danger); border-color: rgba(168, 64, 59, 0.38); }
-.btn.is-danger:hover:not(:disabled) { background: rgba(168, 64, 59, 0.1); border-color: var(--danger); color: var(--danger); }
+.btn.is-primary:hover:not(:disabled) { background: #d9b45e; color: var(--on-gold); border-color: var(--gold); }
+.btn.is-primary:disabled { background: var(--bg-sunken); color: var(--fg-faint); border-color: var(--edge); }
+.btn.is-danger { color: var(--danger); border-color: rgba(157, 51, 45, 0.45); }
+.btn.is-danger:hover:not(:disabled) { background: rgba(157, 51, 45, 0.1); border-color: var(--danger); color: var(--danger); }
 .btn.is-small { padding: 7px 12px; font-size: 0.64rem; }
 
 /* ============ DROPZONE ============ */
 .dropzone {
-  border: 1px dashed rgba(28, 26, 22, 0.24);
+  border: 2px dashed var(--field-edge);
+  background: var(--bg-sunken);
   border-radius: 5px;
   padding: 34px 24px;
   text-align: center;
@@ -430,8 +484,8 @@ button.stat { width: 100%; text-align: left; font-family: inherit; cursor: point
 .dropzone:hover,
 .dropzone.is-dragging { border-color: var(--gold); background: var(--gold-soft); }
 
-.dropzone strong { display: block; font-size: 0.9rem; margin-bottom: 6px; }
-.dropzone span { color: var(--fg-faint); font-size: 0.78rem; }
+.dropzone strong { display: block; font-size: 0.92rem; margin-bottom: 6px; }
+.dropzone span { color: var(--fg-dim); font-size: 0.78rem; }
 .dropzone input[type="file"] { display: none; }
 
 .thumb-strip {
@@ -441,14 +495,16 @@ button.stat { width: 100%; text-align: left; font-family: inherit; cursor: point
   margin-bottom: 16px;
 }
 
+/* A dark island (its chips sit on the uploaded image), so the surface tokens
+   invert inside it and the empty-state colour has to be stated outright. */
 .thumb {
   position: relative;
   width: 84px;
   height: 84px;
   border-radius: 3px;
   overflow: hidden;
-  border: 1px solid var(--edge);
-  background: var(--panel-2);
+  border: 1px solid rgba(28, 26, 22, 0.2);
+  background: #ded6c5;
 }
 
 .thumb img { width: 100%; height: 100%; object-fit: cover; }
@@ -503,8 +559,8 @@ button.stat { width: 100%; text-align: left; font-family: inherit; cursor: point
 .thumb .move button:hover { color: var(--gold); }
 
 .progress {
-  height: 3px;
-  background: rgba(28, 26, 22, 0.1);
+  height: 5px;
+  background: var(--bg-sunken);
   border-radius: 3px;
   overflow: hidden;
   margin-top: 14px;
@@ -518,7 +574,7 @@ button.stat { width: 100%; text-align: left; font-family: inherit; cursor: point
   transition: width 0.2s linear;
 }
 
-.status-line { font-size: 0.8rem; color: var(--fg-faint); margin-top: 10px; min-height: 20px; }
+.status-line { font-size: 0.8rem; color: var(--fg-dim); margin-top: 10px; min-height: 20px; }
 
 /* ============ CONTENT GRID ============ */
 .manage-grid {
@@ -533,10 +589,11 @@ button.stat { width: 100%; text-align: left; font-family: inherit; cursor: point
   border: 1px solid var(--edge);
   border-radius: 4px;
   overflow: hidden;
-  transition: border-color 0.3s var(--ease);
+  box-shadow: var(--shadow-sm);
+  transition: border-color 0.3s var(--ease), box-shadow 0.3s var(--ease);
 }
 
-.m-card:hover { border-color: rgba(125, 96, 24, 0.4); }
+.m-card:hover { border-color: var(--gold-edge); box-shadow: var(--shadow-md); }
 
 .m-card > img,
 .m-card .m-cover {
@@ -544,7 +601,8 @@ button.stat { width: 100%; text-align: left; font-family: inherit; cursor: point
   aspect-ratio: 4 / 3;
   object-fit: cover;
   display: block;
-  background: var(--panel-2);
+  background: var(--bg-sunken);
+  border-bottom: 1px solid var(--edge);
 }
 
 .m-card.is-story .m-cover { aspect-ratio: 2 / 3; }
@@ -565,7 +623,7 @@ button.stat { width: 100%; text-align: left; font-family: inherit; cursor: point
   font-size: 0.66rem;
   letter-spacing: 0.14em;
   text-transform: uppercase;
-  color: var(--fg-faint);
+  color: var(--fg-dim);
 }
 
 .m-card-actions {
@@ -596,14 +654,14 @@ button.stat { width: 100%; text-align: left; font-family: inherit; cursor: point
   grid-template-columns: auto 1fr auto;
   gap: 16px;
   align-items: center;
-  background: var(--panel);
+  background: var(--panel-inset);
   border: 1px solid var(--edge);
   border-radius: 4px;
   padding: 14px 18px;
-  transition: border-color 0.3s var(--ease);
+  transition: border-color 0.3s var(--ease), background 0.3s var(--ease);
 }
 
-.row:hover { border-color: rgba(125, 96, 24, 0.35); }
+.row:hover { border-color: var(--gold-edge); background: var(--bg-raised); }
 
 .row .handle {
   display: flex;
@@ -614,24 +672,24 @@ button.stat { width: 100%; text-align: left; font-family: inherit; cursor: point
 .row .handle button {
   width: 22px;
   height: 18px;
-  border: 1px solid var(--edge);
+  border: 1px solid var(--edge-strong);
   border-radius: 2px;
-  background: var(--panel-2);
-  color: var(--fg-faint);
+  background: var(--control);
+  color: var(--fg-dim);
   cursor: pointer;
   font-size: 0.55rem;
   line-height: 1;
   padding: 0;
 }
 
-.row .handle button:hover:not(:disabled) { color: var(--gold); border-color: rgba(125, 96, 24, 0.5); }
-.row .handle button:disabled { opacity: 0.25; cursor: default; }
+.row .handle button:hover:not(:disabled) { color: var(--gold); border-color: var(--gold-edge); }
+.row .handle button:disabled { opacity: 0.35; cursor: default; }
 
 .row-main strong { display: block; font-size: 0.95rem; font-weight: 500; }
-.row-main small { color: var(--fg-faint); font-size: 0.7rem; letter-spacing: 0.1em; }
+.row-main small { color: var(--fg-dim); font-size: 0.72rem; letter-spacing: 0.1em; }
 .row-main input {
-  background: var(--panel-2);
-  border: 1px solid rgba(125, 96, 24, 0.5);
+  background: var(--field);
+  border: 1px solid var(--gold);
   border-radius: 3px;
   color: var(--fg);
   padding: 7px 10px;
@@ -640,18 +698,21 @@ button.stat { width: 100%; text-align: left; font-family: inherit; cursor: point
   width: 100%;
   max-width: 320px;
   outline: none;
+  box-shadow: 0 0 0 3px var(--gold-soft);
 }
 
 .row-actions { display: flex; gap: 6px; flex-wrap: wrap; }
 
 .row-comment { grid-template-columns: 1fr auto; align-items: start; }
-.row-comment .row-main span { color: var(--fg-dim); font-size: 0.88rem; display: block; margin-top: 4px; word-break: break-word; }
+.row-comment .row-main span { color: var(--fg); font-size: 0.88rem; display: block; margin-top: 4px; word-break: break-word; }
 
 .empty-note {
-  color: var(--fg-faint);
+  color: var(--fg-dim);
   font-size: 0.86rem;
   padding: 34px 0;
   text-align: center;
+  background: var(--bg-sunken);
+  border-radius: 4px;
 }
 
 /* ============ MODAL ============ */
@@ -662,7 +723,7 @@ button.stat { width: 100%; text-align: left; font-family: inherit; cursor: point
   display: grid;
   place-items: center;
   padding: 24px;
-  background: rgba(28, 26, 22, 0.58);
+  background: rgba(28, 26, 22, 0.5);
   backdrop-filter: blur(6px);
   -webkit-backdrop-filter: blur(6px);
   opacity: 0;
@@ -680,6 +741,7 @@ button.stat { width: 100%; text-align: left; font-family: inherit; cursor: point
   border: 1px solid var(--edge);
   border-radius: 6px;
   padding: 32px;
+  box-shadow: var(--shadow-lg);
   transform: translateY(14px) scale(0.98);
   transition: transform 0.35s var(--ease-out);
 }
@@ -706,8 +768,8 @@ button.stat { width: 100%; text-align: left; font-family: inherit; cursor: point
 }
 
 .confirm-guard {
-  border: 1px solid rgba(168, 64, 59, 0.32);
-  background: rgba(168, 64, 59, 0.07);
+  border: 1px solid rgba(157, 51, 45, 0.38);
+  background: rgba(157, 51, 45, 0.08);
   border-radius: 4px;
   padding: 16px;
   margin-top: 18px;
@@ -728,12 +790,12 @@ button.stat { width: 100%; text-align: left; font-family: inherit; cursor: point
 
 .toast {
   background: var(--panel);
-  border: 1px solid var(--edge);
-  border-left: 2px solid var(--gold);
+  border: 1px solid var(--edge-strong);
+  border-left: 3px solid var(--gold);
   border-radius: 4px;
   padding: 14px 18px;
   font-size: 0.84rem;
-  box-shadow: 0 16px 40px rgba(28, 26, 22, 0.2);
+  box-shadow: var(--shadow-lg);
   animation: toastIn 0.35s var(--ease-out);
 }
 
@@ -743,4 +805,66 @@ button.stat { width: 100%; text-align: left; font-family: inherit; cursor: point
 @keyframes toastIn {
   from { opacity: 0; transform: translateX(20px); }
   to { opacity: 1; transform: none; }
+}
+
+
+/* ================= SMALL SCREENS & TOUCH =================
+   These live at the end of the file on purpose. Every selector below is
+   also declared in the sections above at the same specificity, so when
+   these blocks sat higher up the desktop rules simply won the cascade and
+   the entire phone layout was dead -- the media query matched and changed
+   nothing. Keep new breakpoint rules after the thing they override. */
+
+@media (max-width: 700px) {
+  .panel { padding: 20px 16px; border-radius: 4px; }
+  .panel > h2 { font-size: 1.2rem; }
+
+  .login-box { padding: 32px 22px; }
+
+  .stat-row { grid-template-columns: repeat(auto-fit, minmax(130px, 1fr)); gap: 10px; }
+  .stat { padding: 16px 16px; }
+  .stat b { font-size: 2rem; }
+
+  .dropzone { padding: 26px 14px; }
+
+  .manage-grid { grid-template-columns: repeat(auto-fill, minmax(150px, 1fr)); gap: 12px; }
+  .m-card-body { padding: 10px 12px; }
+  .m-card-body h4 { font-size: 0.9rem; }
+  .m-card-actions { padding: 0 12px 12px; gap: 5px; }
+
+  /* Rows stack so the action buttons never crush the label. */
+  .row {
+    grid-template-columns: auto 1fr;
+    gap: 12px;
+    padding: 14px;
+  }
+
+  .row-actions {
+    grid-column: 1 / -1;
+    justify-content: flex-start;
+  }
+
+  .row-comment { grid-template-columns: 1fr; }
+
+  .toolbar { gap: 8px; }
+  .toolbar .grow { min-width: 100%; }
+  /* One control per line once there is no room to sit them side by side. */
+  .toolbar > select { max-width: none; width: 100%; }
+  .btn { padding: 11px 16px; }
+
+  .modal { padding: 14px; align-items: flex-end; }
+  .modal-box { padding: 24px 20px; max-height: 88vh; border-radius: 6px 6px 0 0; }
+  .modal-actions { flex-direction: column-reverse; }
+  .modal-actions .btn { width: 100%; justify-content: center; }
+
+  .toast-host { right: 12px; left: 12px; bottom: 12px; max-width: none; }
+}
+
+/* Touch targets for the small icon controls. */
+@media (pointer: coarse) {
+  .btn, .side-link, .admin-menu button { min-height: 44px; }
+  .row .handle button { width: 34px; height: 28px; }
+  .thumb .kill { width: 26px; height: 26px; }
+  .thumb .move button { width: 24px; height: 24px; }
+  .comment-del { width: 30px; height: 30px; }
 }

@@ -58,10 +58,16 @@
   border: 1px solid var(--hairline);
   border-radius: 4px;
   overflow: hidden;
-  transition: border-color 0.5s var(--ease), transform 0.6s var(--ease-out);
+  box-shadow: var(--shadow-sm);
+  transition: border-color 0.5s var(--ease), transform 0.6s var(--ease-out),
+              box-shadow 0.6s var(--ease-out);
 }
 
-.art-card:hover { border-color: rgba(125, 96, 24, 0.4); transform: translateY(-4px); }
+.art-card:hover {
+  border-color: var(--gold-edge);
+  transform: translateY(-4px);
+  box-shadow: var(--shadow-md);
+}
 
 .art-frame {
   position: relative;
@@ -84,6 +90,10 @@
 
 .art-frame:hover img { transform: scale(1.06); filter: brightness(0.72); }
 
+/* This label lands on the artwork itself, which the hover above darkens to
+   72% brightness. It followed the page's ink colour, so the relight left it
+   near-black on a darkened photograph -- the word was there and unreadable.
+   It belongs to the media palette, not the paper one. */
 .art-frame-hint {
   position: absolute;
   inset: 0;
@@ -92,7 +102,8 @@
   font-size: 0.66rem;
   letter-spacing: 0.28em;
   text-transform: uppercase;
-  color: var(--fg);
+  color: var(--on-media);
+  text-shadow: 0 1px 12px rgba(0, 0, 0, 0.6);
   opacity: 0;
   transform: translateY(8px);
   transition: opacity 0.45s var(--ease), transform 0.5s var(--ease-out);
@@ -113,7 +124,7 @@
 }
 
 .art-desc {
-  color: var(--fg-faint);
+  color: var(--fg-dim);
   font-size: 0.86rem;
   margin: 8px 0 0;
 }
@@ -131,8 +142,8 @@
   display: inline-flex;
   align-items: center;
   gap: 8px;
-  background: transparent;
-  border: 1px solid var(--hairline);
+  background: var(--control);
+  border: 1px solid var(--hairline-strong);
   color: var(--fg-dim);
   border-radius: 999px;
   padding: 8px 16px;
@@ -145,18 +156,19 @@
 }
 
 .like-btn:hover:not(:disabled),
-.comment-toggle:hover { color: var(--fg); border-color: rgba(125, 96, 24, 0.55); }
+.comment-toggle:hover { color: var(--fg); background: var(--control-hover); border-color: var(--gold-edge); }
 
 .like-btn.is-liked {
   color: var(--gold);
-  border-color: rgba(125, 96, 24, 0.6);
+  border-color: var(--gold);
   background: var(--gold-soft);
+  font-weight: 500;
 }
 
 .like-btn:disabled { cursor: default; }
 .like-btn .heart { font-size: 0.95rem; line-height: 1; }
 
-.art-error { color: #a3352f; font-size: 0.8rem; margin: 12px 0 0; }
+.art-error { color: var(--danger); font-size: 0.8rem; margin: 12px 0 0; }
 
 /* ============ COMMENTS ============ */
 .comments-panel,
@@ -164,9 +176,12 @@
 
 .comments-list { display: grid; gap: 8px; max-height: 210px; overflow-y: auto; margin-bottom: 14px; }
 
+/* These same rules render on the paper page AND inside the black comic
+   reader, so they are written against the surface tokens rather than fixed
+   translucent blacks -- a 4.5%-black bubble is invisible on both grounds. */
 .comment {
   position: relative;
-  background: rgba(28, 26, 22, 0.045);
+  background: var(--bg-sunken);
   border-radius: 3px;
   padding: 10px 34px 10px 12px;
   font-size: 0.86rem;
@@ -174,7 +189,7 @@
 }
 
 .comment strong { display: block; color: var(--gold); font-size: 0.7rem; letter-spacing: 0.14em; text-transform: uppercase; margin-bottom: 4px; }
-.comment span { color: var(--fg-dim); }
+.comment span { color: var(--fg); }
 
 .comment-del {
   position: absolute;
@@ -184,22 +199,22 @@
   height: 22px;
   border: 0;
   border-radius: 50%;
-  background: rgba(163, 53, 47, 0.1);
-  color: #a3352f;
+  background: transparent;
+  color: var(--danger);
   cursor: pointer;
   line-height: 1;
 }
 
-.comment-del:hover { background: rgba(163, 53, 47, 0.2); }
+.comment-del:hover { background: rgba(157, 51, 45, 0.16); }
 
-.no-comments { color: var(--fg-faint); font-size: 0.84rem; margin: 0; }
+.no-comments { color: var(--fg-dim); font-size: 0.84rem; margin: 0; }
 
 .comment-form { display: grid; gap: 8px; }
 
 .comment-form input,
 .comment-form textarea {
-  background: rgba(28, 26, 22, 0.05);
-  border: 1px solid var(--hairline);
+  background: var(--field);
+  border: 1px solid var(--field-edge);
   border-radius: 3px;
   color: var(--fg);
   padding: 10px 12px;
@@ -207,11 +222,14 @@
   font-size: 0.88rem;
   resize: vertical;
   outline: none;
-  transition: border-color 0.3s var(--ease);
+  transition: border-color 0.3s var(--ease), box-shadow 0.3s var(--ease);
 }
 
 .comment-form input:focus,
-.comment-form textarea:focus { border-color: rgba(125, 96, 24, 0.6); }
+.comment-form textarea:focus {
+  border-color: var(--gold);
+  box-shadow: 0 0 0 3px var(--gold-soft);
+}
 
 .comment-form textarea { min-height: 76px; }
 
@@ -294,8 +312,8 @@
 
 .lb-close,
 .lb-arrow {
-  background: rgba(244, 241, 234, 0.06);
-  border: 1px solid var(--hairline);
+  background: var(--control);
+  border: 1px solid var(--hairline-strong);
   color: var(--fg);
   cursor: pointer;
   border-radius: 50%;

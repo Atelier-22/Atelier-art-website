@@ -1,10 +1,10 @@
-import { ensureGuestAuth, watchAuth, isOwner } from "../../firebase-config.js";
+import { ensureGuestAuth, watchAuth, isOwner } from "../../firebase-config.js?v=20260822b";
 import {
   watchCategories, watchComics, watchLikes, toggleLike, hasLiked,
   watchComments, addComment, deleteComment
-} from "./data.js";
-import { DEFAULT_COMIC_CATEGORIES } from "./site-data.js";
-import { observeReveals, initNav } from "./reveal.js";
+} from "./data.js?v=20260822b";
+import { DEFAULT_COMIC_CATEGORIES } from "./site-data.js?v=20260822b";
+import { observeReveals, initNav } from "./reveal.js?v=20260822b";
 
 const shelvesHost = document.getElementById("comic-shelves");
 const emptyHost = document.getElementById("comics-empty");

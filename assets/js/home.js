@@ -1,5 +1,5 @@
-import { DEFAULT_ART_CATEGORIES, LOCAL_SEEDS, mergeCategories, categoryHref } from "./site-data.js";
-import { observeReveals, onScrollFrame, sectionProgress, initNav, prefersReducedMotion } from "./reveal.js";
+import { DEFAULT_ART_CATEGORIES, LOCAL_SEEDS, mergeCategories, categoryHref } from "./site-data.js?v=20260822b";
+import { observeReveals, onScrollFrame, sectionProgress, initNav, prefersReducedMotion } from "./reveal.js?v=20260822b";
 
 const TILE_LAYOUT = ["t-hero", "t-tall", "t-strip", "t-strip", "t-strip"];
 const FRAMES_PER_TILE = 3;
@@ -310,7 +310,7 @@ function wireHeroCanvas() {
 
 async function upgradeFromFirestore(sections) {
   try {
-    const { fetchUploadedArtworks } = await import("../../firebase-config.js");
+    const { fetchUploadedArtworks } = await import("../../firebase-config.js?v=20260822b");
     const byCategory = await fetchUploadedArtworks();
     let changed = false;
 
@@ -370,7 +370,7 @@ function sameOrder(a, b) {
 
 async function loadCategoryOrder() {
   try {
-    const { fetchCategories } = await import("./data.js");
+    const { fetchCategories } = await import("./data.js?v=20260822b");
     return mergeCategories(await fetchCategories("art"));
   } catch (err) {
     console.warn("Category order unavailable, using defaults.", err);

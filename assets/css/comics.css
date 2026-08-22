@@ -10,8 +10,8 @@
   display: inline-flex;
   align-items: center;
   gap: 9px;
-  background: transparent;
-  border: 1px solid var(--hairline);
+  background: var(--control);
+  border: 1px solid var(--hairline-strong);
   color: var(--fg-dim);
   border-radius: 999px;
   padding: 10px 20px;
@@ -31,7 +31,7 @@
   padding-left: 9px;
 }
 
-.chip:hover { color: var(--fg); border-color: rgba(125, 96, 24, 0.5); }
+.chip:hover { color: var(--fg); background: var(--control-hover); border-color: var(--gold-edge); }
 
 .chip.is-active {
   background: var(--gold-fill);
@@ -216,8 +216,8 @@
 
 .reader-exit {
   justify-self: start;
-  background: none;
-  border: 1px solid var(--hairline);
+  background: var(--control);
+  border: 1px solid var(--hairline-strong);
   color: var(--fg-dim);
   border-radius: 999px;
   padding: 9px 18px;
@@ -303,8 +303,8 @@
   width: clamp(40px, 5vw, 56px);
   height: clamp(40px, 5vw, 56px);
   border-radius: 50%;
-  background: rgba(244, 241, 234, 0.06);
-  border: 1px solid var(--hairline);
+  background: var(--control);
+  border: 1px solid var(--hairline-strong);
   color: var(--fg);
   cursor: pointer;
   display: grid;

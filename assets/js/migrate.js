@@ -1,5 +1,5 @@
-import { db } from "../../firebase-config.js";
-import { publicIdFromUrl, slugify, logChange } from "./data.js";
+import { db } from "../../firebase-config.js?v=20260822b";
+import { publicIdFromUrl, slugify, logChange } from "./data.js?v=20260822b";
 import {
   collection, doc, getDocs, writeBatch, serverTimestamp
 } from "https://www.gstatic.com/firebasejs/10.13.0/firebase-firestore.js";

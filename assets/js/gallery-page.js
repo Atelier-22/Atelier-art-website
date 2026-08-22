@@ -1,11 +1,11 @@
-import { ensureGuestAuth, watchAuth, isOwner } from "../../firebase-config.js";
+import { ensureGuestAuth, watchAuth, isOwner } from "../../firebase-config.js?v=20260822b";
 import {
-  watchArtworks, watchLikes, toggleLike, hasLiked,
-  watchComments, addComment, deleteComment, fetchCategories
-} from "./data.js";
-import { LOCAL_SEEDS, CATEGORY_BY_SLUG, currentCategorySlug } from "./site-data.js";
-import { bindGallery } from "./lightbox.js";
-import { observeReveals, initNav } from "./reveal.js";
+  watchArtworks, watchPieceMeta, toggleLike, hasLiked,
+  watchComments, addComment, deleteComment, fetchCategories, archivePieceId
+} from "./data.js?v=20260822b";
+import { LOCAL_SEEDS, CATEGORY_BY_SLUG, currentCategorySlug } from "./site-data.js?v=20260822b";
+import { bindGallery } from "./lightbox.js?v=20260822b";
+import { observeReveals, initNav } from "./reveal.js?v=20260822b";
 
 const slug = currentCategorySlug();
 const grid = document.getElementById("gallery-grid");
@@ -24,13 +24,20 @@ function escapeHtml(str) {
 function localItems() {
   const seeds = LOCAL_SEEDS[slug] || [];
   const label = CATEGORY_BY_SLUG[slug]?.label || slug;
-  return seeds.map((src, i) => ({
-    id: `${slug}-archive-${i + 1}`,
-    title: `${label.replace(/s$/, "")} No. ${String(i + 1).padStart(2, "0")}`,
-    imageUrl: src,
-    description: "",
-    archive: true
-  }));
+  return seeds.map((src, i) => {
+    const placeholder = `${label.replace(/s$/, "")} No. ${String(i + 1).padStart(2, "0")}`;
+    return {
+      id: archivePieceId(slug, i),
+      // Only a placeholder. If the owner has named this piece, the title that
+      // arrives from its document replaces this on the first snapshot -- and
+      // the placeholder is kept so clearing the name falls back to it.
+      title: placeholder,
+      placeholder,
+      imageUrl: src,
+      description: "",
+      archive: true
+    };
+  });
 }
 
 /** Ordered list backing both the grid and the lightbox. */
@@ -60,7 +67,7 @@ function buildCard(item) {
     </button>
     <div class="art-body">
       <h3 class="art-title">${escapeHtml(item.title)}</h3>
-      ${item.description ? `<p class="art-desc">${escapeHtml(item.description)}</p>` : ""}
+      <p class="art-desc"${item.description ? "" : " hidden"}>${escapeHtml(item.description)}</p>
       <div class="art-actions">
         <button class="like-btn" type="button" aria-label="Like this piece">
           <span class="heart" aria-hidden="true">&#9825;</span>
@@ -115,7 +122,33 @@ function wireCard(el, item) {
     heart.innerHTML = "&#9829;";
   }
 
-  unsubscribers.push(watchLikes("artworks", item.id, (n) => { likeCount.textContent = n; }));
+  // One listener carries both the like count and whatever the owner has
+  // titled this piece. `entry.item` is updated too, because the lightbox
+  // caption reads from it rather than from the DOM.
+  unsubscribers.push(watchPieceMeta("artworks", item.id, (meta) => {
+    likeCount.textContent = meta.likes;
+
+    const entry = cards.get(item.id);
+    const model = entry ? entry.item : item;
+
+    // An archive piece falls back to its number when the owner clears the
+    // name. An upload has no placeholder, so its own title stands.
+    const shown = meta.title || model.placeholder || model.title;
+
+    if (shown !== model.title) {
+      model.title = shown;
+      el.querySelector(".art-title").textContent = shown;
+      el.querySelector(".art-frame").setAttribute("aria-label", `View ${shown} full size`);
+      el.querySelector("img").alt = shown;
+    }
+
+    if (meta.description !== model.description) {
+      model.description = meta.description;
+      const desc = el.querySelector(".art-desc");
+      desc.textContent = meta.description;
+      desc.hidden = !meta.description;
+    }
+  }));
 
   likeBtn.addEventListener("click", async () => {
     likeBtn.disabled = true;

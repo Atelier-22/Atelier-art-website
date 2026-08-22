@@ -1,6 +1,6 @@
-import { fetchCategories } from "./data.js";
-import { CATEGORY_BY_SLUG, categoryHref } from "./site-data.js";
-import { observeReveals, initNav } from "./reveal.js";
+import { fetchCategories } from "./data.js?v=20260822b";
+import { CATEGORY_BY_SLUG, categoryHref } from "./site-data.js?v=20260822b";
+import { observeReveals, initNav } from "./reveal.js?v=20260822b";
 
 const grid = document.querySelector(".index-grid");
 

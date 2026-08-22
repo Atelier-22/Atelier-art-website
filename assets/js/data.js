@@ -1,5 +1,5 @@
-import { db, auth, getApp } from "../../firebase-config.js";
-import { DEFAULT_ART_CATEGORIES, DEFAULT_COMIC_CATEGORIES } from "./site-data.js";
+import { db, auth, getApp } from "../../firebase-config.js?v=20260822b";
+import { DEFAULT_ART_CATEGORIES, DEFAULT_COMIC_CATEGORIES } from "./site-data.js?v=20260822b";
 import {
   doc, getDoc, getDocs, setDoc, addDoc, deleteDoc, updateDoc, writeBatch,
   collection, collectionGroup, onSnapshot, query, orderBy, where, limit,
@@ -287,6 +287,11 @@ function normaliseArtwork(id, data) {
     id,
     category: data.category || "general",
     title: data.title || "Untitled",
+    // The substitution above is for display. The studio has to tell an
+    // untitled piece from one the owner deliberately called "Untitled", so
+    // the unfilled truth is carried alongside it.
+    hasTitle: typeof data.title === "string" && data.title.trim() !== "",
+    archive: data.archive === true,
     description: data.description || "",
     imageUrl: data.imageUrl || "",
     likes: data.likes || 0,
@@ -371,6 +376,35 @@ export async function createArtwork({
 
 export async function updateArtwork(id, patch) {
   await updateDoc(doc(db, "artworks", id), patch);
+}
+
+/**
+ * The archive pieces ship with the site as plain image files, so until now
+ * they had no record anywhere and the page could only label them by counting:
+ * "Portrait No. 03". This is the id that lets one be named. It has to match
+ * the id the gallery page builds for the same piece, and the id a like
+ * already writes to, so a title and a like counter share one document.
+ */
+export function archivePieceId(categorySlug, index) {
+  return `${categorySlug}-archive-${index + 1}`;
+}
+
+/**
+ * Names an archive piece. Merged, never overwritten, because the document may
+ * already hold likes and a comment thread. `uploaded` is deliberately left
+ * unset: that flag is what marks a real upload, and setting it here would
+ * make the piece appear a second time in the grid as an empty card.
+ */
+export async function saveArchivePiece(id, { categorySlug, title, description }) {
+  const name = (title || "").trim();
+  await setDoc(doc(db, "artworks", id), {
+    category: categorySlug,
+    title: name,
+    description: (description || "").trim(),
+    archive: true,
+    status: "published"
+  }, { merge: true });
+  await logChange("artwork.rename", id, name || "(cleared)");
 }
 
 export async function deleteArtwork(id) {
@@ -531,6 +565,26 @@ export function watchLikes(collectionName, id, callback, onError) {
     callback(snap.exists() ? (snap.data().likes || 0) : 0);
   }, (err) => {
     console.error("watchLikes error for", id, err);
+    onError?.(err);
+  });
+}
+
+/**
+ * Everything a card shows about itself, from the one document it already
+ * listens to for likes. Titles for the archive pieces live in the same place
+ * as their like counts, so naming a piece costs no extra listener and the
+ * name lands on the page the moment it is saved.
+ */
+export function watchPieceMeta(collectionName, id, callback, onError) {
+  return onSnapshot(doc(db, collectionName, id), (snap) => {
+    const d = snap.exists() ? snap.data() : {};
+    callback({
+      likes: d.likes || 0,
+      title: (d.title || "").trim(),
+      description: (d.description || "").trim()
+    });
+  }, (err) => {
+    console.error("watchPieceMeta error for", id, err);
     onError?.(err);
   });
 }

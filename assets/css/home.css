@@ -41,9 +41,13 @@
   position: absolute;
   inset: 0;
   z-index: -1;
+  /* The headline sits over the middle of this gradient. At 0.44 the photo
+     came through strongly enough that dark display type on a light passage
+     of artwork lost its edges, so the waist of the veil is lifted -- the
+     slideshow still reads, the words stay solid. */
   background:
-    radial-gradient(120% 80% at 20% 10%, rgba(236,231,220,0.3), transparent 60%),
-    linear-gradient(180deg, rgba(236,231,220,0.86) 0%, rgba(236,231,220,0.44) 42%, rgba(236,231,220,0.96) 100%);
+    radial-gradient(120% 80% at 20% 10%, rgba(230,223,209,0.34), transparent 60%),
+    linear-gradient(180deg, rgba(230,223,209,0.88) 0%, rgba(230,223,209,0.62) 42%, rgba(230,223,209,0.97) 100%);
 }
 
 .hero-inner {
@@ -467,7 +471,9 @@
   z-index: -1;
   white-space: nowrap;
   overflow: hidden;
-  opacity: 0.05;
+  /* A 5% ghost had enough presence against black to be felt. On paper it was
+     simply not there. */
+  opacity: 0.09;
   pointer-events: none;
 }
 

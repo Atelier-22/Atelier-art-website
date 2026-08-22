@@ -2,16 +2,46 @@
   color-scheme: light;
 
   /* Surfaces. A warm gallery paper rather than pure white: #fff glares on
-     large screens and drains the warmth out of the artwork sitting on it. */
-  --bg: #ece7dc;
-  --bg-raised: #f6f2ea;
-  --bg-veil: rgba(236, 231, 220, 0.86);
+     large screens and drains the warmth out of the artwork sitting on it.
 
-  /* Ink on paper. Near-black kept warm so it sits with the ground. */
-  --fg: #1c1a16;
-  --fg-dim: rgba(28, 26, 22, 0.78);
-  --fg-faint: rgba(28, 26, 22, 0.68);
-  --hairline: rgba(28, 26, 22, 0.16);
+     The dark theme separated surfaces by nudging luminance a few percent and
+     letting a faint hairline do the rest. That only works against black,
+     where the eye has enormous headroom above the ground. On paper the same
+     trick collapses -- every panel reads as the same blank sheet. So the
+     ground is pushed DOWN and raised surfaces UP, far enough apart that a
+     card is obviously sitting on top of the page before any border is drawn.
+     Shadows then do the work the darkness used to. */
+  --bg: #e6dfd1;         /* page ground -- the deepest surface */
+  --bg-raised: #faf7f1;  /* cards, panels, anything lifted off the page */
+  --bg-sunken: #ded6c5;  /* wells and recesses, below the ground */
+  --bg-veil: rgba(230, 223, 209, 0.86);
+
+  /* A field has to look typeable at a glance, so it goes near-white and gets
+     a border with real weight rather than a whisper. */
+  --field: #fffdf9;
+  --field-edge: rgba(28, 26, 22, 0.3);
+
+  /* The resting surface of a button. Kept separate from --bg-raised because
+     controls also live inside the dark islands, where a card surface and a
+     button surface need to go opposite ways. */
+  --control: #faf7f1;
+  --control-hover: #fffdf9;
+
+  /* Ink on paper. Secondary text is a genuinely lighter INK, not the same
+     black at lower alpha -- transparency over a warm ground turns text milky
+     and kills the letterforms long before it reads as "secondary". These are
+     7.6:1 and 5.1:1 on the page ground, so small caps still hold together. */
+  --fg: #14120e;
+  --fg-dim: #4a453b;
+  --fg-faint: #635d50;
+
+  /* Borders carry structure on paper the way glow did on black. */
+  --hairline: rgba(28, 26, 22, 0.2);
+  --hairline-strong: rgba(28, 26, 22, 0.34);
+
+  --shadow-sm: 0 1px 2px rgba(46, 38, 20, 0.06), 0 2px 8px rgba(46, 38, 20, 0.05);
+  --shadow-md: 0 2px 4px rgba(46, 38, 20, 0.07), 0 10px 28px rgba(46, 38, 20, 0.09);
+  --shadow-lg: 0 26px 64px rgba(46, 38, 20, 0.2);
 
   /* Gold splits in two on a light ground: the accent has to be deep enough
      to read as text on paper, which then makes it too dark to sit dark text
@@ -19,7 +49,12 @@
   --gold: #7d6018;
   --gold-fill: #c8a349;
   --gold-soft: rgba(125, 96, 24, 0.13);
+  --gold-edge: rgba(125, 96, 24, 0.5);
   --on-gold: #241f14;
+
+  /* Status inks, deep enough to read as text on paper. */
+  --danger: #9d332d;
+  --ok: #2c6647;
 
   /* Anything laid directly over a photograph keeps the dark treatment,
      because a photo can be any colour. Applied via .on-media below. */
@@ -71,7 +106,12 @@ a { color: inherit; }
    The page is light, but a few regions sit on top of imagery we don't
    control -- a caption burned into a thumbnail, the full-screen viewer, the
    comic reader. Re-pointing the palette tokens here flips everything inside
-   back to light-on-dark without touching the individual rules. */
+   back to light-on-dark without touching the individual rules.
+
+   Every surface token has to be re-pointed, not just the ink. A field left
+   at the paper value is a white slab punched into a black reader; a well
+   left at the paper value vanishes entirely. The islands get translucent
+   equivalents that read the same way against whatever is underneath. */
 .on-media,
 .tile,
 .index-card-body,
@@ -84,7 +124,17 @@ a { color: inherit; }
   --fg-dim: var(--on-media-dim);
   --fg-faint: var(--on-media-faint);
   --hairline: var(--media-hairline);
+  --hairline-strong: rgba(244, 241, 234, 0.34);
   --gold: var(--media-gold);
+  --gold-edge: rgba(216, 178, 92, 0.55);
+  --bg-sunken: rgba(244, 241, 234, 0.07);
+  --field: rgba(244, 241, 234, 0.09);
+  --field-edge: rgba(244, 241, 234, 0.28);
+  --control: rgba(244, 241, 234, 0.08);
+  --control-hover: rgba(244, 241, 234, 0.16);
+  --danger: #e8827c;
+  --shadow-sm: none;
+  --shadow-md: none;
   color: var(--fg);
 }
 
@@ -123,15 +173,15 @@ a { color: inherit; }
   position: absolute;
   inset: 0;
   background:
-    radial-gradient(130% 90% at 50% 0%, rgba(236, 231, 220, 0.66), rgba(236, 231, 220, 0.88) 70%),
-    linear-gradient(180deg, rgba(236, 231, 220, 0.8) 0%, rgba(236, 231, 220, 0.9) 100%);
+    radial-gradient(130% 90% at 50% 0%, rgba(230, 223, 209, 0.72), rgba(230, 223, 209, 0.9) 70%),
+    linear-gradient(180deg, rgba(230, 223, 209, 0.84) 0%, rgba(230, 223, 209, 0.92) 100%);
 }
 
 /* Phones render a much larger backdrop relative to the viewport, so the
    image is dimmed further to keep body copy legible. */
 @media (max-width: 700px) {
   .wallpaper::after {
-    background: linear-gradient(180deg, rgba(236, 231, 220, 0.91) 0%, rgba(236, 231, 220, 0.94) 100%);
+    background: linear-gradient(180deg, rgba(230, 223, 209, 0.93) 0%, rgba(230, 223, 209, 0.95) 100%);
   }
 }
 
@@ -152,10 +202,11 @@ a { color: inherit; }
 
 .site-nav.is-stuck {
   padding-block: 14px;
-  background: rgba(236, 231, 220, 0.82);
+  background: rgba(245, 241, 233, 0.88);
   backdrop-filter: blur(18px) saturate(140%);
   -webkit-backdrop-filter: blur(18px) saturate(140%);
   border-bottom-color: var(--hairline);
+  box-shadow: var(--shadow-sm);
 }
 
 .site-nav .wordmark {
@@ -212,13 +263,15 @@ a { color: inherit; }
   transform-origin: left;
 }
 
-.nav-links a.admin-link { opacity: 0.5; }
+/* Understated, not invisible. At 0.5 on paper this washed out to nothing and
+   the way into the studio became a guessing game. */
+.nav-links a.admin-link { opacity: 0.72; }
 .nav-links a.admin-link:hover { opacity: 1; }
 
 .nav-toggle {
   display: none;
-  background: none;
-  border: 1px solid var(--hairline);
+  background: var(--control);
+  border: 1px solid var(--hairline-strong);
   color: var(--fg);
   border-radius: 999px;
   padding: 8px 16px;
@@ -237,10 +290,11 @@ a { color: inherit; }
     align-items: flex-start;
     gap: 0;
     padding: 96px var(--gutter) 36px;
-    background: rgba(236, 231, 220, 0.98);
+    background: rgba(250, 247, 241, 0.99);
     backdrop-filter: blur(20px);
     -webkit-backdrop-filter: blur(20px);
     border-bottom: 1px solid var(--hairline);
+    box-shadow: var(--shadow-md);
     transform: translateY(-102%);
     transition: transform 0.6s var(--ease-out);
   }
@@ -259,14 +313,22 @@ a { color: inherit; }
   text-transform: uppercase;
   color: var(--fg);
   padding: 15px 30px;
-  border: 1px solid var(--hairline);
+  /* A transparent pill edged at 16% black was invisible on paper -- nothing
+     announced it as a control. It gets a real edge and a surface now. */
+  border: 1px solid var(--hairline-strong);
   border-radius: 999px;
-  background: transparent;
+  background: var(--control);
   cursor: pointer;
   font-family: inherit;
   overflow: hidden;
   position: relative;
-  transition: color 0.45s var(--ease), border-color 0.45s var(--ease);
+  /* The fill sweep below sits at z-index -1. Now that the button paints its
+     own background, it needs a stacking context or the sweep would slide in
+     behind that background and never be seen. */
+  isolation: isolate;
+  box-shadow: var(--shadow-sm);
+  transition: color 0.45s var(--ease), border-color 0.45s var(--ease),
+              box-shadow 0.45s var(--ease);
 }
 
 .link-btn::before {
@@ -279,7 +341,7 @@ a { color: inherit; }
   z-index: -1;
 }
 
-.link-btn:hover { color: var(--on-gold); border-color: var(--gold); }
+.link-btn:hover { color: var(--on-gold); border-color: var(--gold); box-shadow: var(--shadow-md); }
 .link-btn:hover::before { transform: translateY(0); }
 .link-btn .arrow { transition: transform 0.45s var(--ease-out); }
 .link-btn:hover .arrow { transform: translateX(5px); }

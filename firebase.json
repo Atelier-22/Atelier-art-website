@@ -11,6 +11,23 @@
       "functions/**",
       "*.mjs",
       "SETUP_README.md"
+    ],
+    "headers": [
+      {
+        "//": "The pages carry the version queries that point at everything else, so they must never be served from a stale cache.",
+        "source": "**/*.html",
+        "headers": [{ "key": "Cache-Control", "value": "no-cache" }]
+      },
+      {
+        "//": "Hosting defaults these to max-age=3600. Nothing here is content-hashed, and the ES modules import each other directly, so a version query on the HTML tag cannot reach assets/js/data.js and friends. That is how a browser ended up holding the old dark core.css alongside the new light admin.css and rendering white on white. no-cache still caches -- it just forces a revalidate, so the usual answer is a 304 and the stale-mixture failure cannot happen again.",
+        "source": "**/*.@(css|js)",
+        "headers": [{ "key": "Cache-Control", "value": "no-cache" }]
+      },
+      {
+        "//": "Artwork filenames are stable and the bytes never change under them.",
+        "source": "**/*.@(jpg|jpeg|png|webp|svg|ico|woff2)",
+        "headers": [{ "key": "Cache-Control", "value": "public, max-age=604800" }]
+      }
     ]
   },
   "firestore": {

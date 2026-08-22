@@ -1,13 +1,14 @@
-import { watchAuth, isOwner, ownerLogin, ownerLogout } from "../../firebase-config.js";
+import { watchAuth, isOwner, ownerLogin, ownerLogout } from "../../firebase-config.js?v=20260822b";
 import {
   watchCategories, seedDefaultCategories, createCategory, updateCategory,
   reorderCategories, deleteCategory,
   watchAllArtworks, createArtwork, updateArtwork, deleteArtwork,
+  archivePieceId, saveArchivePiece,
   watchComics, createComic, updateComic, deleteComic, reorderComics,
   watchAllComments, deleteComment, uploadImage,
   grantAdminClaim, watchChangeLog, logChange
-} from "./data.js";
-import { categoryHref } from "./site-data.js";
+} from "./data.js?v=20260822b";
+import { categoryHref, LOCAL_SEEDS, CATEGORY_BY_SLUG } from "./site-data.js?v=20260822b";
 
 const $ = (sel, root = document) => root.querySelector(sel);
 const $$ = (sel, root = document) => Array.from(root.querySelectorAll(sel));
@@ -21,6 +22,8 @@ const state = {
   view: "overview",
   artFilter: "all",
   artSearch: "",
+  archiveFilter: "",
+  archiveSearch: "",
   comicFilter: "all",
   ready: false
 };
@@ -431,6 +434,116 @@ $("#artwork-filter").addEventListener("change", (e) => {
 });
 
 /* ------------------------------------------------------------------ */
+/*  Archive pieces — the images that ship with the site                */
+/*                                                                     */
+/*  These have never had a record of their own, so the gallery could   */
+/*  only label them by position: "Portrait No. 03". Naming one writes  */
+/*  a document at the same id the piece's likes already use, so a      */
+/*  title, a meaning, a like count and a comment thread all live       */
+/*  together and the page picks the name up immediately.               */
+/* ------------------------------------------------------------------ */
+
+/** Categories that actually ship images, in site order. */
+function archiveCategories() {
+  return Object.keys(LOCAL_SEEDS)
+    .filter(slug => (LOCAL_SEEDS[slug] || []).length && !CATEGORY_BY_SLUG[slug]?.isComics);
+}
+
+/** The placeholder the gallery shows for an unnamed piece. */
+function archivePlaceholder(slug, i) {
+  const label = CATEGORY_BY_SLUG[slug]?.label || slug;
+  return `${label.replace(/s$/, "")} No. ${String(i + 1).padStart(2, "0")}`;
+}
+
+function archivePieces(slug) {
+  return (LOCAL_SEEDS[slug] || []).map((src, i) => {
+    const id = archivePieceId(slug, i);
+    const saved = state.artworks.find(a => a.id === id);
+    return {
+      id, slug, index: i, imageUrl: src,
+      title: saved?.hasTitle ? saved.title : "",
+      placeholder: archivePlaceholder(slug, i),
+      description: saved?.description || "",
+      likes: saved?.likes || 0
+    };
+  });
+}
+
+function renderArchive() {
+  const host = $("#archive-grid");
+  if (!host) return;
+
+  const slug = state.archiveFilter || archiveCategories()[0] || "";
+  const term = state.archiveSearch.trim().toLowerCase();
+
+  const list = archivePieces(slug).filter(p =>
+    !term || p.title.toLowerCase().includes(term) || p.placeholder.toLowerCase().includes(term));
+
+  const named = archivePieces(slug).filter(p => p.title).length;
+  const total = (LOCAL_SEEDS[slug] || []).length;
+  $("#archive-count").textContent = total ? `${named} of ${total} named` : "";
+
+  host.innerHTML = list.length ? "" : '<p class="empty-note">Nothing matches that search.</p>';
+
+  list.forEach((piece) => {
+    const el = document.createElement("article");
+    el.className = "m-card";
+    el.innerHTML = `
+      ${piece.likes ? `<span class="m-badge">${piece.likes} &#9829;</span>` : ""}
+      <img src="${escapeHtml(piece.imageUrl)}" alt="${escapeHtml(piece.title || piece.placeholder)}" loading="lazy">
+      <div class="m-card-body">
+        <h4>${escapeHtml(piece.title || piece.placeholder)}</h4>
+        <p>${piece.title ? "Named" : "Unnamed"}</p>
+      </div>
+      <div class="m-card-actions">
+        <button class="btn is-small" data-name>${piece.title ? "Edit" : "Add a title"}</button>
+      </div>
+    `;
+    $("[data-name]", el).addEventListener("click", () => nameArchivePiece(piece));
+    host.appendChild(el);
+  });
+}
+
+function nameArchivePiece(piece) {
+  modal({
+    title: piece.title ? "Edit this piece" : "Name this piece",
+    body: `
+      <div class="field">
+        <label for="ap-title">Title</label>
+        <input id="ap-title" type="text" value="${escapeHtml(piece.title)}"
+               placeholder="${escapeHtml(piece.placeholder)}">
+        <p class="form-note">Leave this blank and the piece goes back to showing &ldquo;${escapeHtml(piece.placeholder)}&rdquo;.</p>
+      </div>
+      <div class="field">
+        <label for="ap-desc">What it means</label>
+        <textarea id="ap-desc" placeholder="Say what this piece is about — shown under the title.">${escapeHtml(piece.description)}</textarea>
+      </div>
+    `,
+    confirmLabel: "Save",
+    onConfirm: async () => {
+      await saveArchivePiece(piece.id, {
+        categorySlug: piece.slug,
+        title: $("#ap-title").value,
+        description: $("#ap-desc").value
+      });
+      toast($("#ap-title").value.trim() ? "Saved — it's live on the site." : "Title cleared.", "ok");
+    }
+  });
+}
+
+$("#archive-filter")?.addEventListener("change", (e) => {
+  state.archiveFilter = e.target.value;
+  state.archiveSearch = "";
+  $("#archive-search").value = "";
+  renderArchive();
+});
+
+$("#archive-search")?.addEventListener("input", (e) => {
+  state.archiveSearch = e.target.value;
+  renderArchive();
+});
+
+/* ------------------------------------------------------------------ */
 /*  Comic upload — cover + ordered page sequence                       */
 /* ------------------------------------------------------------------ */
 
@@ -825,6 +938,20 @@ function refreshCategorySelects() {
   keep(comic, categoryOptions("comics"));
   keep(artFilter, `<option value="all">All categories</option>${categoryOptions("art")}`);
   keep(comicFilter, `<option value="all">All genres</option>${categoryOptions("comics")}`);
+
+  // The archive list is per-category on purpose: twenty pieces at a time is a
+  // sitting you can finish, where a hundred and twenty is a chore nobody
+  // starts. Its options come from the shipped folders, not from Firestore,
+  // because a category with no bundled images has nothing to name.
+  const archiveFilter = $("#archive-filter");
+  if (archiveFilter) {
+    const slugs = archiveCategories();
+    if (!state.archiveFilter) state.archiveFilter = slugs[0] || "";
+    archiveFilter.innerHTML = slugs
+      .map(s => `<option value="${s}">${escapeHtml(CATEGORY_BY_SLUG[s]?.label || s)}</option>`)
+      .join("");
+    archiveFilter.value = state.archiveFilter;
+  }
 }
 
 /* ------------------------------------------------------------------ */
@@ -943,7 +1070,7 @@ $("#migrate-dry").addEventListener("click", async () => {
   btn.disabled = true;
   $("#migrate-report").innerHTML = '<p class="empty-note">Scanning…</p>';
   try {
-    const { dryRun } = await import("./migrate.js");
+    const { dryRun } = await import("./migrate.js?v=20260822b");
     const { plans, totalWrites } = await dryRun();
     renderMigrationReport(plans, false);
     $("#migrate-run").disabled = totalWrites === 0;
@@ -965,7 +1092,7 @@ $("#migrate-run").addEventListener("click", () => {
     body: "This writes <b>status</b>, <b>featured</b>, and Cloudinary <b>public IDs</b> onto your existing documents, copies categories into artCategories, seeds comic genres, and backfills the media library.<br><br>It is additive and idempotent — nothing is deleted, and re-running it is harmless.",
     confirmLabel: "Run migration",
     onConfirm: async () => {
-      const { apply } = await import("./migrate.js");
+      const { apply } = await import("./migrate.js?v=20260822b");
       const { results, totalWrites } = await apply((label) => {
         $("#migrate-report").innerHTML = `<p class="empty-note">Migrating: ${escapeHtml(label)}…</p>`;
       });
@@ -994,11 +1121,17 @@ function renderChangeLog(entries) {
 /* ------------------------------------------------------------------ */
 
 function boot() {
+  // The archive list is driven by the bundled folders, not by Firestore, so
+  // it can be drawn immediately rather than waiting for a snapshot.
+  refreshCategorySelects();
+  renderArchive();
+
   watchCategories("art", (items) => {
     state.artCategories = items;
     refreshCategorySelects();
     renderCategoryList("art");
     renderArtworks();
+    renderArchive();
     renderOverview();
   });
 
@@ -1013,6 +1146,7 @@ function boot() {
   watchAllArtworks((items) => {
     state.artworks = items;
     renderArtworks();
+    renderArchive();
     renderCategoryList("art");
     renderOverview();
   });

@@ -122,7 +122,8 @@
 }
 
 .tag-cloud li {
-  border: 1px solid var(--hairline);
+  background: var(--bg-raised);
+  border: 1px solid var(--hairline-strong);
   border-radius: 999px;
   padding: 9px 20px;
   font-size: 0.7rem;
@@ -132,7 +133,7 @@
   transition: color 0.35s var(--ease), border-color 0.35s var(--ease);
 }
 
-.tag-cloud li:hover { color: var(--gold); border-color: rgba(125, 96, 24, 0.5); }
+.tag-cloud li:hover { color: var(--gold); border-color: var(--gold-edge); }
 
 /* ---- figures ---- */
 .figure-row {
@@ -175,10 +176,12 @@
   border: 1px solid var(--hairline);
   border-radius: 4px;
   padding: 22px 24px;
-  transition: border-color 0.4s var(--ease), transform 0.4s var(--ease-out);
+  box-shadow: var(--shadow-sm);
+  transition: border-color 0.4s var(--ease), transform 0.4s var(--ease-out),
+              box-shadow 0.4s var(--ease-out);
 }
 
-.contact-card:hover { border-color: rgba(125, 96, 24, 0.55); transform: translateY(-4px); }
+.contact-card:hover { border-color: var(--gold-edge); transform: translateY(-4px); box-shadow: var(--shadow-md); }
 
 .contact-card small {
   display: block;

@@ -3,7 +3,7 @@
 <head>
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1.0, viewport-fit=cover">
-  <meta name="theme-color" content="#ece7dc">
+  <meta name="theme-color" content="#e6dfd1">
   <title>Studio | Alafi Art Work</title>
   <meta name="robots" content="noindex, nofollow">
   <link rel="icon" type="image/svg+xml" href="favicon.svg">
@@ -12,8 +12,8 @@
   <link rel="preconnect" href="https://fonts.googleapis.com">
   <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
   <link href="https://fonts.googleapis.com/css2?family=Cormorant+Garamond:ital,wght@0,300;0,400;0,500;0,600&family=Inter:wght@300;400;500&display=swap" rel="stylesheet">
-  <link rel="stylesheet" href="assets/css/core.css">
-  <link rel="stylesheet" href="assets/css/admin.css">
+  <link rel="stylesheet" href="assets/css/core.css?v=20260822b">
+  <link rel="stylesheet" href="assets/css/admin.css?v=20260822b">
 </head>
 <body class="admin">
 
@@ -153,6 +153,19 @@
         </div>
 
         <div class="manage-grid" id="artwork-grid"></div>
+      </div>
+
+      <div class="panel">
+        <h2>Name the archive pieces</h2>
+        <p class="panel-sub">These are the pieces that came with the site. Until you name one it is listed by its number &mdash; give it a real title and say what it means, and that is what visitors see.</p>
+
+        <div class="toolbar">
+          <select id="archive-filter"></select>
+          <div class="grow"><input type="search" id="archive-search" placeholder="Search titles"></div>
+          <span class="status-line" id="archive-count" style="margin:0"></span>
+        </div>
+
+        <div class="manage-grid" id="archive-grid"></div>
       </div>
     </section>
 
@@ -296,6 +309,6 @@
   </main>
 </div>
 
-<script type="module" src="assets/js/admin.js"></script>
+<script type="module" src="assets/js/admin.js?v=20260822b"></script>
 </body>
 </html>
