@@ -1,4 +1,4 @@
-import { ART_CATEGORIES } from "./site-data.js";
+import { DEFAULT_ART_CATEGORIES, LOCAL_SEEDS, mergeCategories, categoryHref } from "./site-data.js";
 import { observeReveals, onScrollFrame, sectionProgress, initNav, prefersReducedMotion } from "./reveal.js";
 
 const TILE_LAYOUT = ["t-hero", "t-tall", "t-strip", "t-strip", "t-strip"];
@@ -7,6 +7,7 @@ const HOVER_INTERVAL = 1600;
 const PARALLAX_DEPTH = [0, 46, -30, 22, -18];
 
 const pools = new Map();
+let categories = DEFAULT_ART_CATEGORIES;
 
 function spread(list, count) {
   if (list.length <= count) return list.slice();
@@ -19,7 +20,7 @@ function toItem(src, category, title) {
 }
 
 function seedPool(category) {
-  return category.seeds.map((src, i) =>
+  return (category.seeds || LOCAL_SEEDS[category.slug] || []).map((src, i) =>
     toItem(src, category.label, `${category.label.replace(/s$/, "")} Study ${i + 1}`)
   );
 }
@@ -27,7 +28,7 @@ function seedPool(category) {
 function buildTile(category, layoutClass, tileIndex) {
   const tile = document.createElement("a");
   tile.className = `tile ${layoutClass}`;
-  tile.href = category.page;
+  tile.href = categoryHref(category);
   tile.dataset.depth = String(PARALLAX_DEPTH[tileIndex] || 0);
   tile.setAttribute("aria-label", `View the ${category.label} collection`);
 
@@ -138,11 +139,11 @@ function buildSection(category, index) {
   intro.className = "collection-intro";
   intro.setAttribute("data-reveal", index % 2 ? "right" : "left");
   intro.innerHTML = `
-    <span class="collection-index">${String(index + 1).padStart(2, "0")} / ${String(ART_CATEGORIES.length).padStart(2, "0")}</span>
+    <span class="collection-index">${String(index + 1).padStart(2, "0")} / ${String(categories.length).padStart(2, "0")}</span>
     <h2>${category.label}</h2>
     <p class="collection-tagline">${category.tagline}</p>
     <p class="blurb">${category.blurb}</p>
-    <a class="link-btn" href="${category.page}">Explore ${category.label} <span class="arrow">&#8594;</span></a>
+    <a class="link-btn" href="${categoryHref(category)}">Explore ${category.label} <span class="arrow">&#8594;</span></a>
     <span class="collection-count" data-count></span>
   `;
 
@@ -189,7 +190,7 @@ function refreshSection(section) {
 }
 
 function wireScrollMotion(sections) {
-  onScrollFrame((vh) => {
+  return onScrollFrame((vh) => {
     sections.forEach((section) => {
       const rect = section.getBoundingClientRect();
       if (rect.bottom < -200 || rect.top > vh + 200) return;
@@ -253,18 +254,47 @@ function init() {
   const host = document.getElementById("collections");
   if (!host) return;
 
-  const sections = ART_CATEGORIES.map((category, i) => {
+  let sections = mount(host);
+
+  observeReveals(document);
+  let detachScroll = wireScrollMotion(sections);
+  wireHeroCanvas();
+  upgradeFromFirestore(sections);
+
+  loadCategoryOrder().then((remote) => {
+    if (!remote || sameOrder(remote, categories)) return;
+    categories = remote;
+    detachScroll();
+    host.innerHTML = "";
+    sections = mount(host);
+    observeReveals(document);
+    detachScroll = wireScrollMotion(sections);
+    upgradeFromFirestore(sections);
+  });
+}
+
+function mount(host) {
+  return categories.map((category, i) => {
     pools.set(category.slug, seedPool(category));
     const section = buildSection(category, i);
     host.appendChild(section);
     refreshSection(section);
     return section;
   });
+}
 
-  observeReveals(document);
-  wireScrollMotion(sections);
-  wireHeroCanvas();
-  upgradeFromFirestore(sections);
+function sameOrder(a, b) {
+  return a.length === b.length && a.every((c, i) => c.slug === b[i].slug && c.label === b[i].label);
+}
+
+async function loadCategoryOrder() {
+  try {
+    const { fetchCategories } = await import("./data.js");
+    return mergeCategories(await fetchCategories("art"));
+  } catch (err) {
+    console.warn("Category order unavailable, using defaults.", err);
+    return null;
+  }
 }
 
 init();

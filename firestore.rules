@@ -2,70 +2,71 @@ rules_version = '2';
 service cloud.firestore {
   match /databases/{database}/documents {
 
-    // /artworks/{artId}  — one doc per painting/sketch/etc.
-    match /artworks/{artId} {
+    function isOwner() {
+      return request.auth != null
+        && request.auth.token.email in [
+          "jonathanalafi@gmail.com",
+          "muhwezipetros@gmail.com"
+        ];
+    }
 
-      // Everyone (including anonymous guests) can read artwork + like counts.
+    // A signed-in guest may bump "likes" by exactly one and touch nothing else.
+    function isLikeIncrement() {
+      return request.auth != null
+        && request.resource.data.diff(resource.data).affectedKeys().hasOnly(['likes'])
+        && request.resource.data.likes == resource.data.likes + 1;
+    }
+
+    function isValidComment() {
+      return request.auth != null
+        && request.resource.data.text is string
+        && request.resource.data.text.size() > 0
+        && request.resource.data.text.size() <= 300
+        && request.resource.data.name is string
+        && request.resource.data.name.size() <= 40;
+    }
+
+    // Two independent category systems, both publicly readable so the site
+    // can render them, both owner-only for writes.
+    match /categories/{categoryId} {
       allow read: if true;
+      allow write: if isOwner();
+    }
 
-      // Only the signed-in owner (matched by email) can create or delete
-      // an artwork document.
+    match /comicCategories/{categoryId} {
+      allow read: if true;
+      allow write: if isOwner();
+    }
+
+    match /artworks/{artId} {
+      allow read: if true;
       allow create, delete: if isOwner();
+      allow update: if isOwner() || isLikeIncrement();
 
-      // Updates are allowed for the owner (editing title/description),
-      // OR for any signed-in guest performing exactly a +1 like increment
-      // and touching no other field.
-      allow update: if isOwner() || isValidLikeIncrement();
-
-      function isOwner() {
-        return request.auth != null
-          && request.auth.token.email in [
-            "jonathanalafi@gmail.com",
-            "muhwezipetros@gmail.com"
-          ];
-      }
-
-      function isValidLikeIncrement() {
-        let before = resource.data.likes;
-        let after = request.resource.data.likes;
-        return request.auth != null
-          && request.resource.data.diff(resource.data).affectedKeys().hasOnly(['likes'])
-          && after == before + 1;
-      }
-
-      // /artworks/{artId}/comments/{commentId}
       match /comments/{commentId} {
-        // Public read so anyone can see the comment thread.
         allow read: if true;
-
-        // Any signed-in user — including anonymous guests — can post a
-        // comment, as long as it's a real, reasonably-sized comment.
-        allow create: if request.auth != null
-          && request.resource.data.text is string
-          && request.resource.data.text.size() > 0
-          && request.resource.data.text.size() <= 300
-          && request.resource.data.name is string
-          && request.resource.data.name.size() <= 40;
-
-        // Comments can't be edited after posting.
+        allow create: if isValidComment();
         allow update: if false;
-
-        // Only the owner can delete a comment (basic moderation).
-        allow delete: if request.auth != null
-          && request.auth.token.email in [
-            "jonathanalafi@gmail.com",
-            "muhwezipetros@gmail.com"
-          ];
-    }
+        allow delete: if isOwner();
+      }
     }
 
-    // ===== Added: collection-group read for admin totals =====
-    // Individual comment threads are already public above
-    // (artworks/{artId}/comments allows read: if true). This just
-    // extends that same public-read permission to collection-group
-    // queries, i.e. counting comments across every artwork at once
-    // (used by the admin dashboard's "Total Comments" stat).
-    // No new data is exposed — comments were already public.
+    // A comic is a story: cover image plus an ordered page sequence.
+    match /comics/{comicId} {
+      allow read: if true;
+      allow create, delete: if isOwner();
+      allow update: if isOwner() || isLikeIncrement();
+
+      match /comments/{commentId} {
+        allow read: if true;
+        allow create: if isValidComment();
+        allow update: if false;
+        allow delete: if isOwner();
+      }
+    }
+
+    // Collection-group read so the admin panel can list every comment at once.
+    // Comment threads are already public above, so this exposes nothing new.
     match /{path=**}/comments/{commentId} {
       allow read: if true;
     }

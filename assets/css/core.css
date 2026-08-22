@@ -21,6 +21,10 @@
 
 *, *::before, *::after { box-sizing: border-box; }
 
+/* The UA [hidden] rule loses to any class that declares display, so several
+   panels below would stay visible when toggled. Make the attribute win. */
+[hidden] { display: none !important; }
+
 html { scroll-behavior: smooth; -webkit-text-size-adjust: 100%; }
 
 body {

@@ -24,14 +24,6 @@ export function observeReveals(root = document) {
   targets.forEach(el => observer.observe(el));
 }
 
-export function stagger(root, step = 90) {
-  root.querySelectorAll("[data-stagger]").forEach((group) => {
-    Array.from(group.children).forEach((child, i) => {
-      child.style.setProperty("--reveal-delay", `${i * step}ms`);
-    });
-  });
-}
-
 const scrollHandlers = new Set();
 let ticking = false;
 

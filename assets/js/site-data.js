@@ -1,7 +1,7 @@
 const seed = (dir, prefix, count) =>
   Array.from({ length: count }, (_, i) => `artworks/${dir}/${prefix}${i + 1}.jpg`);
 
-export const ART_CATEGORIES = [
+export const DEFAULT_ART_CATEGORIES = [
   {
     slug: "paintings",
     label: "Paintings",
@@ -56,30 +56,55 @@ export const ART_CATEGORIES = [
     page: "comics.html",
     tagline: "Stories, panel by panel",
     blurb: "Sequential worlds you read rather than glance at — enter a story and follow it to the last page.",
-    seeds: seed("comics", "comic", 3)
+    seeds: seed("comics", "comic", 3),
+    isComics: true
   }
 ];
 
-export const CATEGORY_BY_SLUG = Object.fromEntries(
-  ART_CATEGORIES.map(c => [c.slug, c])
-);
-
-export const CATEGORY_LABELS = Object.fromEntries(
-  ART_CATEGORIES.map(c => [c.slug, c.label])
-);
-
-export const CATEGORY_SLUGS = ART_CATEGORIES.map(c => c.slug);
-
-export const DEFAULT_COMIC_GENRES = [
-  { slug: "action", label: "Action", order: 0 },
-  { slug: "fantasy", label: "Fantasy", order: 1 },
-  { slug: "drama", label: "Drama", order: 2 },
-  { slug: "sci-fi", label: "Sci-Fi", order: 3 }
+export const DEFAULT_COMIC_CATEGORIES = [
+  { slug: "action", label: "Action", tagline: "Momentum and consequence", blurb: "Stories that move — chases, stand-offs, and the split second before everything changes." },
+  { slug: "fantasy", label: "Fantasy", tagline: "Worlds with their own rules", blurb: "Invented places where magic is a system, not a shortcut, and every map hides a cost." },
+  { slug: "drama", label: "Drama", tagline: "The quiet, human weight", blurb: "No explosions needed — stories built from what people can not quite bring themselves to say." },
+  { slug: "sci-fi", label: "Sci-Fi", tagline: "Tomorrow, extrapolated", blurb: "Speculative futures used as a lens on the present, drawn in cool light and hard edges." }
 ];
+
+export const CATEGORY_BY_SLUG = Object.fromEntries(
+  DEFAULT_ART_CATEGORIES.map(c => [c.slug, c])
+);
+
+export const LOCAL_SEEDS = Object.fromEntries(
+  DEFAULT_ART_CATEGORIES.map(c => [c.slug, c.seeds])
+);
+
+export function categoryHref(category) {
+  if (category.isComics || category.slug === "comics") return "comics.html";
+  const known = CATEGORY_BY_SLUG[category.slug];
+  return known ? known.page : `category.html?c=${encodeURIComponent(category.slug)}`;
+}
 
 export function currentCategorySlug() {
   const explicit = document.body?.dataset?.category;
-  if (explicit && CATEGORY_BY_SLUG[explicit]) return explicit;
+  if (explicit) return explicit;
+  const param = new URLSearchParams(location.search).get("c");
+  if (param) return param;
   const file = location.pathname.split("/").pop().replace(/\.html$/, "");
   return CATEGORY_BY_SLUG[file] ? file : "general";
+}
+
+export function mergeCategories(remote) {
+  const bySlug = new Map(DEFAULT_ART_CATEGORIES.map(c => [c.slug, { ...c }]));
+  remote.forEach((cat, i) => {
+    const base = bySlug.get(cat.slug) || { slug: cat.slug, seeds: [] };
+    bySlug.set(cat.slug, {
+      ...base,
+      label: cat.name || base.label,
+      tagline: cat.tagline || base.tagline || "",
+      blurb: cat.blurb || base.blurb || "",
+      order: cat.order ?? i,
+      page: base.page || `category.html?c=${encodeURIComponent(cat.slug)}`
+    });
+  });
+  return Array.from(bySlug.values())
+    .filter(c => remote.length === 0 || remote.some(r => r.slug === c.slug))
+    .sort((a, b) => (a.order ?? 0) - (b.order ?? 0));
 }
