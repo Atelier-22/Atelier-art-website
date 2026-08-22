@@ -185,3 +185,18 @@ export function watchCategoryArtworks(category, callback) {
 export async function deleteArtwork(artId) {
   await deleteDoc(doc(db, "artworks", artId));
 }
+
+export async function fetchUploadedArtworks() {
+  const { getDocs } = await import("https://www.gstatic.com/firebasejs/10.13.0/firebase-firestore.js");
+  const snap = await getDocs(collection(db, "artworks"));
+  const byCategory = {};
+  snap.forEach(d => {
+    const data = d.data();
+    if (data.uploaded !== true || !data.imageUrl) return;
+    (byCategory[data.category] ||= []).push({ id: d.id, ...data });
+  });
+  Object.values(byCategory).forEach(list =>
+    list.sort((a, b) => (b.createdAt?.seconds || 0) - (a.createdAt?.seconds || 0))
+  );
+  return byCategory;
+}
