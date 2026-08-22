@@ -62,6 +62,10 @@
               data-title="Categories" data-sub="Two independent systems &mdash; gallery collections and comic genres.">
         <span class="ico">&#9750;</span> Categories
       </button>
+      <button type="button" data-view="maintenance"
+              data-title="Maintenance" data-sub="Schema migration, admin identity, and the change log.">
+        <span class="ico">&#9881;</span> Maintenance
+      </button>
       <button type="button" data-view="engagement"
               data-title="Engagement" data-sub="Likes and comments left by visitors.">
         <span class="ico">&#9825;</span> Engagement
@@ -236,6 +240,49 @@
         </form>
 
         <div class="rows" id="comic-cat-rows"></div>
+      </div>
+    </section>
+
+    <section class="admin-view" id="view-maintenance">
+      <div class="panel">
+        <h2>Admin identity</h2>
+        <p class="panel-sub">Security rules match on this. Everything else depends on it being real.</p>
+        <div class="rows">
+          <div class="row">
+            <div class="row-main">
+              <strong>Your UID</strong>
+              <small id="admin-uid">&mdash;</small>
+            </div>
+            <div class="row-actions"><button class="btn is-small" id="copy-uid">Copy</button></div>
+          </div>
+          <div class="row">
+            <div class="row-main">
+              <strong>Admin claim</strong>
+              <small id="admin-claim-state">Checking&hellip;</small>
+            </div>
+            <div class="row-actions"><button class="btn is-small" id="grant-claim">Grant claim</button></div>
+          </div>
+        </div>
+        <p class="form-note" style="margin-top:14px">The claim requires the Cloud Functions to be deployed. Until then the rules fall back to matching your email, which is also enforced server-side.</p>
+      </div>
+
+      <div class="panel">
+        <h2>Schema migration</h2>
+        <p class="panel-sub">Stamps status, featured, and Cloudinary public IDs onto existing documents, copies categories into artCategories, seeds comic genres, and backfills the media library. Safe to run more than once.</p>
+        <div class="alert is-warn" id="migrate-warning">
+          Run this <b>before</b> publishing the new security rules. Public reads will require <code>status == "published"</code>, and documents created earlier have no status field.
+        </div>
+        <div class="toolbar">
+          <button class="btn" id="migrate-dry">Preview changes</button>
+          <button class="btn is-primary" id="migrate-run" disabled>Run migration</button>
+        </div>
+        <div class="rows" id="migrate-report" style="margin-top:16px"></div>
+      </div>
+
+      <div class="panel">
+        <h2>Change log</h2>
+        <p class="panel-sub">Append-only record of consequential admin actions, newest first.</p>
+        <div class="rows" id="changelog-rows"></div>
       </div>
     </section>
 

@@ -1,8 +1,32 @@
 rules_version = '2';
+
+// ============================================================================
+// Alafi Art Work — Firestore Security Rules
+//
+// This is the enforcement layer for the whole project. The site is hosted on
+// GitHub Pages, so there is no server to check permissions: anything not
+// blocked here can be done by anyone who opens devtools. Every write below is
+// gated on a verified admin identity, never on a frontend flag.
+//
+// PUBLISH THESE ONLY AFTER RUNNING THE MIGRATION (Admin -> Maintenance).
+// Public reads require status == "published"; documents created before the
+// migration have no status field and will become invisible until stamped.
+// ============================================================================
+
 service cloud.firestore {
   match /databases/{database}/documents {
 
-    function isOwner() {
+    // ---- Identity ------------------------------------------------------
+
+    // Set by the grantAdminClaim Cloud Function. This is the primary check.
+    function hasAdminClaim() {
+      return request.auth != null && request.auth.token.admin == true;
+    }
+
+    // Fallback while the claim propagates, and a recovery path if the claim is
+    // ever lost. The email is a signed token claim, not client input — nobody
+    // can obtain a token for an address they cannot authenticate as.
+    function isOwnerEmail() {
       return request.auth != null
         && request.auth.token.email in [
           "jonathanalafi@gmail.com",
@@ -10,15 +34,33 @@ service cloud.firestore {
         ];
     }
 
-    // A signed-in guest may bump "likes" by exactly one and touch nothing else.
+    function isAdmin() {
+      return hasAdminClaim() || isOwnerEmail();
+    }
+
+    function signedIn() {
+      return request.auth != null;
+    }
+
+    // ---- Shared predicates ---------------------------------------------
+
+    function isPublished() {
+      return resource.data.status == "published";
+    }
+
+    function incomingIsValidStatus() {
+      return request.resource.data.status in ["draft", "published", "archived"];
+    }
+
+    // A guest may bump "likes" by exactly one and touch nothing else.
     function isLikeIncrement() {
-      return request.auth != null
+      return signedIn()
         && request.resource.data.diff(resource.data).affectedKeys().hasOnly(['likes'])
         && request.resource.data.likes == resource.data.likes + 1;
     }
 
     function isValidComment() {
-      return request.auth != null
+      return signedIn()
         && request.resource.data.text is string
         && request.resource.data.text.size() > 0
         && request.resource.data.text.size() <= 300
@@ -26,47 +68,118 @@ service cloud.firestore {
         && request.resource.data.name.size() <= 40;
     }
 
-    // Two independent category systems, both publicly readable so the site
-    // can render them, both owner-only for writes.
-    match /categories/{categoryId} {
+    // ---- Site configuration ---------------------------------------------
+    // The public site reads only siteConfig/published. The draft is admin-only
+    // so unpublished design changes are never visible to visitors.
+
+    match /siteConfig/published {
       allow read: if true;
-      allow write: if isOwner();
+      allow write: if isAdmin();
+    }
+
+    match /siteConfig/draft {
+      allow read, write: if isAdmin();
+    }
+
+    match /siteConfig/{other} {
+      allow read, write: if isAdmin();
+    }
+
+    // ---- Categories ------------------------------------------------------
+
+    match /artCategories/{categoryId} {
+      allow read: if true;
+      allow write: if isAdmin();
     }
 
     match /comicCategories/{categoryId} {
       allow read: if true;
-      allow write: if isOwner();
+      allow write: if isAdmin();
     }
+
+    // Legacy collection, kept readable so the site keeps working during the
+    // migration. Remove this block once artCategories is the only source.
+    match /categories/{categoryId} {
+      allow read: if true;
+      allow write: if isAdmin();
+    }
+
+    // ---- Artworks --------------------------------------------------------
+    // Public list queries MUST filter on status == "published"; rules are not
+    // filters, and Firestore rejects a query it cannot prove safe.
 
     match /artworks/{artId} {
-      allow read: if true;
-      allow create, delete: if isOwner();
-      allow update: if isOwner() || isLikeIncrement();
+      allow read: if isAdmin() || isPublished();
+      allow create: if isAdmin() && incomingIsValidStatus();
+      allow delete: if isAdmin();
+      allow update: if isAdmin() || isLikeIncrement();
 
       match /comments/{commentId} {
         allow read: if true;
         allow create: if isValidComment();
-        allow update: if false;
-        allow delete: if isOwner();
+        allow update: if isAdmin();
+        allow delete: if isAdmin();
       }
     }
 
-    // A comic is a story: cover image plus an ordered page sequence.
+    // ---- Comics ----------------------------------------------------------
+    // A comic holds chapters; a chapter holds ordered pages.
+
     match /comics/{comicId} {
-      allow read: if true;
-      allow create, delete: if isOwner();
-      allow update: if isOwner() || isLikeIncrement();
+      allow read: if isAdmin() || isPublished();
+      allow create: if isAdmin() && incomingIsValidStatus();
+      allow delete: if isAdmin();
+      allow update: if isAdmin() || isLikeIncrement();
 
       match /comments/{commentId} {
         allow read: if true;
         allow create: if isValidComment();
-        allow update: if false;
-        allow delete: if isOwner();
+        allow update: if isAdmin();
+        allow delete: if isAdmin();
+      }
+
+      match /chapters/{chapterId} {
+        allow read: if isAdmin() || isPublished();
+        allow write: if isAdmin();
+
+        match /pages/{pageId} {
+          // Page visibility follows its chapter, which the reader has already
+          // been permitted to open.
+          allow read: if true;
+          allow write: if isAdmin();
+        }
       }
     }
 
-    // Collection-group read so the admin panel can list every comment at once.
-    // Comment threads are already public above, so this exposes nothing new.
+    // ---- Stories / announcements ----------------------------------------
+
+    match /stories/{storyId} {
+      allow read: if isAdmin() || isPublished();
+      allow write: if isAdmin();
+    }
+
+    // ---- Media library ---------------------------------------------------
+    // Tracks every Cloudinary upload so assets can be reused and deleted.
+
+    match /media/{mediaId} {
+      allow read: if isAdmin();
+      allow write: if isAdmin();
+    }
+
+    // ---- Change log ------------------------------------------------------
+    // Append-only: entries may be created but never edited or removed, so the
+    // log cannot be quietly rewritten.
+
+    match /changeLog/{entryId} {
+      allow read: if isAdmin();
+      allow create: if isAdmin();
+      allow update, delete: if false;
+    }
+
+    // ---- Collection group read for the admin comments view ---------------
+    // Comment threads are already public above; this only permits querying
+    // them together.
+
     match /{path=**}/comments/{commentId} {
       allow read: if true;
     }

@@ -1,8 +1,8 @@
-import { db, auth } from "../../firebase-config.js";
+import { db, auth, getApp } from "../../firebase-config.js";
 import { DEFAULT_ART_CATEGORIES, DEFAULT_COMIC_CATEGORIES } from "./site-data.js";
 import {
   doc, getDoc, getDocs, setDoc, addDoc, deleteDoc, updateDoc, writeBatch,
-  collection, collectionGroup, onSnapshot, query, orderBy, where,
+  collection, collectionGroup, onSnapshot, query, orderBy, where, limit,
   serverTimestamp, increment
 } from "https://www.gstatic.com/firebasejs/10.13.0/firebase-firestore.js";
 
@@ -46,8 +46,16 @@ export function uploadImage(file, onProgress) {
         return;
       }
       try {
-        const data = JSON.parse(xhr.responseText);
-        resolve(data.secure_url);
+        const d = JSON.parse(xhr.responseText);
+        resolve({
+          url: d.secure_url,
+          publicId: d.public_id,
+          format: d.format,
+          bytes: d.bytes,
+          width: d.width,
+          height: d.height,
+          resourceType: d.resource_type || "image"
+        });
       } catch {
         reject(new Error("Cloudinary returned an unreadable response."));
       }
@@ -59,12 +67,116 @@ export function uploadImage(file, onProgress) {
   });
 }
 
+/**
+ * Uploads and records the asset in the media library in one step. Every upload
+ * goes through here so nothing lands in Cloudinary without a stored public_id
+ * to delete it by later.
+ */
+export async function uploadAndRecord(file, { usedFor = "artwork", onProgress } = {}) {
+  const asset = await uploadImage(file, onProgress);
+  await setDoc(doc(db, "media", slugify(asset.publicId, "asset")), {
+    ...asset,
+    filename: file.name,
+    usedFor,
+    type: asset.resourceType,
+    createdAt: serverTimestamp()
+  });
+  return asset;
+}
+
+/**
+ * Cloudinary's URL layout is
+ *   .../<cloud>/image/upload/[transforms]/v<version>/<public_id>.<ext>
+ * so an existing secure_url can be turned back into a public_id. Used by the
+ * migration to give already-uploaded images a deletion handle.
+ */
+export function publicIdFromUrl(url) {
+  if (typeof url !== "string" || !url.includes("/upload/")) return null;
+  let tail = url.split("/upload/")[1];
+  if (!tail) return null;
+  tail = tail.replace(/^(?:[^/]+\/)*?v\d+\//, "");
+  return decodeURIComponent(tail.replace(/\.[a-z0-9]+$/i, "")) || null;
+}
+
+export function watchMedia(callback, onError) {
+  return onSnapshot(collection(db, "media"), (snap) => {
+    const items = snap.docs
+      .map(d => ({ id: d.id, ...d.data(), createdAt: d.data().createdAt?.seconds || 0 }))
+      .sort((a, b) => b.createdAt - a.createdAt);
+    callback(items);
+  }, (err) => {
+    console.error("watchMedia error:", err);
+    onError?.(err);
+  });
+}
+
+export async function recordMedia(asset, usedFor) {
+  if (!asset?.publicId) return;
+  await setDoc(doc(db, "media", slugify(asset.publicId, "asset")), {
+    ...asset,
+    usedFor: usedFor || "unknown",
+    type: asset.resourceType || "image",
+    createdAt: serverTimestamp()
+  }, { merge: true });
+}
+
+/**
+ * Deletes the Cloudinary asset via the signed Cloud Function, then drops the
+ * media record. The API secret never reaches the browser.
+ */
+export async function deleteMedia(mediaId, publicId, resourceType = "image") {
+  const { getFunctions, httpsCallable } = await import("https://www.gstatic.com/firebasejs/10.13.0/firebase-functions.js");
+  const call = httpsCallable(getFunctions(getApp()), "deleteCloudinaryAsset");
+  await call({ publicId, resourceType });
+  await deleteDoc(doc(db, "media", mediaId));
+}
+
+export async function grantAdminClaim() {
+  const { getFunctions, httpsCallable } = await import("https://www.gstatic.com/firebasejs/10.13.0/firebase-functions.js");
+  const call = httpsCallable(getFunctions(getApp()), "grantAdminClaim");
+  const res = await call({});
+  return res.data;
+}
+
+/* ------------------------------------------------------------------ */
+/*  Change log — append-only record of consequential admin actions      */
+/* ------------------------------------------------------------------ */
+
+export async function logChange(action, resource, detail) {
+  try {
+    await addDoc(collection(db, "changeLog"), {
+      action,
+      resource: resource || "",
+      detail: detail || "",
+      actor: auth.currentUser?.email || auth.currentUser?.uid || "unknown",
+      createdAt: serverTimestamp()
+    });
+  } catch (err) {
+    // The log must never be the reason an action fails.
+    console.warn("changeLog write failed:", err);
+  }
+}
+
+export function watchChangeLog(callback, onError) {
+  const q = query(collection(db, "changeLog"), orderBy("createdAt", "desc"), limit(200));
+  return onSnapshot(q, (snap) => {
+    callback(snap.docs.map(d => ({
+      id: d.id,
+      ...d.data(),
+      createdAt: d.data().createdAt?.toMillis?.() || 0
+    })));
+  }, (err) => {
+    console.error("watchChangeLog error:", err);
+    onError?.(err);
+  });
+}
+
 /* ------------------------------------------------------------------ */
 /*  Categories — art and comics share the same shape                   */
 /* ------------------------------------------------------------------ */
 
 function categoryPath(kind) {
-  return kind === "comics" ? "comicCategories" : "categories";
+  return kind === "comics" ? "comicCategories" : "artCategories";
 }
 
 function defaultsFor(kind) {
@@ -179,19 +291,29 @@ function normaliseArtwork(id, data) {
     imageUrl: data.imageUrl || "",
     likes: data.likes || 0,
     uploaded: data.uploaded === true,
+    publicId: data.publicId || null,
+    status: data.status || (data.uploaded === true ? "published" : "draft"),
+    featured: data.featured === true,
+    order: typeof data.order === "number" ? data.order : 0,
     createdAt: data.createdAt?.seconds || 0
   };
 }
 
+/**
+ * Public listing. The status filter is not optional: rules are not filters, so
+ * Firestore rejects any query it cannot prove will return only readable docs.
+ */
 export function watchArtworks(categorySlug, callback, onError) {
   const ref = categorySlug
-    ? query(collection(db, "artworks"), where("category", "==", categorySlug))
-    : collection(db, "artworks");
+    ? query(collection(db, "artworks"),
+            where("category", "==", categorySlug),
+            where("status", "==", "published"))
+    : query(collection(db, "artworks"), where("status", "==", "published"));
 
   return onSnapshot(ref, (snap) => {
     const items = snap.docs
       .map(d => normaliseArtwork(d.id, d.data()))
-      .filter(a => a.uploaded && a.imageUrl)
+      .filter(a => a.imageUrl)
       .sort((a, b) => b.createdAt - a.createdAt);
     callback(items);
   }, (err) => {
@@ -209,20 +331,38 @@ export function watchAllArtworks(callback, onError) {
   });
 }
 
-export async function createArtwork({ categorySlug, file, title, description, imageUrl, onProgress }) {
-  const url = imageUrl || await uploadImage(file, onProgress);
+export async function createArtwork({
+  categorySlug, file, title, description, imageUrl, publicId,
+  status = "published", onProgress
+}) {
+  let url = imageUrl;
+  let assetId = publicId || null;
+
+  if (!url) {
+    const asset = await uploadAndRecord(file, { usedFor: "artwork", onProgress });
+    url = asset.url;
+    assetId = asset.publicId;
+  }
+
   const name = (title || file?.name || "Untitled").trim();
   const id = artworkId(categorySlug, name);
+
   await setDoc(doc(db, "artworks", id), {
     category: categorySlug,
     title: name,
     description: description || "",
     imageUrl: url,
+    publicId: assetId,
     likes: 0,
+    status,
+    featured: false,
+    order: 0,
     createdAt: serverTimestamp(),
     uploaded: true
   }, { merge: true });
-  return { id, imageUrl: url };
+
+  await logChange("artwork.create", id, name);
+  return { id, imageUrl: url, publicId: assetId };
 }
 
 export async function updateArtwork(id, patch) {
@@ -247,6 +387,9 @@ function normaliseComic(id, data) {
     pages: Array.isArray(data.pages) ? data.pages.filter(Boolean) : [],
     likes: data.likes || 0,
     order: typeof data.order === "number" ? data.order : 0,
+    status: data.status || "published",
+    featured: data.featured === true,
+    coverPublicId: data.coverPublicId || null,
     createdAt: data.createdAt?.seconds || 0
   };
 }

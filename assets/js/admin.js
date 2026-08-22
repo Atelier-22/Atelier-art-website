@@ -4,7 +4,8 @@ import {
   reorderCategories, deleteCategory,
   watchAllArtworks, createArtwork, updateArtwork, deleteArtwork,
   watchComics, createComic, updateComic, deleteComic, reorderComics,
-  watchAllComments, deleteComment, uploadImage
+  watchAllComments, deleteComment, uploadImage,
+  grantAdminClaim, watchChangeLog, logChange
 } from "./data.js";
 import { categoryHref } from "./site-data.js";
 
@@ -164,6 +165,7 @@ watchAuth((user) => {
     loginScreen.hidden = true;
     shell.hidden = false;
     $("#who").textContent = user.email;
+    paintIdentity(user).catch(err => console.warn("Identity panel failed:", err));
     if (!state.ready) { state.ready = true; boot(); }
   } else {
     loginScreen.hidden = false;
@@ -868,6 +870,125 @@ function renderComments() {
   });
 }
 
+
+/* ------------------------------------------------------------------ */
+/*  Maintenance — identity, migration, change log                      */
+/* ------------------------------------------------------------------ */
+
+async function paintIdentity(user) {
+  $("#admin-uid").textContent = user.uid || "unavailable";
+  const stateEl = $("#admin-claim-state");
+
+  let claimed = false;
+  try {
+    const token = await user.getIdTokenResult?.(true);
+    claimed = token?.claims?.admin === true;
+  } catch (err) {
+    console.warn("Could not read the ID token claims:", err);
+  }
+
+  stateEl.textContent = claimed
+    ? "Granted — rules are matching on your UID claim"
+    : "Not granted — rules are falling back to your email";
+  stateEl.style.color = claimed ? "var(--ok)" : "var(--gold)";
+  $("#grant-claim").disabled = claimed;
+}
+
+$("#copy-uid").addEventListener("click", async () => {
+  const uid = $("#admin-uid").textContent;
+  try {
+    await navigator.clipboard.writeText(uid);
+    toast("UID copied.", "ok");
+  } catch {
+    toast(uid, "");
+  }
+});
+
+$("#grant-claim").addEventListener("click", async () => {
+  const btn = $("#grant-claim");
+  btn.disabled = true;
+  try {
+    const res = await grantAdminClaim();
+    toast(`Claim granted to ${res.email}. Sign out and back in to activate it.`, "ok");
+    await logChange("admin.claimGranted", res.uid, res.email);
+  } catch (err) {
+    console.error(err);
+    toast(
+      /not-found|internal|unavailable/i.test(err.message)
+        ? "Cloud Functions are not deployed yet — see functions/README.md."
+        : err.message,
+      "error"
+    );
+    btn.disabled = false;
+  }
+});
+
+function renderMigrationReport(plans, applied) {
+  const host = $("#migrate-report");
+  host.innerHTML = plans.map(p => `
+    <div class="row">
+      <div class="row-main">
+        <strong>${escapeHtml(p.label)}</strong>
+        <small>${applied
+          ? `${p.written} document${p.written === 1 ? "" : "s"} written`
+          : `${p.writes.length} document${p.writes.length === 1 ? "" : "s"} would change`}</small>
+        ${(p.notes || []).map(n => `<span style="display:block;color:var(--paper-faint);font-size:.76rem">${escapeHtml(n)}</span>`).join("")}
+      </div>
+    </div>
+  `).join("");
+}
+
+$("#migrate-dry").addEventListener("click", async () => {
+  const btn = $("#migrate-dry");
+  btn.disabled = true;
+  $("#migrate-report").innerHTML = '<p class="empty-note">Scanning…</p>';
+  try {
+    const { dryRun } = await import("./migrate.js");
+    const { plans, totalWrites } = await dryRun();
+    renderMigrationReport(plans, false);
+    $("#migrate-run").disabled = totalWrites === 0;
+    toast(totalWrites
+      ? `${totalWrites} documents need migrating.`
+      : "Nothing to migrate — schema is already current.", "ok");
+  } catch (err) {
+    console.error(err);
+    $("#migrate-report").innerHTML = `<p class="empty-note">Scan failed: ${escapeHtml(err.message)}</p>`;
+    toast("Could not scan. Check the console.", "error");
+  } finally {
+    btn.disabled = false;
+  }
+});
+
+$("#migrate-run").addEventListener("click", () => {
+  modal({
+    title: "Run the schema migration?",
+    body: "This writes <b>status</b>, <b>featured</b>, and Cloudinary <b>public IDs</b> onto your existing documents, copies categories into artCategories, seeds comic genres, and backfills the media library.<br><br>It is additive and idempotent — nothing is deleted, and re-running it is harmless.",
+    confirmLabel: "Run migration",
+    onConfirm: async () => {
+      const { apply } = await import("./migrate.js");
+      const { results, totalWrites } = await apply((label) => {
+        $("#migrate-report").innerHTML = `<p class="empty-note">Migrating: ${escapeHtml(label)}…</p>`;
+      });
+      renderMigrationReport(results, true);
+      $("#migrate-run").disabled = true;
+      toast(`Migration complete — ${totalWrites} documents written.`, "ok");
+    }
+  });
+});
+
+function renderChangeLog(entries) {
+  const host = $("#changelog-rows");
+  host.innerHTML = entries.length ? entries.map(e => `
+    <div class="row row-comment">
+      <div class="row-main">
+        <strong>${escapeHtml(e.action)}</strong>
+        <small>${escapeHtml(e.actor || "")} &middot; ${relativeTime(e.createdAt / 1000)}</small>
+        <span>${escapeHtml(e.resource || "")}${e.detail ? " — " + escapeHtml(e.detail) : ""}</span>
+      </div>
+    </div>
+  `).join("") : '<p class="empty-note">No changes recorded yet.</p>';
+}
+
 /* ------------------------------------------------------------------ */
 /*  Boot                                                               */
 /* ------------------------------------------------------------------ */
@@ -910,6 +1031,10 @@ function boot() {
   }, () => {
     $("#comment-rows").innerHTML =
       '<p class="empty-note">Comments couldn\'t be loaded. Publish the collection-group rule from firestore.rules in the Firebase Console.</p>';
+  });
+
+  watchChangeLog(renderChangeLog, () => {
+    $("#changelog-rows").innerHTML = '<p class="empty-note">Change log unavailable — publish the updated rules.</p>';
   });
 
   renderArtFiles();
