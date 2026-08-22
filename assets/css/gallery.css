@@ -24,7 +24,7 @@
 }
 
 .page-head .page-blurb {
-  color: var(--paper-dim);
+  color: var(--fg-dim);
   max-width: 54ch;
   margin: 0;
   font-size: clamp(0.95rem, 1.4vw, 1.08rem);
@@ -37,7 +37,7 @@
   font-size: 0.68rem;
   letter-spacing: 0.2em;
   text-transform: uppercase;
-  color: var(--paper-faint);
+  color: var(--fg-faint);
 }
 
 .crumbs a { text-decoration: none; transition: color 0.3s var(--ease); }
@@ -54,14 +54,14 @@
 }
 
 .art-card {
-  background: var(--ink-raised);
+  background: var(--bg-raised);
   border: 1px solid var(--hairline);
   border-radius: 4px;
   overflow: hidden;
   transition: border-color 0.5s var(--ease), transform 0.6s var(--ease-out);
 }
 
-.art-card:hover { border-color: rgba(216, 178, 92, 0.4); transform: translateY(-4px); }
+.art-card:hover { border-color: rgba(125, 96, 24, 0.4); transform: translateY(-4px); }
 
 .art-frame {
   position: relative;
@@ -92,7 +92,7 @@
   font-size: 0.66rem;
   letter-spacing: 0.28em;
   text-transform: uppercase;
-  color: var(--paper);
+  color: var(--fg);
   opacity: 0;
   transform: translateY(8px);
   transition: opacity 0.45s var(--ease), transform 0.5s var(--ease-out);
@@ -113,7 +113,7 @@
 }
 
 .art-desc {
-  color: var(--paper-faint);
+  color: var(--fg-faint);
   font-size: 0.86rem;
   margin: 8px 0 0;
 }
@@ -133,7 +133,7 @@
   gap: 8px;
   background: transparent;
   border: 1px solid var(--hairline);
-  color: var(--paper-dim);
+  color: var(--fg-dim);
   border-radius: 999px;
   padding: 8px 16px;
   font-family: inherit;
@@ -145,18 +145,18 @@
 }
 
 .like-btn:hover:not(:disabled),
-.comment-toggle:hover { color: var(--paper); border-color: rgba(216, 178, 92, 0.55); }
+.comment-toggle:hover { color: var(--fg); border-color: rgba(125, 96, 24, 0.55); }
 
 .like-btn.is-liked {
   color: var(--gold);
-  border-color: rgba(216, 178, 92, 0.6);
+  border-color: rgba(125, 96, 24, 0.6);
   background: var(--gold-soft);
 }
 
 .like-btn:disabled { cursor: default; }
 .like-btn .heart { font-size: 0.95rem; line-height: 1; }
 
-.art-error { color: #e08a8a; font-size: 0.8rem; margin: 12px 0 0; }
+.art-error { color: #a3352f; font-size: 0.8rem; margin: 12px 0 0; }
 
 /* ============ COMMENTS ============ */
 .comments-panel,
@@ -166,7 +166,7 @@
 
 .comment {
   position: relative;
-  background: rgba(244, 241, 234, 0.04);
+  background: rgba(28, 26, 22, 0.045);
   border-radius: 3px;
   padding: 10px 34px 10px 12px;
   font-size: 0.86rem;
@@ -174,7 +174,7 @@
 }
 
 .comment strong { display: block; color: var(--gold); font-size: 0.7rem; letter-spacing: 0.14em; text-transform: uppercase; margin-bottom: 4px; }
-.comment span { color: var(--paper-dim); }
+.comment span { color: var(--fg-dim); }
 
 .comment-del {
   position: absolute;
@@ -184,24 +184,24 @@
   height: 22px;
   border: 0;
   border-radius: 50%;
-  background: rgba(224, 138, 138, 0.16);
-  color: #e08a8a;
+  background: rgba(163, 53, 47, 0.1);
+  color: #a3352f;
   cursor: pointer;
   line-height: 1;
 }
 
-.comment-del:hover { background: rgba(224, 138, 138, 0.32); }
+.comment-del:hover { background: rgba(163, 53, 47, 0.2); }
 
-.no-comments { color: var(--paper-faint); font-size: 0.84rem; margin: 0; }
+.no-comments { color: var(--fg-faint); font-size: 0.84rem; margin: 0; }
 
 .comment-form { display: grid; gap: 8px; }
 
 .comment-form input,
 .comment-form textarea {
-  background: rgba(244, 241, 234, 0.05);
+  background: rgba(28, 26, 22, 0.05);
   border: 1px solid var(--hairline);
   border-radius: 3px;
-  color: var(--paper);
+  color: var(--fg);
   padding: 10px 12px;
   font-family: inherit;
   font-size: 0.88rem;
@@ -211,26 +211,26 @@
 }
 
 .comment-form input:focus,
-.comment-form textarea:focus { border-color: rgba(216, 178, 92, 0.6); }
+.comment-form textarea:focus { border-color: rgba(125, 96, 24, 0.6); }
 
 .comment-form textarea { min-height: 76px; }
 
 .comment-form input::placeholder,
-.comment-form textarea::placeholder { color: var(--paper-faint); }
+.comment-form textarea::placeholder { color: var(--fg-faint); }
 
 .comment-form .link-btn { justify-self: start; padding: 10px 22px; font-size: 0.68rem; }
 
 .empty-state {
   text-align: center;
   padding: clamp(60px, 12vh, 120px) 20px;
-  color: var(--paper-faint);
+  color: var(--fg-faint);
 }
 
 .empty-state h3 {
   font-family: var(--display);
   font-weight: 400;
   font-size: 2rem;
-  color: var(--paper-dim);
+  color: var(--fg-dim);
   margin: 0 0 10px;
 }
 
@@ -296,7 +296,7 @@
 .lb-arrow {
   background: rgba(244, 241, 234, 0.06);
   border: 1px solid var(--hairline);
-  color: var(--paper);
+  color: var(--fg);
   cursor: pointer;
   border-radius: 50%;
   display: grid;
@@ -305,7 +305,7 @@
 }
 
 .lb-close:hover,
-.lb-arrow:hover { background: var(--gold); color: var(--ink); border-color: var(--gold); }
+.lb-arrow:hover { background: var(--gold-fill); color: var(--on-gold); border-color: var(--gold); }
 
 .lb-arrow { width: 52px; height: 52px; font-size: 1.1rem; }
 
@@ -324,7 +324,7 @@
   left: clamp(12px, 3vw, 46px);
   font-size: 0.68rem;
   letter-spacing: 0.24em;
-  color: var(--paper-faint);
+  color: var(--fg-faint);
 }
 
 @media (max-width: 700px) {
@@ -349,7 +349,7 @@
   overflow: hidden;
   border-radius: 4px;
   aspect-ratio: 5 / 6;
-  background: var(--ink-raised);
+  background: var(--bg-raised);
 }
 
 .index-card img {
@@ -380,7 +380,7 @@
 
 .index-card-body p {
   margin: 0;
-  color: var(--paper-dim);
+  color: var(--fg-dim);
   font-size: 0.88rem;
   max-width: 32ch;
   max-height: 0;

@@ -17,7 +17,7 @@
 }
 
 .prose p {
-  color: var(--paper-dim);
+  color: var(--fg-dim);
   font-size: clamp(0.98rem, 1.3vw, 1.1rem);
   margin: 0 0 18px;
 }
@@ -34,7 +34,7 @@
 .split-media {
   aspect-ratio: 4 / 5;
   overflow: hidden;
-  background: var(--ink-raised);
+  background: var(--bg-raised);
   border: 1px solid var(--hairline);
 }
 
@@ -54,7 +54,7 @@
   font-weight: 300;
   font-size: clamp(1.5rem, 3.4vw, 2.7rem);
   line-height: 1.2;
-  color: var(--paper);
+  color: var(--fg);
 }
 
 .pull-quote::before {
@@ -109,7 +109,7 @@
 }
 
 .step-list span,
-.timeline span { color: var(--paper-dim); font-size: 0.95rem; }
+.timeline span { color: var(--fg-dim); font-size: 0.95rem; }
 
 /* ---- tags ---- */
 .tag-cloud {
@@ -128,11 +128,11 @@
   font-size: 0.7rem;
   letter-spacing: 0.18em;
   text-transform: uppercase;
-  color: var(--paper-dim);
+  color: var(--fg-dim);
   transition: color 0.35s var(--ease), border-color 0.35s var(--ease);
 }
 
-.tag-cloud li:hover { color: var(--gold); border-color: rgba(216, 178, 92, 0.5); }
+.tag-cloud li:hover { color: var(--gold); border-color: rgba(125, 96, 24, 0.5); }
 
 /* ---- figures ---- */
 .figure-row {
@@ -157,7 +157,7 @@
   font-size: 0.62rem;
   letter-spacing: 0.22em;
   text-transform: uppercase;
-  color: var(--paper-faint);
+  color: var(--fg-faint);
 }
 
 /* ---- contact cards ---- */
@@ -171,14 +171,14 @@
 .contact-card {
   display: block;
   text-decoration: none;
-  background: var(--ink-raised);
+  background: var(--bg-raised);
   border: 1px solid var(--hairline);
   border-radius: 4px;
   padding: 22px 24px;
   transition: border-color 0.4s var(--ease), transform 0.4s var(--ease-out);
 }
 
-.contact-card:hover { border-color: rgba(216, 178, 92, 0.55); transform: translateY(-4px); }
+.contact-card:hover { border-color: rgba(125, 96, 24, 0.55); transform: translateY(-4px); }
 
 .contact-card small {
   display: block;

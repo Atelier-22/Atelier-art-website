@@ -12,7 +12,7 @@
   gap: 9px;
   background: transparent;
   border: 1px solid var(--hairline);
-  color: var(--paper-dim);
+  color: var(--fg-dim);
   border-radius: 999px;
   padding: 10px 20px;
   font-family: inherit;
@@ -26,17 +26,17 @@
 .chip i {
   font-style: normal;
   font-size: 0.62rem;
-  color: var(--paper-faint);
+  color: var(--fg-faint);
   border-left: 1px solid var(--hairline);
   padding-left: 9px;
 }
 
-.chip:hover { color: var(--paper); border-color: rgba(216, 178, 92, 0.5); }
+.chip:hover { color: var(--fg); border-color: rgba(125, 96, 24, 0.5); }
 
 .chip.is-active {
-  background: var(--gold);
+  background: var(--gold-fill);
   border-color: var(--gold);
-  color: var(--ink);
+  color: var(--on-gold);
 }
 
 .chip.is-active i { color: rgba(7, 7, 10, 0.6); border-left-color: rgba(7, 7, 10, 0.2); }
@@ -58,13 +58,13 @@
   margin: 0 0 8px;
 }
 
-.shelf-blurb { color: var(--paper-dim); margin: 0 0 12px; max-width: 52ch; }
+.shelf-blurb { color: var(--fg-dim); margin: 0 0 12px; max-width: 52ch; }
 
 .shelf-count {
   font-size: 0.66rem;
   letter-spacing: 0.24em;
   text-transform: uppercase;
-  color: var(--paper-faint);
+  color: var(--fg-faint);
 }
 
 .story-rail {
@@ -76,12 +76,12 @@
   scroll-snap-type: x mandatory;
   padding-bottom: 18px;
   scrollbar-width: thin;
-  scrollbar-color: rgba(216, 178, 92, 0.4) transparent;
+  scrollbar-color: rgba(125, 96, 24, 0.4) transparent;
 }
 
 .story-rail::-webkit-scrollbar { height: 4px; }
-.story-rail::-webkit-scrollbar-track { background: rgba(244, 241, 234, 0.05); }
-.story-rail::-webkit-scrollbar-thumb { background: rgba(216, 178, 92, 0.4); border-radius: 4px; }
+.story-rail::-webkit-scrollbar-track { background: rgba(28, 26, 22, 0.06); }
+.story-rail::-webkit-scrollbar-thumb { background: rgba(125, 96, 24, 0.4); border-radius: 4px; }
 
 /* ============ STORY CARD ============ */
 .story-card {
@@ -104,16 +104,16 @@
   overflow: hidden;
   border-radius: 4px;
   aspect-ratio: 2 / 3;
-  background: var(--ink-raised);
+  background: var(--bg-raised);
   border: 1px solid var(--hairline);
-  box-shadow: 0 18px 46px rgba(0, 0, 0, 0.5);
+  box-shadow: 0 18px 46px rgba(28, 26, 22, 0.22);
   transition: transform 0.7s var(--ease-out), border-color 0.5s var(--ease);
 }
 
 .story-card:hover .story-cover,
 .story-card:focus-visible .story-cover {
   transform: translateY(-8px) rotate(-0.6deg);
-  border-color: rgba(216, 178, 92, 0.5);
+  border-color: rgba(125, 96, 24, 0.5);
 }
 
 .story-cover::before {
@@ -175,11 +175,11 @@
   font-size: 0.62rem;
   letter-spacing: 0.22em;
   text-transform: uppercase;
-  color: var(--paper-faint);
+  color: var(--fg-faint);
 }
 
 .story-blurb {
-  color: var(--paper-dim);
+  color: var(--fg-dim);
   font-size: 0.84rem;
   line-height: 1.55;
   display: -webkit-box;
@@ -218,7 +218,7 @@
   justify-self: start;
   background: none;
   border: 1px solid var(--hairline);
-  color: var(--paper-dim);
+  color: var(--fg-dim);
   border-radius: 999px;
   padding: 9px 18px;
   font-family: inherit;
@@ -229,7 +229,7 @@
   transition: color 0.35s var(--ease), border-color 0.35s var(--ease);
 }
 
-.reader-exit:hover { color: var(--paper); border-color: var(--gold); }
+.reader-exit:hover { color: var(--fg); border-color: var(--gold); }
 
 .reader-id { text-align: center; }
 
@@ -253,11 +253,11 @@
   font-size: 0.68rem;
   letter-spacing: 0.18em;
   text-transform: uppercase;
-  color: var(--paper-faint);
+  color: var(--fg-faint);
   white-space: nowrap;
 }
 
-.reader-counter b { color: var(--paper); font-weight: 500; }
+.reader-counter b { color: var(--fg); font-weight: 500; }
 
 .reader-stage {
   position: relative;
@@ -305,14 +305,14 @@
   border-radius: 50%;
   background: rgba(244, 241, 234, 0.06);
   border: 1px solid var(--hairline);
-  color: var(--paper);
+  color: var(--fg);
   cursor: pointer;
   display: grid;
   place-items: center;
   transition: background 0.3s var(--ease), border-color 0.3s var(--ease), opacity 0.3s var(--ease);
 }
 
-.reader-nav:hover:not(:disabled) { background: var(--gold); color: var(--ink); border-color: var(--gold); }
+.reader-nav:hover:not(:disabled) { background: var(--gold-fill); color: var(--on-gold); border-color: var(--gold); }
 .reader-nav:disabled { opacity: 0.2; cursor: default; }
 
 .reader-foot {
@@ -353,7 +353,7 @@
   border: 1px solid var(--hairline);
   border-radius: 2px;
   overflow: hidden;
-  background: var(--ink-raised);
+  background: var(--bg-raised);
   cursor: pointer;
   opacity: 0.45;
   transition: opacity 0.35s var(--ease), border-color 0.35s var(--ease), transform 0.35s var(--ease);

@@ -42,8 +42,8 @@
   inset: 0;
   z-index: -1;
   background:
-    radial-gradient(120% 80% at 20% 10%, rgba(7,7,10,0.25), transparent 60%),
-    linear-gradient(180deg, rgba(7,7,10,0.82) 0%, rgba(7,7,10,0.35) 42%, rgba(7,7,10,0.96) 100%);
+    radial-gradient(120% 80% at 20% 10%, rgba(236,231,220,0.3), transparent 60%),
+    linear-gradient(180deg, rgba(236,231,220,0.86) 0%, rgba(236,231,220,0.44) 42%, rgba(236,231,220,0.96) 100%);
 }
 
 .hero-inner {
@@ -83,7 +83,7 @@
 .hero-foot p {
   margin: 0;
   max-width: 46ch;
-  color: var(--paper-dim);
+  color: var(--fg-dim);
   font-size: clamp(0.95rem, 1.4vw, 1.1rem);
 }
 
@@ -105,7 +105,7 @@
   font-size: 0.64rem;
   letter-spacing: 0.24em;
   text-transform: uppercase;
-  color: var(--paper-faint);
+  color: var(--fg-faint);
 }
 
 .scroll-cue {
@@ -116,7 +116,7 @@
   font-size: 0.62rem;
   letter-spacing: 0.32em;
   text-transform: uppercase;
-  color: var(--paper-faint);
+  color: var(--fg-faint);
   display: flex;
   align-items: center;
   gap: 14px;
@@ -159,7 +159,7 @@
   display: flex;
   align-items: center;
   gap: 16px;
-  color: var(--paper-faint);
+  color: var(--fg-faint);
   font-size: 0.72rem;
   letter-spacing: 0.22em;
   text-transform: uppercase;
@@ -202,7 +202,7 @@
   font-family: var(--display);
   font-size: 0.9rem;
   letter-spacing: 0.3em;
-  color: var(--paper-faint);
+  color: var(--fg-faint);
   display: block;
   margin-bottom: 22px;
 }
@@ -225,7 +225,7 @@
 }
 
 .collection-intro p.blurb {
-  color: var(--paper-dim);
+  color: var(--fg-dim);
   margin: 0 0 34px;
   max-width: 38ch;
   font-size: 0.98rem;
@@ -237,7 +237,7 @@
   font-size: 0.68rem;
   letter-spacing: 0.22em;
   text-transform: uppercase;
-  color: var(--paper-faint);
+  color: var(--fg-faint);
 }
 
 /* --- mosaic --- */
@@ -252,7 +252,7 @@
   display: block;
   overflow: hidden;
   border-radius: 3px;
-  background: var(--ink-raised);
+  background: var(--bg-raised);
   text-decoration: none;
   will-change: transform;
   transition: transform 0.8s var(--ease-out);
@@ -356,7 +356,7 @@
   transition: background 0.4s var(--ease), transform 0.4s var(--ease);
 }
 
-.tile-dots i.is-on { background: var(--gold); transform: scale(1.4); }
+.tile-dots i.is-on { background: var(--gold-fill); transform: scale(1.4); }
 
 .tile.t-hero   { grid-column: span 4; aspect-ratio: 4 / 3; }
 .tile.t-tall   { grid-column: span 2; aspect-ratio: 2 / 3; }
@@ -405,7 +405,7 @@
   position: relative;
   aspect-ratio: 4 / 5;
   overflow: hidden;
-  background: var(--ink-raised);
+  background: var(--bg-raised);
 }
 
 .artist-portrait img {
@@ -426,7 +426,7 @@
 }
 
 .artist-copy p {
-  color: var(--paper-dim);
+  color: var(--fg-dim);
   max-width: 46ch;
   margin: 0 0 20px;
 }
@@ -453,7 +453,7 @@
 }
 
 .finale p {
-  color: var(--paper-dim);
+  color: var(--fg-dim);
   max-width: 44ch;
   margin: 0 auto 40px;
 }
