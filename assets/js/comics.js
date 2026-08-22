@@ -12,16 +12,46 @@ const emptyHost = document.getElementById("comics-empty");
 const filterHost = document.getElementById("comic-filters");
 
 /**
- * The sample story used to be hard-coded here and shown whenever the database
- * had no comics in it. That made it undeletable: removing it emptied the
- * collection, which was the exact condition that brought it back. It is now
- * seeded as a real document by the migration (Admin -> Maintenance), so it can
- * be retitled, reordered, or thrown away like any other story, and an empty
- * shelf is allowed to actually be empty.
+ * The sample story that ships with the site.
+ *
+ * It used to be shown whenever the comics collection was empty, which made it
+ * undeletable: removing it emptied the collection, which was the exact
+ * condition that brought it back. The migration now seeds it as a real
+ * document that can be retitled, reordered, or thrown away like any other
+ * story.
+ *
+ * It survives here only as the stand-in for a database that has never been set
+ * up, where the alternative is a blank Comics page. The condition is no longer
+ * "the collection is empty" but "the genres have never been seeded", which the
+ * migration does at the same moment it writes the real document. So once the
+ * site has been set up this can never come back, and deleting the real story
+ * deletes it for good.
  */
+const SAMPLE_STORY = {
+  id: "from-the-sketchbook",
+  title: "From the Sketchbook",
+  categorySlug: "drama",
+  description: "Three loose pages pulled straight from the working sketchbook — the sample that ships with the site.",
+  coverUrl: "artworks/comics/comic1.jpg",
+  pages: ["artworks/comics/comic1.jpg", "artworks/comics/comic2.jpg", "artworks/comics/comic3.jpg"],
+  likes: 0,
+  order: 0,
+  // Readable, but not likeable or commentable: it has no document behind it
+  // yet, and a like would leave a stray counter in the collection.
+  local: true
+};
 
 let categories = DEFAULT_COMIC_CATEGORIES.map((c, i) => ({ ...c, name: c.label, order: i }));
 let comics = [];
+
+/** False until the migration has run, i.e. until this database has been set up. */
+let genresSeeded = false;
+
+/** What the shelves are actually built from. */
+function shelvedStories() {
+  return (!genresSeeded && !comics.length) ? [SAMPLE_STORY] : comics;
+}
+
 let activeFilter = "all";
 let owner = false;
 
@@ -345,10 +375,11 @@ function visibleCategories() {
 
 function renderFilters() {
   if (!filterHost) return;
+  const stories = shelvedStories();
   const counts = new Map();
-  comics.forEach(c => counts.set(c.categorySlug, (counts.get(c.categorySlug) || 0) + 1));
+  stories.forEach(c => counts.set(c.categorySlug, (counts.get(c.categorySlug) || 0) + 1));
 
-  const chips = [{ slug: "all", name: "All Stories", count: comics.length }]
+  const chips = [{ slug: "all", name: "All Stories", count: stories.length }]
     .concat(categories.map(c => ({ slug: c.slug, name: c.name, count: counts.get(c.slug) || 0 })));
 
   filterHost.innerHTML = chips.map(c => `
@@ -362,10 +393,10 @@ function renderShelves() {
   shelvesHost.innerHTML = "";
 
   const shelves = visibleCategories()
-    .map(cat => ({ cat, stories: comics.filter(c => c.categorySlug === cat.slug) }))
+    .map(cat => ({ cat, stories: shelvedStories().filter(c => c.categorySlug === cat.slug) }))
     .filter(s => s.stories.length);
 
-  const orphaned = comics.filter(c => !categories.some(cat => cat.slug === c.categorySlug));
+  const orphaned = shelvedStories().filter(c => !categories.some(cat => cat.slug === c.categorySlug));
   if (orphaned.length && activeFilter === "all") {
     shelves.push({ cat: { slug: "uncategorised", name: "Uncategorised", tagline: "", blurb: "" }, stories: orphaned });
   }
@@ -402,7 +433,7 @@ function render() {
 function openFromHash() {
   const match = location.hash.match(/^#story\/(.+)$/);
   if (!match) return;
-  const story = comics.find(c => c.id === decodeURIComponent(match[1]));
+  const story = shelvedStories().find(c => c.id === decodeURIComponent(match[1]));
   if (story && (!reader.story || reader.story.id !== story.id)) openReader(story);
 }
 
@@ -424,8 +455,11 @@ async function init() {
   await ensureGuestAuth().catch(() => null);
   watchAuth((user) => { owner = isOwner(user); });
 
-  watchCategories("comics", (items) => {
+  watchCategories("comics", (items, meta) => {
     categories = items;
+    // The genres being present is the signal that this database has been set
+    // up, which is what retires the bundled sample story.
+    genresSeeded = meta?.seeded === true;
     render();
     openFromHash();
   });
