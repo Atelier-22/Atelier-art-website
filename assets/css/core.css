@@ -569,9 +569,15 @@ body.is-previewing { padding-bottom: 40px; }
    everything else. Quiet enough to ignore, always obvious enough to switch
    off -- which matters more than anything else about it, because the visitor
    who wants it off wants it off now. */
+/* Bottom right, not bottom left.
+   Every heading, paragraph and button on this site is left-aligned, so a
+   control parked in the bottom-left corner eventually lands on top of one --
+   it was sitting squarely on "Read the full story". A floating control has to
+   overlap something as the page scrolls under it; the right-hand side is
+   where that something is never a button. */
 .ambient {
   position: fixed;
-  left: var(--gutter);
+  right: var(--gutter);
   bottom: 20px;
   z-index: 800;
   display: inline-flex;
@@ -653,9 +659,25 @@ body.is-previewing { padding-bottom: 40px; }
 /* The preview banner owns the bottom edge, so the control steps above it. */
 body.is-previewing .ambient { bottom: 58px; }
 
+/* Icon-only at rest on anything narrower than a desktop.
+   The word "Music" tripled the control's width for no information the speaker
+   symbol does not already carry, and every pixel of a floating control is a
+   pixel of something underneath it -- here it was landing on the comic genre
+   chips. The track name still slides out when a piece starts, which is when
+   there is actually something to say. */
+@media (max-width: 900px) {
+  .ambient:not(.is-naming):not(.is-unavailable) .ambient-label {
+    max-width: 0;
+    margin-left: 0;
+    opacity: 0;
+  }
+
+  .ambient.is-naming .ambient-label { max-width: 14ch; }
+}
+
 @media (max-width: 700px) {
-  .ambient { left: 12px; bottom: 12px; padding: 8px 12px 8px 10px; font-size: 0.6rem; }
-  .ambient-label { max-width: 9ch; }
+  .ambient { right: 12px; bottom: 12px; padding: 9px; font-size: 0.6rem; }
+  .ambient.is-naming .ambient-label { max-width: 11ch; }
 }
 
 @media (prefers-reduced-motion: reduce) {

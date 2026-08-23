@@ -722,3 +722,8 @@
   .update-copy p { font-size: clamp(1.15rem, 5.4vw, 1.5rem); }
   .update-media { aspect-ratio: 16 / 9; }
 }
+
+/* The scroll cue and the music control both want the bottom-right corner of
+   the hero. The cue steps up when there is music to make room, rather than
+   the two sitting on top of each other. */
+body.has-ambient .scroll-cue { bottom: clamp(104px, 14vh, 160px); }
