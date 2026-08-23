@@ -14,7 +14,7 @@
 import {
   DEFAULT_CONFIG, DISPLAY_FONTS, BODY_FONTS, fetchConfig, saveDraft,
   publishDraft, discardDraft, contrastReport, hasBlockingContrastFailure,
-  derivePalette, mergeConfig, parseEmbed
+  derivePalette, mergeConfig, parseEmbed, updateState, timeLeft, UPDATE_DURATIONS
 } from "./site-config.js?v=20260823a";
 import {
   uploadAndRecord, watchMedia, inspectVideo, videoRejectionReason,
@@ -176,9 +176,49 @@ const TABS = [
   },
 
   {
+    id: "update",
+    label: "Update",
+    note: "A short note pinned to the top of the homepage — an exhibition opening, a new series, a studio note. It takes itself down when its time is up, so the site is never showing last month's news. This is not the same thing as the Story tab, which is your long-form writing and stays until you change it.",
+    groups: [
+      {
+        title: "The update",
+        fields: [
+          { type: "toggle", path: "update.enabled", label: "Show an update on the homepage" },
+          { type: "textarea", path: "update.text", label: "What's happening", rows: 4, note: "Keep it to a line or two — it is set large, at the top of the page." },
+          {
+            type: "media", label: "Picture or video",
+            urlPath: "update.mediaUrl", typePath: "update.mediaType",
+            posterPath: "update.mediaPoster", durationPath: "update.mediaDuration",
+            emptyNote: "Optional — the update reads fine as words alone."
+          }
+        ]
+      },
+      {
+        title: "How long it stays up",
+        fields: [
+          {
+            type: "select", path: "update.durationHours", label: "Take it down after",
+            numeric: true,
+            options: UPDATE_DURATIONS.map(d => ({ value: String(d.hours), label: d.label })),
+            note: "Counted from when you post it. Leave it at 24 hours unless this one should last longer."
+          },
+          { type: "post" }
+        ]
+      },
+      {
+        title: "Link",
+        fields: [
+          { type: "text", path: "update.linkLabel", label: "Link text", note: "Leave empty for no link." },
+          { type: "text", path: "update.linkHref", label: "Link target", placeholder: "gallery.html" }
+        ]
+      }
+    ]
+  },
+
+  {
     id: "story",
     label: "Story",
-    note: "A section on the homepage, directly below the artist block. Write the story, the bio, or an artist statement — whatever it should say. It disappears from the site entirely when switched off or left empty.",
+    note: "Your long-form writing — the story, the bio, an artist statement. It sits further down the homepage and stays until you change it. For a short note that should expire on its own, use the Update tab.",
     groups: [
       {
         title: "The section",
@@ -205,7 +245,9 @@ const TABS = [
             type: "media", label: "Media",
             urlPath: "story.mediaUrl",
             typePath: "story.mediaType",
-            posterPath: "story.mediaPoster"
+            posterPath: "story.mediaPoster",
+            durationPath: "story.mediaDuration",
+            emptyNote: "The story runs full width when there is no media."
           }
         ]
       },
@@ -681,7 +723,7 @@ function fieldShell(label, note, control, extraClass = "") {
  */
 const FULL_WIDTH_FIELDS = new Set([
   "images", "list", "blocks", "covers", "contrast", "swatches", "typepreview",
-  "media", "link", "tracks"
+  "media", "link", "tracks", "post"
 ]);
 
 function renderField(field) {
@@ -742,12 +784,17 @@ function renderField(field) {
       el.innerHTML = fieldShell(field.label, field.note, `
         <select data-setting>
           ${field.options.map(o => `
-            <option value="${escapeHtml(o.value)}"${o.value === value ? " selected" : ""}>${escapeHtml(o.label)}</option>`).join("")}
+            <option value="${escapeHtml(o.value)}"${o.value === String(value) ? " selected" : ""}>${escapeHtml(o.label)}</option>`).join("")}
         </select>`);
       const input = $("[data-setting]", el);
       input.addEventListener("change", () => {
-        set(state.draft, field.path, input.value);
+        // A <select> hands back a string; a duration has to be stored as the
+        // number the expiry maths expects.
+        set(state.draft, field.path, field.numeric ? Number(input.value) : input.value);
         markDirty();
+        // The post panel reports how long the update has left, so it has to
+        // hear about a change to the duration.
+        if (field.numeric) $$("[data-state]").forEach(node => node.closest(".setting")?._repaint?.());
         renderLiveTheme();
       });
       break;
@@ -807,6 +854,10 @@ function renderField(field) {
 
     case "tracks":
       el.appendChild(tracksField(field));
+      break;
+
+    case "post":
+      el.appendChild(postField());
       break;
 
     case "images":
@@ -952,7 +1003,7 @@ function mediaField(field) {
 
     if (!url) {
       thumb.innerHTML = '<span class="image-empty">None</span>';
-      note.textContent = "The story runs full width when there is no media.";
+      note.textContent = field.emptyNote || "It runs full width when there is no media.";
     } else if (type === "embed") {
       const parsed = parseEmbed(url);
       thumb.innerHTML = `<span class="image-empty">${escapeHtml(parsed?.provider || "Link")}</span>`;
@@ -960,7 +1011,7 @@ function mediaField(field) {
         ? `Embedded from ${parsed.provider}. Costs nothing to serve, and carries their player.`
         : "This link is not a YouTube or Vimeo address, so nothing will be shown.";
     } else if (type === "video") {
-      const duration = Number(get(state.draft, "story.mediaDuration")) || 0;
+      const duration = Number(field.durationPath ? get(state.draft, field.durationPath) : 0) || 0;
       const trimmed = duration > VIDEO_TRIM_SECONDS;
       thumb.innerHTML = `<img src="${escapeHtml(poster || posterFromVideo(url))}" alt="">`;
       note.textContent = trimmed
@@ -1092,6 +1143,115 @@ function tracksField(field) {
 
     write(tracks);
     paint();
+  });
+
+  paint();
+  el._repaint = paint;
+  return el;
+}
+
+/**
+ * Posting an update, and seeing what it is doing.
+ *
+ * Posting is one button rather than "save, then remember to publish". An
+ * update is a thing you post; leaving it sitting in a draft is exactly the
+ * trap that cost a story earlier, and it matters more here because the clock
+ * starts at the moment it is posted, not at the moment it is written.
+ */
+function postField() {
+  const el = document.createElement("div");
+  el.className = "setting is-full";
+  el.innerHTML = `
+    <div class="post-row">
+      <div class="post-state" data-state></div>
+      <div class="post-actions">
+        <button class="btn is-primary" type="button" data-post></button>
+        <button class="btn is-danger" type="button" data-takedown hidden>Take it down</button>
+      </div>
+    </div>`;
+
+  const paint = () => {
+    const update = state.draft.update || {};
+    const info = updateState(update);
+    const stateEl = $("[data-state]", el);
+    const postBtn = $("[data-post]", el);
+
+    const posted = info.postedAt ? new Date(info.postedAt) : null;
+    const when = posted ? posted.toLocaleString(undefined, { dateStyle: "medium", timeStyle: "short" }) : "";
+
+    if (!(update.text || "").trim()) {
+      stateEl.className = "post-state";
+      stateEl.textContent = "Write something above first.";
+      postBtn.disabled = true;
+      postBtn.textContent = "Post it";
+    } else if (info.live) {
+      stateEl.className = "post-state is-live";
+      stateEl.textContent = info.reason === "indefinite"
+        ? `Live since ${when} — no time limit, so it stays until you take it down.`
+        : `Live since ${when} — ${timeLeft(info.remainingMs)}. It comes down by itself.`;
+      postBtn.disabled = false;
+      postBtn.textContent = "Post again (restarts the clock)";
+    } else if (info.reason === "expired") {
+      stateEl.className = "post-state is-expired";
+      stateEl.textContent = `Expired. It was posted ${when} and is no longer on the site.`;
+      postBtn.disabled = false;
+      postBtn.textContent = "Post it again";
+    } else if (info.reason === "off") {
+      stateEl.className = "post-state";
+      stateEl.textContent = "Switched off, so nothing is showing.";
+      postBtn.disabled = false;
+      postBtn.textContent = "Post it";
+    } else {
+      stateEl.className = "post-state";
+      stateEl.textContent = "Not posted yet.";
+      postBtn.disabled = false;
+      postBtn.textContent = "Post it";
+    }
+
+    $("[data-takedown]", el).hidden = !info.live;
+  };
+
+  $("[data-post]", el).addEventListener("click", () => {
+    const hours = Number(state.draft.update?.durationHours) || 0;
+    const label = UPDATE_DURATIONS.find(d => d.hours === hours)?.label || `${hours} hours`;
+    const pending = unpublishedCount();
+    const others = Math.max(0, pending - 1);
+
+    modal({
+      title: "Post this update?",
+      body: `It goes to the top of the homepage now, and
+             ${hours ? `comes down by itself after <b>${escapeHtml(label)}</b>` : "<b>stays until you take it down</b>"}.
+             ${others ? `<br><br>This publishes the site, so <b>${others} other unpublished change${others === 1 ? "" : "s"}</b> will go live at the same time.` : ""}`,
+      confirmLabel: "Post it",
+      onConfirm: async () => {
+        set(state.draft, "update.enabled", true);
+        set(state.draft, "update.postedAt", new Date().toISOString());
+        clearTimeout(state.saveTimer);
+        await saveDraft(state.draft);
+        state.published = await publishDraft();
+        state.dirty = false;
+        renderBody();
+        toast("Posted — it's at the top of the homepage.", "ok");
+      }
+    });
+  });
+
+  $("[data-takedown]", el).addEventListener("click", () => {
+    modal({
+      title: "Take the update down?",
+      body: "It comes off the homepage straight away. The words stay here, so you can post it again later.",
+      confirmLabel: "Take it down",
+      danger: true,
+      onConfirm: async () => {
+        set(state.draft, "update.enabled", false);
+        clearTimeout(state.saveTimer);
+        await saveDraft(state.draft);
+        state.published = await publishDraft();
+        state.dirty = false;
+        renderBody();
+        toast("Taken down.", "ok");
+      }
+    });
   });
 
   paint();

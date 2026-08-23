@@ -759,3 +759,26 @@ body.has-publish-bar .admin-main { padding-bottom: 130px; }
   .publish-bar .settings-status { font-size: 0.74rem; line-height: 1.35; }
   .publish-bar .btn { padding: 9px 12px; font-size: 0.66rem; }
 }
+
+/* ---- Posting an update ---- */
+.post-row {
+  display: flex;
+  gap: 16px;
+  align-items: center;
+  flex-wrap: wrap;
+  background: var(--panel-inset);
+  border: 1px solid var(--edge);
+  border-radius: 4px;
+  padding: 16px 18px;
+}
+
+.post-state { flex: 1; min-width: 220px; font-size: 0.86rem; color: var(--fg-dim); }
+.post-state.is-live { color: var(--ok); }
+.post-state.is-expired { color: var(--fg-faint); }
+
+.post-actions { display: flex; gap: 8px; flex-wrap: wrap; }
+
+@media (max-width: 700px) {
+  .post-row { flex-direction: column; align-items: stretch; }
+  .post-actions .btn { flex: 1; justify-content: center; }
+}

@@ -10,7 +10,7 @@
 
 import {
   initSiteConfig, paragraphs, escapeHtml, previewHref, isPreview, parseEmbed,
-  applyBindings, rewriteLinksForPreview
+  applyBindings, rewriteLinksForPreview, updateState, timeAgo
 } from "./site-config.js?v=20260823a";
 import { posterFromVideo, videoDeliveryUrl } from "./cloudinary.js?v=20260823a";
 import { renderAmbient } from "./ambient.js?v=20260823a";
@@ -39,6 +39,66 @@ function renderPreviewBanner(meta) {
     ? "Preview unavailable — showing the live site. Sign in as the owner to see drafts."
     : "Preview — unpublished draft. Visitors still see the live site.";
   bar.classList.toggle("is-denied", !!meta?.deniedDraft);
+}
+
+/* ------------------------------------------------------------------ */
+/*  Status update                                                      */
+/* ------------------------------------------------------------------ */
+
+let expiryTimer = null;
+
+/**
+ * The short note at the top of the homepage.
+ *
+ * It expires on its own: the check is made when the page draws, and again
+ * every minute after, so a tab left open overnight takes it down rather than
+ * showing yesterday's news to whoever comes back to it.
+ */
+export function renderUpdate(config) {
+  const host = document.getElementById("update-banner");
+  if (!host) return;
+
+  const update = config.update || {};
+  const state = updateState(update);
+
+  host.hidden = !state.live;
+  if (!state.live) {
+    clearInterval(expiryTimer);
+    expiryTimer = null;
+    return;
+  }
+
+  const media = update.mediaUrl
+    ? update.mediaType === "video"
+      ? `<div class="update-media"><video controls playsinline preload="metadata"
+             ${posterFromVideo(update.mediaUrl) ? `poster="${escapeHtml(posterFromVideo(update.mediaUrl))}"` : ""}>
+           <source src="${escapeHtml(videoDeliveryUrl(update.mediaUrl))}"></video></div>`
+      : `<div class="update-media"><img src="${escapeHtml(update.mediaUrl)}" alt="" loading="lazy"></div>`
+    : "";
+
+  host.innerHTML = `
+    <div class="shell update-grid">
+      <div class="update-copy">
+        <p class="update-meta">
+          <span class="update-dot" aria-hidden="true"></span>
+          <span class="eyebrow">Studio update</span>
+          <time datetime="${escapeHtml(new Date(state.postedAt).toISOString())}">${timeAgo(state.postedAt)}</time>
+        </p>
+        ${paragraphs(update.text)}
+        ${update.linkLabel && update.linkHref
+          ? `<a class="link-btn" href="${escapeHtml(previewHref(update.linkHref))}">${escapeHtml(update.linkLabel)} <span class="arrow">&#8594;</span></a>`
+          : ""}
+      </div>
+      ${media}
+    </div>
+  `;
+
+  // Re-checked rather than scheduled to the exact second: a single timeout
+  // hours away is at the mercy of a sleeping tab, and a minute of overrun on
+  // a notice measured in days is not worth defending against.
+  if (!expiryTimer && Number.isFinite(state.remainingMs)) {
+    expiryTimer = setInterval(() => renderUpdate(config), 60000);
+  }
 }
 
 /* ------------------------------------------------------------------ */
@@ -291,6 +351,7 @@ let pageHook = null;
 function paint(config, meta) {
   latest = config;
   renderPreviewBanner(meta);
+  renderUpdate(config);
   renderBranding(config);
   renderHeroStats(config);
   renderArtistCopy(config);

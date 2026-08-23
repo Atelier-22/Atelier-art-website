@@ -110,14 +110,39 @@ export const DEFAULT_CONFIG = {
 
   /* The story that sits under the Alafi block on the homepage, and the long
      form of the same voice on the About page. */
+  /**
+   * A status update: a short note pinned to the top of the homepage that
+   * expires by itself.
+   *
+   * Entirely separate from `story` below, which is the artist's long-form
+   * writing and stays until it is changed. This is the passing kind — "a new
+   * series opens Friday" — and it is meant to disappear on its own so the
+   * site is never showing last month's news.
+   *
+   * Nothing here is deleted when it expires. `postedAt` and the duration are
+   * simply in the past, so the page stops drawing it; posting again is one
+   * button and the previous text is still there to edit.
+   */
+  update: {
+    enabled: false,
+    text: "",
+    linkLabel: "",
+    linkHref: "",
+    mediaUrl: "",
+    mediaType: "",
+    mediaPoster: "",
+    mediaDuration: null,
+    postedAt: null,        /* ISO string, stamped when it is posted */
+    durationHours: 24      /* the owner's choice; 24 unless they say otherwise */
+  },
+
   story: {
     enabled: true,
     /**
-     * "top" puts it above the hero, so a story update is the first thing a
-     * visitor meets rather than something they have to scroll to find.
-     * "artist" is the original placement, under the Alafi block.
+     * Where the artist's story sits. The top of the page belongs to the
+     * status update, so this defaults to its place under the Alafi block.
      */
-    position: "top",
+    position: "artist",
     eyebrow: "In his own words",
     heading: "The Story So Far",
     body: "It started small — a pencil, a blank page, and a curiosity about what could be made from nothing. Over time, that curiosity turned into discipline, and discipline turned into a voice.\n\nEvery collection since has been another chapter in that same, ongoing story: learning to see the world a little more closely, and finding a way to hand that vision to someone else.",
@@ -406,6 +431,85 @@ function upgrade(config) {
     return { ...config, sound: { ...DEFAULT_CONFIG.sound, ...rest, tracks } };
   }
   return config;
+}
+
+/* ------------------------------------------------------------------ */
+/*  Status updates                                                     */
+/* ------------------------------------------------------------------ */
+
+/** The durations offered when posting, and what they are called. */
+export const UPDATE_DURATIONS = [
+  { hours: 6, label: "6 hours" },
+  { hours: 12, label: "12 hours" },
+  { hours: 24, label: "24 hours" },
+  { hours: 48, label: "2 days" },
+  { hours: 72, label: "3 days" },
+  { hours: 168, label: "1 week" },
+  { hours: 336, label: "2 weeks" },
+  { hours: 0, label: "Until I take it down" }
+];
+
+/**
+ * Whether an update is currently showing, and how long it has left.
+ *
+ * Expiry is worked out at render time from when it was posted, so no clock
+ * anywhere has to fire for it to come down — a page opened three days later
+ * simply does not draw it. A duration of zero means it stays until the owner
+ * removes it, for the occasional notice that should not vanish on a timer.
+ */
+export function updateState(update) {
+  const posted = update?.postedAt ? Date.parse(update.postedAt) : NaN;
+  const hours = Number(update?.durationHours);
+  const hasText = !!(update?.text || "").trim();
+
+  if (update?.enabled !== true || !hasText) {
+    return { live: false, reason: hasText ? "off" : "empty", postedAt: posted || null };
+  }
+  if (!Number.isFinite(posted)) {
+    return { live: false, reason: "unposted", postedAt: null };
+  }
+  if (!hours) {
+    return { live: true, reason: "indefinite", postedAt: posted, expiresAt: null, remainingMs: Infinity };
+  }
+
+  const expiresAt = posted + hours * 3600 * 1000;
+  const remainingMs = expiresAt - Date.now();
+  return {
+    live: remainingMs > 0,
+    reason: remainingMs > 0 ? "live" : "expired",
+    postedAt: posted,
+    expiresAt,
+    remainingMs
+  };
+}
+
+/** "3 hours ago", "just now" — how long since something happened. */
+export function timeAgo(ms) {
+  const diff = Math.max(0, Date.now() - ms) / 1000;
+  if (diff < 90) return "just now";
+  const units = [[86400, "day"], [3600, "hour"], [60, "minute"]];
+  for (const [size, name] of units) {
+    if (diff >= size) {
+      const n = Math.floor(diff / size);
+      return `${n} ${name}${n === 1 ? "" : "s"} ago`;
+    }
+  }
+  return "just now";
+}
+
+/** "21 hours left", for the admin panel. */
+export function timeLeft(ms) {
+  if (!Number.isFinite(ms)) return "no time limit";
+  if (ms <= 0) return "expired";
+  const diff = ms / 1000;
+  const units = [[86400, "day"], [3600, "hour"], [60, "minute"]];
+  for (const [size, name] of units) {
+    if (diff >= size) {
+      const n = Math.floor(diff / size);
+      return `${n} ${name}${n === 1 ? "" : "s"} left`;
+    }
+  }
+  return "less than a minute left";
 }
 
 /* ------------------------------------------------------------------ */

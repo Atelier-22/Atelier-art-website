@@ -631,3 +631,94 @@
   .story.is-leading { padding-top: 96px; padding-bottom: 44px; }
   .story.is-leading .story-copy h2 { font-size: clamp(2rem, 10vw, 2.8rem); }
 }
+
+/* ============ STATUS UPDATE ============
+   A short note at the very top of the homepage, above everything. It reads as
+   a notice rather than a section: tighter, quieter, and clearly the newest
+   thing on the page. It takes itself down when its time is up, so it is never
+   the stale bit at the top. */
+.update {
+  padding-top: clamp(104px, 15vh, 150px);
+  padding-bottom: clamp(30px, 5vh, 52px);
+  background: var(--bg-raised);
+  border-bottom: 1px solid var(--hairline);
+}
+
+.update-grid {
+  display: grid;
+  grid-template-columns: 1fr;
+  gap: clamp(20px, 3vw, 40px);
+  align-items: center;
+}
+
+.update-grid:has(.update-media) { grid-template-columns: 1fr minmax(0, 0.4fr); }
+
+.update-meta {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  margin: 0 0 12px;
+  flex-wrap: wrap;
+}
+
+.update-meta time {
+  font-size: 0.68rem;
+  letter-spacing: 0.16em;
+  text-transform: uppercase;
+  color: var(--fg-faint);
+}
+
+/* A live indicator, because the whole point is that this is current. */
+.update-dot {
+  width: 7px;
+  height: 7px;
+  border-radius: 50%;
+  background: var(--gold-fill);
+  box-shadow: 0 0 0 0 var(--gold-edge);
+  animation: updatePulse 2.6s var(--ease) infinite;
+  flex: none;
+}
+
+@keyframes updatePulse {
+  0%   { box-shadow: 0 0 0 0 var(--gold-edge); }
+  70%  { box-shadow: 0 0 0 7px transparent; }
+  100% { box-shadow: 0 0 0 0 transparent; }
+}
+
+.update-copy p {
+  margin: 0 0 14px;
+  font-family: var(--display);
+  font-size: clamp(1.3rem, 2.6vw, 2rem);
+  line-height: 1.28;
+  max-width: 46ch;
+}
+
+.update-copy p:last-of-type { margin-bottom: 0; }
+.update-copy .link-btn { margin-top: 18px; }
+
+.update-media {
+  overflow: hidden;
+  border-radius: 3px;
+  aspect-ratio: 4 / 3;
+  background: var(--bg-sunken);
+  box-shadow: var(--shadow-sm);
+}
+
+.update-media img,
+.update-media video {
+  width: 100%;
+  height: 100%;
+  object-fit: cover;
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .update-dot { animation: none; }
+}
+
+@media (max-width: 700px) {
+  .update { padding-top: 92px; padding-bottom: 26px; }
+  .update-grid,
+  .update-grid:has(.update-media) { grid-template-columns: 1fr; }
+  .update-copy p { font-size: clamp(1.15rem, 5.4vw, 1.5rem); }
+  .update-media { aspect-ratio: 16 / 9; }
+}
