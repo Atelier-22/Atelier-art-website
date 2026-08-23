@@ -658,19 +658,20 @@
    A grey line saying "2 unpublished changes" was quiet enough to write a whole
    story past. When work is pending the bar is the accent colour and says so in
    words, and it follows you onto every screen. */
+/* The tint has to sit ON the panel, not replace it.
+   --gold-soft is an 11% wash, so using it alone left the bar see-through and
+   the page scrolled visibly underneath the words -- which is what "it overlaps
+   the text" was. Layering the wash over an opaque panel keeps the colour and
+   makes the bar solid. */
 .publish-bar.is-pending {
-  background: var(--gold-soft);
+  background:
+    linear-gradient(var(--gold-soft), var(--gold-soft)),
+    var(--panel);
   border-color: var(--gold);
 }
 
 .publish-bar.is-pending .settings-status { color: var(--gold); font-weight: 500; }
 
-/* ---- Music field ----
-   The track is playable in the panel, because choosing background music
-   without hearing it is guesswork. */
-.audio-field { display: grid; gap: 12px; }
-.audio-actions { display: flex; gap: 8px; flex-wrap: wrap; }
-.audio-field audio { width: 100%; max-width: 460px; }
 
 .picker-audio {
   display: grid;
@@ -679,4 +680,82 @@
   font-size: 1.6rem;
   color: var(--fg-faint);
   background: var(--bg-sunken);
+}
+
+/* ---- Publish bar clearance ----
+   The bar is sticky, so it floats above whatever is behind it. Without this
+   the last panel on the page sits underneath it and reads as overlapping
+   text. The page simply has to end higher up while the bar is on screen. */
+body.has-publish-bar .admin-main { padding-bottom: 130px; }
+
+@media (max-width: 700px) {
+  body.has-publish-bar .admin-main { padding-bottom: 170px; }
+}
+
+/* ---- Playlist ---- */
+.track-list { display: grid; gap: 10px; }
+
+.track-row {
+  display: grid;
+  grid-template-columns: auto 1fr auto;
+  gap: 14px;
+  align-items: center;
+  background: var(--panel-inset);
+  border: 1px solid var(--edge);
+  border-radius: 4px;
+  padding: 12px 14px;
+}
+
+.track-index {
+  font-family: ui-monospace, "SF Mono", Menlo, monospace;
+  font-size: 0.72rem;
+  color: var(--fg-faint);
+  font-variant-numeric: tabular-nums;
+}
+
+.track-main { display: grid; gap: 9px; min-width: 0; }
+
+.track-main input {
+  width: 100%;
+  background: var(--field);
+  border: 1px solid var(--field-edge);
+  border-radius: 3px;
+  color: var(--fg);
+  padding: 9px 12px;
+  font-family: inherit;
+  font-size: 0.88rem;
+}
+
+.track-main audio { width: 100%; max-width: 420px; height: 34px; }
+
+.track-foot {
+  display: flex;
+  align-items: center;
+  gap: 14px;
+  flex-wrap: wrap;
+  padding-top: 4px;
+}
+
+@media (max-width: 700px) {
+  /* On a phone the arrows would squeeze the player into nothing, so the row
+     becomes three stacked bands instead of three columns. */
+  .track-row { grid-template-columns: auto 1fr; }
+  .track-main { grid-column: 1 / -1; }
+  .track-row .repeat-actions { grid-column: 1 / -1; justify-content: flex-end; padding: 0; }
+  .track-main audio { max-width: none; }
+}
+
+/* On a phone the bar is the width of the screen and every pixel it occupies
+   is a pixel of the page it is standing on, so it gets tighter: one row, the
+   status above the buttons, and no wasted padding. */
+@media (max-width: 700px) {
+  .publish-bar {
+    margin-inline: -4px;
+    padding: 11px 14px;
+    gap: 8px;
+    border-radius: 4px;
+  }
+
+  .publish-bar .settings-status { font-size: 0.74rem; line-height: 1.35; }
+  .publish-bar .btn { padding: 9px 12px; font-size: 0.66rem; }
 }

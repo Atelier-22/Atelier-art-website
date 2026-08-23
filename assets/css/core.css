@@ -576,8 +576,8 @@ body.is-previewing { padding-bottom: 40px; }
   z-index: 800;
   display: inline-flex;
   align-items: center;
-  gap: 8px;
-  padding: 9px 15px 9px 12px;
+  gap: 0;
+  padding: 9px 13px;
   border: 1px solid var(--hairline-strong);
   border-radius: 999px;
   background: var(--nav-bg);
@@ -621,11 +621,33 @@ body.is-previewing { padding-bottom: 40px; }
   50% { opacity: 1; }
 }
 
+/* The track name is an announcement, not a label. It slides out when a piece
+   begins, sits for a few seconds, and folds away again -- long enough to
+   answer "what is this?", short enough never to become furniture. Collapsing
+   the width rather than hiding it keeps the control from jumping. */
 .ambient-label {
-  max-width: 16ch;
+  max-width: 0;
+  margin-left: 0;
+  opacity: 0;
   overflow: hidden;
   text-overflow: ellipsis;
   white-space: nowrap;
+  transition: max-width 0.55s var(--ease-out), opacity 0.4s var(--ease),
+              margin-left 0.55s var(--ease-out);
+}
+
+/* Silent: the word "Music" is the only thing that says what the button does. */
+.ambient:not(.is-playing) .ambient-label,
+.ambient.is-naming .ambient-label,
+.ambient.is-unavailable .ambient-label {
+  max-width: 18ch;
+  margin-left: 9px;
+  opacity: 1;
+}
+
+/* A pointer-less device gets no hover, so the name stays a moment longer. */
+@media (hover: none) {
+  .ambient.is-naming .ambient-label { max-width: 22ch; }
 }
 
 /* The preview banner owns the bottom edge, so the control steps above it. */

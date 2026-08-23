@@ -264,9 +264,15 @@ const TABS = [
         title: "Background music",
         fields: [
           { type: "toggle", path: "sound.enabled", label: "Offer music on the site", note: "Puts a small control in the corner of every page. Visitors decide whether to use it, and their choice is remembered as they move around." },
-          { type: "audio", path: "sound.trackUrl", label: "Track", note: "It loops, so a short piece works as well as a long one." },
-          { type: "text", path: "sound.title", label: "What to call it", note: "Shown beside the control while it is playing. A title, or the composer." },
-          { type: "number", path: "sound.volume", label: "Volume", min: 5, max: 100, step: 5, suffix: "%", note: "Background music should sit under the room, not in front of it. Around 40 is usually right." }
+          { type: "tracks", path: "sound.tracks", label: "Playlist" }
+        ]
+      },
+      {
+        title: "How it plays",
+        fields: [
+          { type: "number", path: "sound.volume", label: "Volume", min: 5, max: 80, step: 5, suffix: "%", note: "Background music should sit under the room, not in front of it. Around 30 is right for most tracks — press play on one above to judge it by ear." },
+          { type: "number", path: "sound.crossfade", label: "Overlap between tracks", min: 0, max: 12, step: 1, suffix: "s", note: "One piece begins underneath the last and they pass through each other, so there is never a gap or an abrupt cut. Zero switches straight over." },
+          { type: "toggle", path: "sound.shuffle", label: "Play in a random order", note: "On, so two visitors are unlikely to hear the same opening — and neither will the same person coming back." }
         ]
       }
     ]
@@ -647,7 +653,7 @@ function fieldShell(label, note, control, extraClass = "") {
  */
 const FULL_WIDTH_FIELDS = new Set([
   "images", "list", "blocks", "covers", "contrast", "swatches", "typepreview",
-  "media", "link", "audio"
+  "media", "link", "tracks"
 ]);
 
 function renderField(field) {
@@ -732,6 +738,12 @@ function renderField(field) {
         out.textContent = `${input.value}${field.suffix || ""}`;
         markDirty();
         renderLiveTheme();
+        // The volume slider feeds the players above it, so it can be judged
+        // by ear while dragging rather than by reading a number.
+        if (field.path === "sound.volume") {
+          const level = Math.min(1, Math.max(0, Number(input.value) / 100));
+          $$(".track-list audio").forEach((a) => { a.volume = level; });
+        }
       });
       break;
     }
@@ -765,8 +777,8 @@ function renderField(field) {
       el.appendChild(mediaField(field));
       break;
 
-    case "audio":
-      el.appendChild(audioField(field, value));
+    case "tracks":
+      el.appendChild(tracksField(field));
       break;
 
     case "images":
@@ -954,55 +966,108 @@ function mediaField(field) {
   return el;
 }
 
+export const MAX_TRACKS = 20;
+
 /**
- * The music field, with the track playable right here. Choosing background
- * music without hearing it in the room it will play in is guesswork, so the
- * panel gives you the actual file at the actual volume.
+ * The playlist: add, rename, reorder, replace and remove, with every piece
+ * playable right here.
+ *
+ * Choosing background music without hearing it in the room it will play in is
+ * guesswork, so each row carries a real player at the real volume — and the
+ * volume slider below feeds straight into them, so it can be judged by ear
+ * rather than by number.
  */
-function audioField(field, value) {
+function tracksField(field) {
   const el = document.createElement("div");
   el.className = "setting is-full";
   el.innerHTML = `
     <label class="setting-label">${escapeHtml(field.label)}</label>
-    <div class="setting-control">
-      <div class="audio-field">
-        <div class="audio-actions">
-          <button class="btn is-small" type="button" data-choose></button>
-          <button class="btn is-small is-danger" type="button" data-clear>Remove</button>
-        </div>
-        <audio data-audio controls preload="none"></audio>
-        <code class="image-path" data-path></code>
-      </div>
-    </div>
-    ${field.note ? `<p class="setting-note">${escapeHtml(field.note)}</p>` : ""}`;
+    <div class="setting-control"><div class="track-list" data-list></div></div>`;
+
+  const host = $("[data-list]", el);
+  const read = () => (get(state.draft, field.path) || []).slice();
+  const write = (tracks) => { set(state.draft, field.path, tracks); markDirty(); };
 
   const paint = () => {
-    const url = get(state.draft, field.path) || "";
-    const player = $("[data-audio]", el);
-    player.hidden = !url;
-    if (url && player.getAttribute("src") !== url) player.src = url;
-    player.volume = Math.min(1, Math.max(0, (Number(get(state.draft, "sound.volume")) || 40) / 100));
-    $("[data-choose]", el).textContent = url ? "Replace track" : "Choose a track";
-    $("[data-clear]", el).hidden = !url;
-    $("[data-path]", el).textContent = url;
+    const tracks = read();
+    const volume = Math.min(1, Math.max(0, (Number(get(state.draft, "sound.volume")) || 30) / 100));
+
+    host.innerHTML = tracks.map((track, i) => `
+      <div class="track-row">
+        <span class="track-index">${String(i + 1).padStart(2, "0")}</span>
+        <div class="track-main">
+          <input type="text" data-i="${i}" data-key="title"
+                 value="${escapeHtml(track.title || "")}" placeholder="Untitled — shown briefly when it starts">
+          <audio controls preload="none" src="${escapeHtml(track.url)}"></audio>
+        </div>
+        <div class="repeat-actions">
+          <button type="button" data-up="${i}" ${i === 0 ? "disabled" : ""} aria-label="Move earlier">&#9650;</button>
+          <button type="button" data-down="${i}" ${i === tracks.length - 1 ? "disabled" : ""} aria-label="Move later">&#9660;</button>
+          <button type="button" data-swap="${i}" aria-label="Replace this track">&#8635;</button>
+          <button type="button" data-remove="${i}" class="is-danger" aria-label="Remove">&times;</button>
+        </div>
+      </div>`).join("") + `
+      <div class="track-foot">
+        <button type="button" class="btn is-small is-primary" data-add ${tracks.length >= MAX_TRACKS ? "disabled" : ""}>
+          Add a track
+        </button>
+        <span class="setting-note" style="margin:0">
+          ${tracks.length} of ${MAX_TRACKS}${tracks.length >= MAX_TRACKS ? " — that's the limit" : ""}.
+          ${tracks.length > 1 ? "They play one into the next." : tracks.length === 1 ? "One track repeats; add more for variety." : "Nothing yet — the control stays off the site until there is at least one."}
+        </span>
+      </div>`;
+
+    host.querySelectorAll("audio").forEach((a) => { a.volume = volume; });
   };
 
-  $("[data-choose]", el).addEventListener("click", async () => {
-    const choice = await pickMedia(get(state.draft, field.path) || "", { allow: ["audio"] });
-    if (choice === null) return;
-    set(state.draft, field.path, choice.url);
-    paint();
-    markDirty();
+  host.addEventListener("input", (e) => {
+    const input = e.target.closest("input[data-key]");
+    if (!input) return;
+    const tracks = read();
+    tracks[Number(input.dataset.i)] = { ...tracks[Number(input.dataset.i)], title: input.value };
+    write(tracks);
   });
 
-  $("[data-clear]", el).addEventListener("click", () => {
-    set(state.draft, field.path, "");
+  host.addEventListener("click", async (e) => {
+    const button = e.target.closest("button");
+    if (!button) return;
+    const tracks = read();
+
+    if (button.dataset.add !== undefined) {
+      if (tracks.length >= MAX_TRACKS) return;
+      const choice = await pickMedia("", { allow: ["audio"] });
+      if (!choice?.url) return;
+      tracks.push({ url: choice.url, title: titleFromUrl(choice.url) });
+    } else if (button.dataset.swap !== undefined) {
+      const i = Number(button.dataset.swap);
+      const choice = await pickMedia(tracks[i].url, { allow: ["audio"] });
+      if (!choice?.url) return;
+      tracks[i] = { url: choice.url, title: tracks[i].title || titleFromUrl(choice.url) };
+    } else if (button.dataset.up !== undefined) {
+      const i = Number(button.dataset.up);
+      [tracks[i - 1], tracks[i]] = [tracks[i], tracks[i - 1]];
+    } else if (button.dataset.down !== undefined) {
+      const i = Number(button.dataset.down);
+      [tracks[i + 1], tracks[i]] = [tracks[i], tracks[i + 1]];
+    } else if (button.dataset.remove !== undefined) {
+      tracks.splice(Number(button.dataset.remove), 1);
+    } else {
+      return;
+    }
+
+    write(tracks);
     paint();
-    markDirty();
   });
 
   paint();
+  el._repaint = paint;
   return el;
+}
+
+/** A readable starting name, so a new row is never blank. */
+function titleFromUrl(url) {
+  const file = decodeURIComponent(url.split("/").pop() || "").replace(/\.[a-z0-9]+$/i, "");
+  return file.replace(/[-_]+/g, " ").replace(/\s+/g, " ").trim().slice(0, 60);
 }
 
 function imageListField(field) {
@@ -1391,8 +1456,12 @@ function renderStatus() {
 
   const bar = $("#publish-bar");
   if (bar) {
-    bar.hidden = !waiting && !DRAFT_VIEWS.has(state.view);
+    const showing = waiting || DRAFT_VIEWS.has(state.view);
+    bar.hidden = !showing;
     bar.classList.toggle("is-pending", pending > 0);
+    // A sticky bar floats over whatever is behind it, so the page has to end
+    // far enough above it that nothing is ever left underneath.
+    document.body.classList.toggle("has-publish-bar", showing);
   }
 
   const publish = $("#settings-publish");

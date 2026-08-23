@@ -1,4 +1,4 @@
-import { watchAuth, isOwner, ownerLogin, ownerLogout } from "../../firebase-config.js?v=20260823a";
+import { watchAuth, isOwner, ownerLogin, ownerLogout, authReady } from "../../firebase-config.js?v=20260823a";
 import {
   watchCategories, seedDefaultCategories, createCategory, updateCategory,
   reorderCategories, deleteCategory,
@@ -38,16 +38,56 @@ const state = {
 const loginScreen = $("#login-screen");
 const shell = $("#admin-shell");
 
+/**
+ * Every failure used to come out as "that combination wasn't accepted",
+ * including the ones that have nothing to do with the password. Signing in
+ * was failing on a phone and the screen could not say why, which is the worst
+ * possible behaviour for the one door into the site.
+ */
+const LOGIN_ERRORS = {
+  "auth/invalid-email": "That doesn't look like an email address.",
+  "auth/user-not-found": "No owner account uses that address.",
+  "auth/wrong-password": "That password isn't right for this address.",
+  "auth/invalid-credential": "That email and password combination wasn't accepted.",
+  "auth/invalid-login-credentials": "That email and password combination wasn't accepted.",
+  "auth/too-many-requests": "Too many attempts from this device. Wait a few minutes and try again.",
+  "auth/network-request-failed": "No connection to the server. Check the network and try again.",
+  "auth/user-disabled": "That account has been disabled.",
+  "auth/operation-not-allowed": "Email sign-in is switched off for this project."
+};
+
 $("#login-form").addEventListener("submit", async (e) => {
   e.preventDefault();
   const err = $("#login-error");
+  const submit = $("#login-form button[type=submit]");
   err.hidden = true;
+  submit.disabled = true;
   try {
-    await ownerLogin($("#login-email").value.trim(), $("#login-pass").value);
-  } catch {
-    err.textContent = "That email and password combination wasn't accepted.";
+    await ownerLogin($("#login-email").value, $("#login-pass").value);
+  } catch (error) {
+    const code = error?.code || "";
+    err.textContent = LOGIN_ERRORS[code] || `Sign-in failed (${code || error?.message || "unknown"}).`;
     err.hidden = false;
     $("#login-pass").value = "";
+    console.error("Sign-in failed:", error);
+  } finally {
+    submit.disabled = false;
+  }
+});
+
+/**
+ * A browser that will not keep the session tells you here rather than by
+ * silently signing you out on the next refresh — which is exactly what a
+ * phone in private browsing does.
+ */
+authReady.then((mode) => {
+  const note = $("#login-persistence");
+  if (!note) return;
+  if (mode === "memory" || mode === "session") {
+    note.hidden = false;
+    note.textContent = mode === "memory"
+      ? "This browser won't remember the sign-in, so a refresh will sign you out. Private browsing is the usual cause — try a normal window."
+      : "This browser will only remember the sign-in until the tab is closed.";
   }
 });
 

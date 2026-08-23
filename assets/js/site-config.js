@@ -211,15 +211,20 @@ export const DEFAULT_CONFIG = {
   },
 
   /**
-   * Background music. Even with a track loaded it never plays until a visitor
+   * Background music. Even with tracks loaded it never plays until a visitor
    * asks for it — see ambient.js. `enabled` only decides whether the control
    * appears at all.
+   *
+   * A playlist rather than a track: one piece on repeat becomes wallpaper you
+   * notice, which is the opposite of what background music is for. They run
+   * one into the next with a crossfade so there is never a gap.
    */
   sound: {
     enabled: false,
-    trackUrl: "",
-    title: "",
-    volume: 40
+    tracks: [],
+    shuffle: true,
+    crossfade: 6,
+    volume: 30
   },
 
   backgrounds: {
@@ -368,7 +373,28 @@ export function mergeConfig(remote) {
     });
     return out;
   };
-  return walk(DEFAULT_CONFIG, remote || {});
+  return upgrade(walk(DEFAULT_CONFIG, remote || {}));
+}
+
+/**
+ * Brings a stored config forward to the current shape.
+ *
+ * Music started as a single `trackUrl` and became a playlist. A document
+ * written before that still carries the old pair of fields, and dropping them
+ * would silently turn the music off on a live site — so they are folded into
+ * the list instead, and the config the owner next publishes is written in the
+ * new shape.
+ */
+function upgrade(config) {
+  const sound = config.sound || {};
+  if (!Array.isArray(sound.tracks) || (!sound.tracks.length && sound.trackUrl)) {
+    const tracks = sound.trackUrl
+      ? [{ url: sound.trackUrl, title: sound.title || "" }]
+      : (Array.isArray(sound.tracks) ? sound.tracks : []);
+    const { trackUrl, title, ...rest } = sound;
+    return { ...config, sound: { ...DEFAULT_CONFIG.sound, ...rest, tracks } };
+  }
+  return config;
 }
 
 /* ------------------------------------------------------------------ */
