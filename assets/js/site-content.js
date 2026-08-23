@@ -133,6 +133,8 @@ export function renderStory(config) {
   host.hidden = story.enabled === false || !hasBody;
   if (host.hidden) return;
 
+  placeStory(host, story.position);
+
   host.innerHTML = `
     <div class="shell story-grid">
       <div class="story-copy" data-reveal="left">
@@ -146,6 +148,28 @@ export function renderStory(config) {
       ${storyMedia(story)}
     </div>
   `;
+}
+
+/**
+ * Moves the story section to where the owner wants it.
+ *
+ * At the top it sits above the hero, so a new story is the first thing a
+ * visitor meets rather than something they have to know to scroll for. The
+ * section is moved rather than duplicated, so there is only ever one of it
+ * and switching back and forth costs nothing.
+ */
+function placeStory(host, position) {
+  const hero = document.querySelector(".hero");
+  const artist = document.querySelector(".artist");
+  const atTop = position !== "artist";
+
+  host.classList.toggle("is-leading", atTop);
+
+  if (atTop && hero && hero.previousElementSibling !== host) {
+    hero.parentNode.insertBefore(host, hero);
+  } else if (!atTop && artist && artist.nextElementSibling !== host) {
+    artist.parentNode.insertBefore(host, artist.nextSibling);
+  }
 }
 
 /**
@@ -174,11 +198,12 @@ function storyMedia(story) {
 
   if (story.mediaType === "video") {
     const poster = story.mediaPoster || posterFromVideo(story.mediaUrl);
+    const src = videoDeliveryUrl(story.mediaUrl, { duration: Number(story.mediaDuration) || null });
     return `
       <div class="story-media is-video" data-reveal="right">
         <video controls playsinline preload="metadata"
                ${poster ? `poster="${escapeHtml(poster)}"` : ""}>
-          <source src="${escapeHtml(videoDeliveryUrl(story.mediaUrl))}">
+          <source src="${escapeHtml(src)}">
         </video>
       </div>`;
   }

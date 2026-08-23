@@ -1,6 +1,6 @@
 import { db, auth, getApp } from "../../firebase-config.js?v=20260823a";
 import { DEFAULT_ART_CATEGORIES, DEFAULT_COMIC_CATEGORIES } from "./site-data.js?v=20260823a";
-import { imageDeliveryUrl } from "./cloudinary.js?v=20260823a";
+import { imageDeliveryUrl, VIDEO_TRIM_SECONDS } from "./cloudinary.js?v=20260823a";
 import { autoQualityEnabled } from "./site-config.js?v=20260823a";
 import {
   doc, getDoc, getDocs, setDoc, addDoc, deleteDoc, updateDoc, writeBatch,
@@ -38,8 +38,15 @@ export function artworkId(categorySlug, titleOrFilename) {
  * allowance. Anything longer belongs on YouTube or Vimeo, which the story
  * block also accepts.
  */
+/**
+ * The file size cap is Cloudinary's and cannot be argued with.
+ *
+ * Length is no longer a reason to refuse a clip: anything longer than two
+ * minutes is trimmed to two minutes on delivery instead, so the owner can
+ * upload what they have and the site serves what it can afford.
+ */
 export const MAX_VIDEO_BYTES = 100 * 1024 * 1024;
-export const MAX_VIDEO_SECONDS = 90;
+export const MAX_VIDEO_SECONDS = VIDEO_TRIM_SECONDS;
 
 /**
  * A background track is longer than a reel but far lighter per second, so it
@@ -103,7 +110,10 @@ export function uploadAsset(file, { resourceType, onProgress } = {}) {
           width: d.width,
           height: d.height,
           duration: typeof d.duration === "number" ? d.duration : null,
-          resourceType: d.resource_type || kind
+          resourceType: d.resource_type || kind,
+          // Cloudinary names an upload with a random public id, so the only
+          // record of what the file was actually called is the one we keep.
+          filename: file.name || ""
         });
       } catch {
         reject(new Error("Cloudinary returned an unreadable response."));
@@ -163,23 +173,37 @@ export function inspectVideo(file) {
   });
 }
 
-/** Human-readable reason a clip cannot be used, or null when it is fine. */
+/**
+ * Why a file cannot be used, or null when it can.
+ *
+ * Length no longer refuses a video — it is trimmed on delivery instead, and
+ * `videoTrimNotice` says so before the upload starts. Only the size cap is a
+ * genuine refusal, because it is Cloudinary's and no transformation can get
+ * around it.
+ */
 export function videoRejectionReason({ bytes, duration }, kind = "video") {
   const audio = kind === "audio";
   const maxBytes = audio ? MAX_AUDIO_BYTES : MAX_VIDEO_BYTES;
-  const maxSeconds = audio ? MAX_AUDIO_SECONDS : MAX_VIDEO_SECONDS;
 
   if (bytes > maxBytes) {
     return audio
       ? `That file is ${(bytes / 1048576).toFixed(1)} MB. Keep a background track under ${maxBytes / 1048576} MB — every listener downloads all of it, so export it at a lower bitrate.`
-      : `That file is ${(bytes / 1048576).toFixed(0)} MB. Cloudinary's plan accepts up to ${maxBytes / 1048576} MB — export it smaller, or use a YouTube or Vimeo link instead.`;
+      : `That file is ${(bytes / 1048576).toFixed(0)} MB. Cloudinary's plan will not accept more than ${maxBytes / 1048576} MB whatever we do to it afterwards — export it smaller, or use a YouTube or Vimeo link instead.`;
   }
-  if (duration > maxSeconds) {
-    return audio
-      ? `That track is ${Math.round(duration / 60)} minutes. Keep it under ${maxSeconds / 60} — it loops, so a short piece works as well as a long one and costs a fraction as much.`
-      : `That clip is ${Math.round(duration)} seconds. Anything over ${maxSeconds} costs more monthly bandwidth than this site has to spend — trim it, or use a YouTube or Vimeo link instead.`;
+
+  if (audio && duration > MAX_AUDIO_SECONDS) {
+    return `That track is ${Math.round(duration / 60)} minutes. Keep it under ${MAX_AUDIO_SECONDS / 60} — it loops, so a short piece works as well as a long one and costs a fraction as much.`;
   }
+
   return null;
+}
+
+/** What will happen to a long clip, said before it is uploaded. */
+export function videoTrimNotice(duration) {
+  if (typeof duration !== "number" || duration <= VIDEO_TRIM_SECONDS) return "";
+  const mins = Math.floor(duration / 60);
+  const secs = Math.round(duration % 60);
+  return `${mins}:${String(secs).padStart(2, "0")} long — visitors will see the first ${VIDEO_TRIM_SECONDS / 60} minutes. The full upload is kept, so this can be changed later.`;
 }
 
 

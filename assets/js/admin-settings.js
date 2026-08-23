@@ -18,10 +18,11 @@ import {
 } from "./site-config.js?v=20260823a";
 import {
   uploadAndRecord, watchMedia, inspectVideo, videoRejectionReason,
-  resourceTypeFor, isAudio, MAX_VIDEO_BYTES, MAX_VIDEO_SECONDS,
+  videoTrimNotice, resourceTypeFor, isAudio, MAX_VIDEO_BYTES,
   MAX_AUDIO_BYTES, MAX_AUDIO_SECONDS
 } from "./data.js?v=20260823a";
-import { posterFromVideo } from "./cloudinary.js?v=20260823a";
+import { posterFromVideo, VIDEO_TRIM_SECONDS } from "./cloudinary.js?v=20260823a";
+import { readTrackName, titleFromFilename } from "./id3.js?v=20260823a";
 import { LOCAL_SEEDS, CATEGORY_BY_SLUG } from "./site-data.js?v=20260823a";
 import { $, $$, escapeHtml, toast, modal } from "./admin-ui.js?v=20260823a";
 
@@ -183,6 +184,14 @@ const TABS = [
         title: "The section",
         fields: [
           { type: "toggle", path: "story.enabled", label: "Show this section on the homepage" },
+          {
+            type: "select", path: "story.position", label: "Where it sits",
+            options: [
+              { value: "top", label: "Top — the first thing visitors see" },
+              { value: "artist", label: "Lower down, under the Alafi block" }
+            ],
+            note: "At the top it comes before the opening image, so a new story is the first thing anyone meets rather than something they have to scroll to find."
+          },
           { type: "text", path: "story.eyebrow", label: "Eyebrow" },
           { type: "text", path: "story.heading", label: "Heading" },
           { type: "textarea", path: "story.body", label: "The story", rows: 12, note: "Leave a blank line between paragraphs." }
@@ -190,7 +199,7 @@ const TABS = [
       },
       {
         title: "Accompanying media",
-        note: "Optional. Sits beside the text on a wide screen and above it on a phone. A picture, a short hosted video, or a YouTube or Vimeo link for anything longer.",
+        note: "Optional. Sits beside the text on a wide screen and above it on a phone. A picture, a video, or a YouTube or Vimeo link. Videos are compressed on the way out and trimmed to the first two minutes if they run longer — the full file you upload is kept either way.",
         fields: [
           {
             type: "media", label: "Media",
@@ -378,7 +387,7 @@ export function pickMedia(current = "", { allow = ["image"] } = {}) {
     const dropHint = audioOnly
       ? `An mp3 or m4a, up to ${MAX_AUDIO_BYTES / 1048576} MB and ${MAX_AUDIO_SECONDS / 60} minutes`
       : wantsVideo
-        ? `Images, or video up to ${MAX_VIDEO_BYTES / 1048576} MB and ${MAX_VIDEO_SECONDS} seconds`
+        ? `Images, or video up to ${MAX_VIDEO_BYTES / 1048576} MB — anything past ${VIDEO_TRIM_SECONDS / 60} minutes is trimmed for you`
         : "Uploaded to Cloudinary and added to your library";
 
     modal({
@@ -426,7 +435,7 @@ export function pickMedia(current = "", { allow = ["image"] } = {}) {
                 <input type="text" data-pick-embed placeholder="https://www.youtube.com/watch?v=…">
               </div>
               <p class="form-note">
-                For anything longer than ${MAX_VIDEO_SECONDS} seconds. Costs nothing to serve and has no length
+                For anything longer than ${VIDEO_TRIM_SECONDS / 60} minutes that should play in full. Costs nothing to serve and has no length
                 limit, but the player carries its provider&rsquo;s branding. YouTube is embedded
                 through its no-cookie player.
               </p>
@@ -477,15 +486,27 @@ export function pickMedia(current = "", { allow = ["image"] } = {}) {
           }
 
           // Measured before a byte leaves the machine: checking afterwards
-          // would mean spending the upload to find out it was too long.
+          // would mean spending the upload to find out it was unusable.
+          let measured = null;
+          let songName = "";
+
           if (timeBased) {
             try {
-              const info = await inspectVideo(file);
-              const reason = videoRejectionReason(info, audioFile ? "audio" : "video");
+              measured = await inspectVideo(file);
+              const reason = videoRejectionReason(measured, audioFile ? "audio" : "video");
               if (reason) { status.textContent = reason; return; }
-              status.textContent = audioFile
-                ? `${minutes(info.duration)} — ${bandwidthNote(info.bytes)}`
-                : `${seconds(info.duration)}, ${info.width}×${info.height} — ${bandwidthNote(info.bytes)}`;
+
+              if (audioFile) {
+                // The name of a piece of music lives in the file, not in the
+                // address it ends up at.
+                songName = await readTrackName(file);
+                status.textContent = `${songName} · ${minutes(measured.duration)} — ${bandwidthNote(measured.bytes)}`;
+              } else {
+                const trim = videoTrimNotice(measured.duration);
+                status.textContent = trim
+                  ? `${measured.width}×${measured.height} · ${trim}`
+                  : `${seconds(measured.duration)}, ${measured.width}×${measured.height} — ${bandwidthNote(measured.bytes)}`;
+              }
             } catch (err) {
               status.textContent = err.message;
               return;
@@ -507,7 +528,10 @@ export function pickMedia(current = "", { allow = ["image"] } = {}) {
               type: audioFile ? "audio" : asset.resourceType === "video" ? "video" : "image",
               poster: !audioFile && asset.resourceType === "video" ? posterFromVideo(asset.url) : "",
               bytes: asset.bytes,
-              duration: asset.duration
+              // Cloudinary reports the duration it measured; the browser's is
+              // the fallback for the rare file it does not.
+              duration: asset.duration ?? measured?.duration ?? null,
+              title: songName || titleFromFilename(asset.filename || file.name)
             }, close);
           } catch (err) {
             console.error(err);
@@ -936,8 +960,12 @@ function mediaField(field) {
         ? `Embedded from ${parsed.provider}. Costs nothing to serve, and carries their player.`
         : "This link is not a YouTube or Vimeo address, so nothing will be shown.";
     } else if (type === "video") {
+      const duration = Number(get(state.draft, "story.mediaDuration")) || 0;
+      const trimmed = duration > VIDEO_TRIM_SECONDS;
       thumb.innerHTML = `<img src="${escapeHtml(poster || posterFromVideo(url))}" alt="">`;
-      note.textContent = "Hosted on Cloudinary, served at automatic quality, and only loaded when a visitor presses play.";
+      note.textContent = trimmed
+        ? `Compressed and trimmed to the first ${VIDEO_TRIM_SECONDS / 60} minutes of ${minutes(duration)}. Your full upload is untouched, so this can be changed later.`
+        : "Compressed on the way out at the highest quality setting, and only loaded when a visitor presses play.";
     } else {
       thumb.innerHTML = `<img src="${escapeHtml(url)}" alt="">`;
       note.textContent = "";
@@ -948,10 +976,13 @@ function mediaField(field) {
     $("[data-path]", el).textContent = url;
   };
 
-  const write = (url, type, poster) => {
+  const write = (url, type, poster, duration = null) => {
     set(state.draft, field.urlPath, url);
     set(state.draft, field.typePath, type);
     set(state.draft, field.posterPath, poster);
+    // Kept so the page knows whether the clip needs trimming without having
+    // to download it to find out.
+    set(state.draft, "story.mediaDuration", duration);
     paint();
     markDirty();
   };
@@ -961,10 +992,10 @@ function mediaField(field) {
       allow: ["image", "video", "embed"]
     });
     if (choice === null) return;
-    write(choice.url, choice.url ? choice.type : "", choice.poster || "");
+    write(choice.url, choice.url ? choice.type : "", choice.poster || "", choice.duration ?? null);
   });
 
-  $("[data-clear]", el).addEventListener("click", () => write("", "", ""));
+  $("[data-clear]", el).addEventListener("click", () => write("", "", "", null));
 
   paint();
   return el;
@@ -1041,12 +1072,12 @@ function tracksField(field) {
       if (tracks.length >= MAX_TRACKS) return;
       const choice = await pickMedia("", { allow: ["audio"] });
       if (!choice?.url) return;
-      tracks.push({ url: choice.url, title: titleFromUrl(choice.url) });
+      tracks.push({ url: choice.url, title: choice.title || titleFromFilename(choice.url.split("/").pop()) });
     } else if (button.dataset.swap !== undefined) {
       const i = Number(button.dataset.swap);
       const choice = await pickMedia(tracks[i].url, { allow: ["audio"] });
       if (!choice?.url) return;
-      tracks[i] = { url: choice.url, title: tracks[i].title || titleFromUrl(choice.url) };
+      tracks[i] = { url: choice.url, title: choice.title || tracks[i].title || titleFromFilename(choice.url.split("/").pop()) };
     } else if (button.dataset.up !== undefined) {
       const i = Number(button.dataset.up);
       [tracks[i - 1], tracks[i]] = [tracks[i], tracks[i - 1]];
@@ -1066,12 +1097,6 @@ function tracksField(field) {
   paint();
   el._repaint = paint;
   return el;
-}
-
-/** A readable starting name, so a new row is never blank. */
-function titleFromUrl(url) {
-  const file = decodeURIComponent(url.split("/").pop() || "").replace(/\.[a-z0-9]+$/i, "");
-  return file.replace(/[-_]+/g, " ").replace(/\s+/g, " ").trim().slice(0, 60);
 }
 
 function imageListField(field) {

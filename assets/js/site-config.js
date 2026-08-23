@@ -112,12 +112,19 @@ export const DEFAULT_CONFIG = {
      form of the same voice on the About page. */
   story: {
     enabled: true,
+    /**
+     * "top" puts it above the hero, so a story update is the first thing a
+     * visitor meets rather than something they have to scroll to find.
+     * "artist" is the original placement, under the Alafi block.
+     */
+    position: "top",
     eyebrow: "In his own words",
     heading: "The Story So Far",
     body: "It started small — a pencil, a blank page, and a curiosity about what could be made from nothing. Over time, that curiosity turned into discipline, and discipline turned into a voice.\n\nEvery collection since has been another chapter in that same, ongoing story: learning to see the world a little more closely, and finding a way to hand that vision to someone else.",
     mediaUrl: "",
-    mediaType: "",      /* "image" | "video" | "" */
+    mediaType: "",      /* "image" | "video" | "embed" | "" */
     mediaPoster: "",
+    mediaDuration: null,   /* seconds, so a long clip can be trimmed on delivery */
     ctaLabel: "Read the full story",
     ctaHref: "about.html"
   },

@@ -610,3 +610,24 @@
   .finale h2 { font-size: clamp(2.2rem, 12vw, 3.4rem); }
   .marquee span { font-size: clamp(4rem, 22vw, 7rem); }
 }
+
+/* The story sitting above the hero.
+   It is the first thing on the page, so it has to clear the fixed nav on its
+   own -- nothing above it is doing that -- and it closes with a rule so the
+   hero below reads as the next thing rather than a continuation. */
+.story.is-leading {
+  padding-top: clamp(110px, 16vh, 170px);
+  padding-bottom: clamp(60px, 9vh, 100px);
+  border-bottom: 1px solid var(--hairline);
+}
+
+/* Leading the page, it should read like an announcement rather than a
+   footnote: the heading carries more weight and the measure is a little
+   wider, because there is nothing above it to compete with. */
+.story.is-leading .story-copy h2 { font-size: clamp(2.2rem, 5vw, 3.8rem); }
+.story.is-leading .story-copy p { max-width: 56ch; }
+
+@media (max-width: 700px) {
+  .story.is-leading { padding-top: 96px; padding-bottom: 44px; }
+  .story.is-leading .story-copy h2 { font-size: clamp(2rem, 10vw, 2.8rem); }
+}

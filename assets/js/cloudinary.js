@@ -38,9 +38,37 @@ export function posterFromVideo(url) {
   return withTransform(url, "so_2,q_auto,f_jpg").replace(/\.[a-z0-9]+$/i, ".jpg");
 }
 
-/** Video always goes out at automatic quality; there is no legacy to disturb. */
-export function videoDeliveryUrl(url) {
-  return isCloudinaryUrl(url) ? withTransform(url, "q_auto") : url;
+/** Anything longer than this is trimmed on the way out. */
+export const VIDEO_TRIM_SECONDS = 120;
+
+/**
+ * Video on the way out: compressed, re-encoded for the viewer's browser, and
+ * trimmed to two minutes if it runs longer.
+ *
+ * `q_auto:best` is the gentlest setting Cloudinary offers — it picks a quality
+ * per frame and stops the moment the result would be visibly different from
+ * the source. That is what "compress it without changing the quality" can
+ * actually mean: the file gets smaller because modern codecs encode the same
+ * picture in fewer bytes, not because detail is thrown away. Asking for
+ * genuinely lossless would save almost nothing and defeat the point.
+ *
+ * `vc_auto` lets the codec follow the browser — AV1 or VP9 where they are
+ * supported, H.264 where they are not — which is where most of the saving
+ * comes from.
+ *
+ * The original upload is never altered. All of this is the delivery address,
+ * so it can be changed or dropped later and the master is still there.
+ */
+export function videoDeliveryUrl(url, { duration = null, trim = true } = {}) {
+  if (!isCloudinaryUrl(url)) return url;
+
+  const parts = ["q_auto:best", "vc_auto"];
+  // Only trim when it is actually needed: a duration cap on a short clip is a
+  // transformation Cloudinary has to compute for no reason.
+  if (trim && typeof duration === "number" && duration > VIDEO_TRIM_SECONDS) {
+    parts.push(`du_${VIDEO_TRIM_SECONDS}`);
+  }
+  return withTransform(url, parts.join(","));
 }
 
 /**
