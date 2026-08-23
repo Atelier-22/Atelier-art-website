@@ -6,7 +6,7 @@ import {
   archivePieceId, saveArchivePiece, setArchiveVisibility, replaceArchiveImage,
   reorderArchivePieces, moveArchiveToCloudinary, publicIdFromUrl,
   watchComics, createComic, updateComic, deleteComic, reorderComics,
-  watchAllComments, deleteComment, uploadImage,
+  watchAllComments, deleteComment, uploadAndRecord,
   grantAdminClaim, watchChangeLog, logChange
 } from "./data.js?v=20260823a";
 import { categoryHref, LOCAL_SEEDS, CATEGORY_BY_SLUG } from "./site-data.js?v=20260823a";
@@ -697,18 +697,25 @@ $("#comic-save").addEventListener("click", async () => {
   const tick = (p) => { bar.style.width = `${((doneJobs + p) / Math.max(jobs, 1)) * 100}%`; };
 
   try {
+    // uploadAndRecord resolves the whole asset, not a URL. Taking `.url` is
+    // not a tidy-up: the old code stored the object itself, so a story
+    // published with new files ended up with "[object Object]" for every page.
+    // Routing through uploadAndRecord also gives each page a media-library
+    // record, without which its Cloudinary copy could never be deleted.
     $("#comic-status").textContent = "Uploading pages…";
     const pageUrls = [];
     for (const page of comicPages) {
       if (typeof page === "string") { pageUrls.push(page); continue; }
-      pageUrls.push(await uploadImage(page, tick));
+      const asset = await uploadAndRecord(page, { usedFor: "comic-page", onProgress: tick });
+      pageUrls.push(asset.url);
       doneJobs++;
     }
 
     let coverUrl = typeof comicCover === "string" ? comicCover : "";
     if (comicCover && typeof comicCover !== "string") {
       $("#comic-status").textContent = "Uploading cover…";
-      coverUrl = await uploadImage(comicCover, tick);
+      const asset = await uploadAndRecord(comicCover, { usedFor: "comic-cover", onProgress: tick });
+      coverUrl = asset.url;
       doneJobs++;
     }
 

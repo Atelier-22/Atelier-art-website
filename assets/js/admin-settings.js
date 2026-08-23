@@ -14,9 +14,13 @@
 import {
   DEFAULT_CONFIG, DISPLAY_FONTS, BODY_FONTS, fetchConfig, saveDraft,
   publishDraft, discardDraft, contrastReport, hasBlockingContrastFailure,
-  derivePalette, mergeConfig
+  derivePalette, mergeConfig, parseEmbed
 } from "./site-config.js?v=20260823a";
-import { uploadAndRecord, watchMedia } from "./data.js?v=20260823a";
+import {
+  uploadAndRecord, watchMedia, inspectVideo, videoRejectionReason,
+  resourceTypeFor, MAX_VIDEO_BYTES, MAX_VIDEO_SECONDS
+} from "./data.js?v=20260823a";
+import { posterFromVideo } from "./cloudinary.js?v=20260823a";
 import { LOCAL_SEEDS, CATEGORY_BY_SLUG } from "./site-data.js?v=20260823a";
 import { $, $$, escapeHtml, toast, modal } from "./admin-ui.js?v=20260823a";
 
@@ -77,6 +81,17 @@ const TABS = [
         fields: [
           { type: "number", path: "theme.measure", label: "Maximum content width", min: 900, max: 2200, step: 20, suffix: "px", note: "How wide the site is allowed to get on a large screen." },
           { type: "number", path: "theme.gutter", label: "Side margin", min: 20, max: 160, step: 4, suffix: "px", note: "Space between the content and the edge of the window. Phones always use a smaller value." }
+        ]
+      },
+      {
+        title: "Image delivery",
+        note: "Applies to everything hosted on Cloudinary, across the whole site. It does not touch the images that ship with the site until you move a collection across.",
+        fields: [
+          {
+            type: "toggle", path: "delivery.autoQuality",
+            label: "Serve images at automatic quality",
+            note: "Sends each picture in the best format the visitor's browser accepts, at a quality chosen per image, capped to 1800px wide. Nothing is cropped and the originals are untouched — this only changes how they are delivered. It typically cuts a 578 KB photograph to nearer 100 KB, which is the difference between roughly 900 and roughly 5,000 collection-page views a month. Preview it before publishing."
+          }
         ]
       }
     ]
@@ -173,18 +188,14 @@ const TABS = [
       },
       {
         title: "Accompanying media",
-        note: "Optional. Sits beside the text on a wide screen and above it on a phone.",
+        note: "Optional. Sits beside the text on a wide screen and above it on a phone. A picture, a short hosted video, or a YouTube or Vimeo link for anything longer.",
         fields: [
-          { type: "image", path: "story.mediaUrl", label: "Image or video" },
           {
-            type: "select", path: "story.mediaType", label: "Type",
-            options: [
-              { value: "", label: "None" },
-              { value: "image", label: "Image" },
-              { value: "video", label: "Video" }
-            ]
-          },
-          { type: "image", path: "story.mediaPoster", label: "Video still", note: "Shown before a video is played. Ignored for images." }
+            type: "media", label: "Media",
+            urlPath: "story.mediaUrl",
+            typePath: "story.mediaType",
+            posterPath: "story.mediaPoster"
+          }
         ]
       },
       {
@@ -284,12 +295,33 @@ function bundledImageGroups() {
   return groups;
 }
 
+const seconds = (n) => `${Math.round(n)}s`;
+const megabytes = (n) => `${(n / 1048576).toFixed(1)} MB`;
+
 /**
- * Three ways to choose a picture, because there are three places one can come
- * from: a new file, something already uploaded, or one of the images that
- * shipped with the site. Resolves to a URL, or null if cancelled.
+ * What a clip will cost to serve, in the only unit that matters here.
+ * Cloudinary's free allowance is 25 credits a month and one credit is a
+ * gigabyte of delivery, so a number in gigabytes per thousand plays is
+ * directly comparable to the budget.
  */
-export function pickImage(current = "") {
+function bandwidthNote(bytes) {
+  const perThousand = (bytes * 1000) / 1073741824;
+  return `${megabytes(bytes)} per play — about ${perThousand.toFixed(1)} GB per 1,000 plays, against a 25 GB monthly allowance shared with the rest of the site.`;
+}
+
+/**
+ * Choosing a piece of media. Where it can come from depends on what the field
+ * accepts: a new upload, something already in the library, one of the images
+ * that shipped with the site, a plain address, or — for video only — a
+ * YouTube or Vimeo link, which is the answer for anything too long to host.
+ *
+ * Resolves an object describing the choice, `{ url: "" }` when cleared, or
+ * null when cancelled.
+ */
+export function pickMedia(current = "", { allow = ["image"] } = {}) {
+  const wantsVideo = allow.includes("video");
+  const wantsEmbed = allow.includes("embed");
+
   return new Promise((resolve) => {
     let settled = false;
     const finish = (value, close) => {
@@ -300,9 +332,10 @@ export function pickImage(current = "") {
     };
 
     const groups = bundledImageGroups();
+    const accept = wantsVideo ? "image/*,video/*" : "image/*";
 
     modal({
-      title: "Choose an image",
+      title: wantsVideo ? "Choose an image or video" : "Choose an image",
       wide: true,
       hideConfirm: true,
       body: `
@@ -311,18 +344,17 @@ export function pickImage(current = "") {
             <button type="button" class="is-active" data-ptab="upload">Upload</button>
             <button type="button" data-ptab="library">Library</button>
             <button type="button" data-ptab="bundled">Site images</button>
+            ${wantsEmbed ? '<button type="button" data-ptab="embed">YouTube / Vimeo</button>' : ""}
             <button type="button" data-ptab="url">Address</button>
           </div>
 
           <div class="picker-pane is-active" data-pane="upload">
             <div class="dropzone" data-pick-drop>
               <strong>Drop a file here, or click to choose</strong>
-              <span>Uploaded to Cloudinary and added to your library</span>
-              <!-- Images only for now. The story block already renders a
-                   video when its media type says so, but uploading one needs
-                   Cloudinary's video endpoint and a decision about bandwidth
-                   that has not been taken yet -- see the video report. -->
-              <input type="file" accept="image/*" data-pick-input>
+              <span>${wantsVideo
+                ? `Images, or video up to ${MAX_VIDEO_BYTES / 1048576} MB and ${MAX_VIDEO_SECONDS} seconds`
+                : "Uploaded to Cloudinary and added to your library"}</span>
+              <input type="file" accept="${accept}" data-pick-input>
             </div>
             <div class="progress" data-pick-progress hidden><span></span></div>
             <p class="status-line" data-pick-status></p>
@@ -341,9 +373,24 @@ export function pickImage(current = "") {
             <div class="picker-grid" data-pick-bundled></div>
           </div>
 
+          ${wantsEmbed ? `
+            <div class="picker-pane" data-pane="embed">
+              <div class="field">
+                <label>YouTube or Vimeo link</label>
+                <input type="text" data-pick-embed placeholder="https://www.youtube.com/watch?v=…">
+              </div>
+              <p class="form-note">
+                For anything longer than ${MAX_VIDEO_SECONDS} seconds. Costs nothing to serve and has no length
+                limit, but the player carries its provider&rsquo;s branding. YouTube is embedded
+                through its no-cookie player.
+              </p>
+              <button class="btn is-primary" type="button" data-pick-embed-go>Use this video</button>
+              <p class="status-line" data-pick-embed-status></p>
+            </div>` : ""}
+
           <div class="picker-pane" data-pane="url">
             <div class="field">
-              <label>Image address</label>
+              <label>Address</label>
               <input type="text" data-pick-url value="${escapeHtml(current)}" placeholder="https://… or 2.jpg">
             </div>
             <button class="btn is-primary" type="button" data-pick-url-go>Use this address</button>
@@ -367,18 +414,49 @@ export function pickImage(current = "") {
 
         const upload = async (file) => {
           if (!file) return;
+          const isVideo = resourceTypeFor(file) === "video";
+
+          if (isVideo && !wantsVideo) {
+            status.textContent = "This field takes an image. Video can be used in the Story section.";
+            return;
+          }
+
+          // Measured before a byte leaves the machine: checking afterwards
+          // would mean spending the upload to find out it was too long.
+          if (isVideo) {
+            try {
+              const info = await inspectVideo(file);
+              const reason = videoRejectionReason(info);
+              if (reason) { status.textContent = reason; return; }
+              status.textContent = `${seconds(info.duration)}, ${info.width}×${info.height} — ${bandwidthNote(info.bytes)}`;
+            } catch (err) {
+              status.textContent = err.message;
+              return;
+            }
+          }
+
           bar.hidden = false;
-          status.textContent = `Uploading ${file.name}…`;
+          const label = status.textContent;
           try {
             const asset = await uploadAndRecord(file, {
-              usedFor: "site",
-              onProgress: (p) => { bar.firstElementChild.style.width = `${p * 100}%`; }
+              usedFor: isVideo ? "story-video" : "site",
+              onProgress: (p) => {
+                bar.firstElementChild.style.width = `${p * 100}%`;
+                status.textContent = `Uploading ${file.name}… ${Math.round(p * 100)}%`;
+              }
             });
-            finish(asset.url, close);
+            finish({
+              url: asset.url,
+              type: asset.resourceType === "video" ? "video" : "image",
+              poster: asset.resourceType === "video" ? posterFromVideo(asset.url) : "",
+              bytes: asset.bytes,
+              duration: asset.duration
+            }, close);
           } catch (err) {
             console.error(err);
             status.textContent = err.message || "That upload failed.";
             bar.hidden = true;
+            setTimeout(() => { if (!settled) status.textContent = label; }, 6000);
           }
         };
 
@@ -392,16 +470,20 @@ export function pickImage(current = "") {
 
         /* Library */
         const libraryHost = $("[data-pick-library]", overlay);
-        const paintLibrary = () => {
-          libraryHost.innerHTML = state.media.length
-            ? state.media.map(m => `
-                <button type="button" class="picker-item${m.url === current ? " is-current" : ""}" data-url="${escapeHtml(m.url)}">
-                  <img src="${escapeHtml(m.url)}" alt="" loading="lazy">
+        const usable = state.media.filter(m => (m.type === "video" ? wantsVideo : true));
+        libraryHost.innerHTML = usable.length
+          ? usable.map(m => {
+              const isVideo = m.type === "video";
+              const thumb = isVideo ? posterFromVideo(m.url) : m.url;
+              return `
+                <button type="button" class="picker-item${m.url === current ? " is-current" : ""}"
+                        data-url="${escapeHtml(m.url)}" data-type="${isVideo ? "video" : "image"}">
+                  <img src="${escapeHtml(thumb)}" alt="" loading="lazy">
+                  ${isVideo ? '<span class="picker-badge">Video</span>' : ""}
                   <span>${escapeHtml(m.filename || m.publicId || "")}</span>
-                </button>`).join("")
-            : '<p class="empty-note">Nothing uploaded yet. Use the Upload tab.</p>';
-        };
-        paintLibrary();
+                </button>`;
+            }).join("")
+          : '<p class="empty-note">Nothing uploaded yet. Use the Upload tab.</p>';
 
         /* Bundled */
         const bundledHost = $("[data-pick-bundled]", overlay);
@@ -409,7 +491,8 @@ export function pickImage(current = "") {
         const paintBundled = () => {
           const group = groups[Number(groupSelect.value)] || groups[0];
           bundledHost.innerHTML = group.items.map(src => `
-            <button type="button" class="picker-item${src === current ? " is-current" : ""}" data-url="${escapeHtml(src)}">
+            <button type="button" class="picker-item${src === current ? " is-current" : ""}"
+                    data-url="${escapeHtml(src)}" data-type="image">
               <img src="${escapeHtml(src)}" alt="" loading="lazy">
               <span>${escapeHtml(src.split("/").pop())}</span>
             </button>`).join("");
@@ -419,12 +502,33 @@ export function pickImage(current = "") {
 
         overlay.addEventListener("click", (e) => {
           const item = e.target.closest(".picker-item");
-          if (item) finish(item.dataset.url, close);
+          if (!item) return;
+          const type = item.dataset.type === "video" ? "video" : "image";
+          finish({
+            url: item.dataset.url,
+            type,
+            poster: type === "video" ? posterFromVideo(item.dataset.url) : ""
+          }, close);
         });
+
+        /* Embed */
+        if (wantsEmbed) {
+          const embedInput = $("[data-pick-embed]", overlay);
+          const embedStatus = $("[data-pick-embed-status]", overlay);
+          $("[data-pick-embed-go]", overlay).addEventListener("click", () => {
+            const parsed = parseEmbed(embedInput.value);
+            if (!parsed) {
+              embedStatus.textContent = "That does not look like a YouTube or Vimeo link.";
+              return;
+            }
+            finish({ url: embedInput.value.trim(), type: "embed", poster: "" }, close);
+          });
+        }
 
         /* Address */
         $("[data-pick-url-go]", overlay).addEventListener("click", () => {
-          finish($("[data-pick-url]", overlay).value.trim(), close);
+          const value = $("[data-pick-url]", overlay).value.trim();
+          finish({ url: value, type: value ? "image" : "", poster: "" }, close);
         });
 
         $("[data-cancel]", overlay).addEventListener("click", () => {
@@ -433,6 +537,12 @@ export function pickImage(current = "") {
       }
     });
   });
+}
+
+/** Stills only, resolving a plain URL — what every image field wants. */
+export async function pickImage(current = "") {
+  const choice = await pickMedia(current, { allow: ["image"] });
+  return choice === null ? null : choice.url;
 }
 
 /* ------------------------------------------------------------------ */
@@ -476,7 +586,7 @@ function fieldShell(label, note, control, extraClass = "") {
  * rather than on something inside it or it does nothing at all.
  */
 const FULL_WIDTH_FIELDS = new Set([
-  "images", "list", "blocks", "covers", "contrast", "swatches", "typepreview"
+  "images", "list", "blocks", "covers", "contrast", "swatches", "typepreview", "media"
 ]);
 
 function renderField(field) {
@@ -590,6 +700,10 @@ function renderField(field) {
       }));
       break;
 
+    case "media":
+      el.appendChild(mediaField(field));
+      break;
+
     case "images":
       el.appendChild(imageListField(field));
       break;
@@ -684,6 +798,84 @@ function imageField(label, note, value, onPick) {
     onPick("");
   });
 
+  return el;
+}
+
+/**
+ * One control for the story's media slot, writing all three fields at once.
+ *
+ * Three separate controls — a URL, a type, and a poster — was three chances to
+ * leave them disagreeing: a video address with the type still set to image
+ * renders a broken picture, and nothing on the page would say why. Picking a
+ * file settles all three, and the type is a consequence of what was chosen
+ * rather than something to remember.
+ */
+function mediaField(field) {
+  const el = document.createElement("div");
+  el.className = "setting is-full";
+  el.innerHTML = `
+    <label class="setting-label">${escapeHtml(field.label)}</label>
+    <div class="setting-control">
+      <div class="image-field">
+        <div class="image-thumb is-media" data-thumb></div>
+        <div class="image-actions">
+          <button class="btn is-small" type="button" data-choose>Choose</button>
+          <button class="btn is-small is-danger" type="button" data-clear>Remove</button>
+          <code class="image-path" data-path></code>
+          <p class="setting-note" data-media-note style="flex-basis:100%"></p>
+        </div>
+      </div>
+    </div>`;
+
+  const paint = () => {
+    const url = get(state.draft, field.urlPath) || "";
+    const type = get(state.draft, field.typePath) || "";
+    const poster = get(state.draft, field.posterPath) || "";
+
+    const thumb = $("[data-thumb]", el);
+    const note = $("[data-media-note]", el);
+
+    if (!url) {
+      thumb.innerHTML = '<span class="image-empty">None</span>';
+      note.textContent = "The story runs full width when there is no media.";
+    } else if (type === "embed") {
+      const parsed = parseEmbed(url);
+      thumb.innerHTML = `<span class="image-empty">${escapeHtml(parsed?.provider || "Link")}</span>`;
+      note.textContent = parsed
+        ? `Embedded from ${parsed.provider}. Costs nothing to serve, and carries their player.`
+        : "This link is not a YouTube or Vimeo address, so nothing will be shown.";
+    } else if (type === "video") {
+      thumb.innerHTML = `<img src="${escapeHtml(poster || posterFromVideo(url))}" alt="">`;
+      note.textContent = "Hosted on Cloudinary, served at automatic quality, and only loaded when a visitor presses play.";
+    } else {
+      thumb.innerHTML = `<img src="${escapeHtml(url)}" alt="">`;
+      note.textContent = "";
+    }
+
+    $("[data-choose]", el).textContent = url ? "Replace" : "Choose";
+    $("[data-clear]", el).hidden = !url;
+    $("[data-path]", el).textContent = url;
+  };
+
+  const write = (url, type, poster) => {
+    set(state.draft, field.urlPath, url);
+    set(state.draft, field.typePath, type);
+    set(state.draft, field.posterPath, poster);
+    paint();
+    markDirty();
+  };
+
+  $("[data-choose]", el).addEventListener("click", async () => {
+    const choice = await pickMedia(get(state.draft, field.urlPath) || "", {
+      allow: ["image", "video", "embed"]
+    });
+    if (choice === null) return;
+    write(choice.url, choice.url ? choice.type : "", choice.poster || "");
+  });
+
+  $("[data-clear]", el).addEventListener("click", () => write("", "", ""));
+
+  paint();
   return el;
 }
 

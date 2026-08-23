@@ -9,8 +9,9 @@
  */
 
 import {
-  initSiteConfig, paragraphs, escapeHtml, previewHref, isPreview
+  initSiteConfig, paragraphs, escapeHtml, previewHref, isPreview, parseEmbed
 } from "./site-config.js?v=20260823a";
+import { posterFromVideo, videoDeliveryUrl } from "./cloudinary.js?v=20260823a";
 
 /* ------------------------------------------------------------------ */
 /*  Preview banner                                                     */
@@ -144,15 +145,37 @@ export function renderStory(config) {
   `;
 }
 
+/**
+ * Three kinds of media, one slot.
+ *
+ * A hosted video is served at automatic quality and starts as a still —
+ * `preload="metadata"` fetches a few kilobytes of header rather than the whole
+ * clip, so a visitor who never presses play costs almost nothing. On a site
+ * whose whole video budget is a shared monthly allowance, that is the
+ * difference between affordable and not.
+ */
 function storyMedia(story) {
   if (!story.mediaUrl) return "";
 
-  if (story.mediaType === "video") {
+  if (story.mediaType === "embed") {
+    const embed = parseEmbed(story.mediaUrl);
+    if (!embed) return "";
     return `
-      <div class="story-media" data-reveal="right">
+      <div class="story-media is-embed" data-reveal="right">
+        <iframe src="${escapeHtml(embed.src)}" title="${escapeHtml(story.heading || "Video")}"
+                loading="lazy" allowfullscreen
+                allow="accelerometer; encrypted-media; gyroscope; picture-in-picture"
+                referrerpolicy="strict-origin-when-cross-origin"></iframe>
+      </div>`;
+  }
+
+  if (story.mediaType === "video") {
+    const poster = story.mediaPoster || posterFromVideo(story.mediaUrl);
+    return `
+      <div class="story-media is-video" data-reveal="right">
         <video controls playsinline preload="metadata"
-               ${story.mediaPoster ? `poster="${escapeHtml(story.mediaPoster)}"` : ""}>
-          <source src="${escapeHtml(story.mediaUrl)}">
+               ${poster ? `poster="${escapeHtml(poster)}"` : ""}>
+          <source src="${escapeHtml(videoDeliveryUrl(story.mediaUrl))}">
         </video>
       </div>`;
   }

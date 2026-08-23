@@ -1,5 +1,7 @@
 import { db, auth, getApp } from "../../firebase-config.js?v=20260823a";
 import { DEFAULT_ART_CATEGORIES, DEFAULT_COMIC_CATEGORIES } from "./site-data.js?v=20260823a";
+import { imageDeliveryUrl } from "./cloudinary.js?v=20260823a";
+import { autoQualityEnabled } from "./site-config.js?v=20260823a";
 import {
   doc, getDoc, getDocs, setDoc, addDoc, deleteDoc, updateDoc, writeBatch,
   collection, collectionGroup, onSnapshot, query, orderBy, where, limit,
@@ -27,14 +29,33 @@ export function artworkId(categorySlug, titleOrFilename) {
 /*  Cloudinary upload with real progress                               */
 /* ------------------------------------------------------------------ */
 
-export function uploadImage(file, onProgress) {
+/**
+ * What the Free plan will accept, and what the site is willing to serve.
+ *
+ * The file cap is Cloudinary's. The duration cap is ours: delivery bandwidth
+ * is the scarce resource on this account, and ninety seconds is the longest
+ * clip that still leaves room for the rest of the site inside the monthly
+ * allowance. Anything longer belongs on YouTube or Vimeo, which the story
+ * block also accepts.
+ */
+export const MAX_VIDEO_BYTES = 100 * 1024 * 1024;
+export const MAX_VIDEO_SECONDS = 90;
+
+/** Cloudinary keeps images, video and raw files on separate endpoints. */
+export function resourceTypeFor(file) {
+  return (file?.type || "").startsWith("video/") ? "video" : "image";
+}
+
+export function uploadAsset(file, { resourceType, onProgress } = {}) {
+  const kind = resourceType || resourceTypeFor(file);
+
   return new Promise((resolve, reject) => {
     const form = new FormData();
     form.append("file", file);
     form.append("upload_preset", CLOUDINARY_UPLOAD_PRESET);
 
     const xhr = new XMLHttpRequest();
-    xhr.open("POST", `https://api.cloudinary.com/v1_1/${CLOUDINARY_CLOUD_NAME}/image/upload`);
+    xhr.open("POST", `https://api.cloudinary.com/v1_1/${CLOUDINARY_CLOUD_NAME}/${kind}/upload`);
 
     xhr.upload.addEventListener("progress", (e) => {
       if (e.lengthComputable && onProgress) onProgress(e.loaded / e.total);
@@ -42,7 +63,16 @@ export function uploadImage(file, onProgress) {
 
     xhr.addEventListener("load", () => {
       if (xhr.status < 200 || xhr.status >= 300) {
-        reject(new Error(`Cloudinary rejected "${file.name}" (${xhr.status})`));
+        // The single most likely failure for video is an upload preset that
+        // only permits images, and "rejected (400)" gives nobody a way to fix
+        // that. Cloudinary's own message is far more use.
+        let detail = "";
+        try { detail = JSON.parse(xhr.responseText)?.error?.message || ""; } catch { /* not JSON */ }
+        reject(new Error(
+          detail
+            ? `Cloudinary rejected "${file.name}": ${detail}`
+            : `Cloudinary rejected "${file.name}" (${xhr.status})`
+        ));
         return;
       }
       try {
@@ -54,7 +84,8 @@ export function uploadImage(file, onProgress) {
           bytes: d.bytes,
           width: d.width,
           height: d.height,
-          resourceType: d.resource_type || "image"
+          duration: typeof d.duration === "number" ? d.duration : null,
+          resourceType: d.resource_type || kind
         });
       } catch {
         reject(new Error("Cloudinary returned an unreadable response."));
@@ -73,7 +104,7 @@ export function uploadImage(file, onProgress) {
  * to delete it by later.
  */
 export async function uploadAndRecord(file, { usedFor = "artwork", onProgress } = {}) {
-  const asset = await uploadImage(file, onProgress);
+  const asset = await uploadAsset(file, { onProgress });
   await setDoc(doc(db, "media", slugify(asset.publicId, "asset")), {
     ...asset,
     filename: file.name,
@@ -83,6 +114,47 @@ export async function uploadAndRecord(file, { usedFor = "artwork", onProgress } 
   });
   return asset;
 }
+
+/**
+ * Reads a video's duration and dimensions in the browser, before a byte is
+ * uploaded. Checking after the upload would mean spending the bandwidth to
+ * discover the clip was too long to keep.
+ */
+export function inspectVideo(file) {
+  return new Promise((resolve, reject) => {
+    const el = document.createElement("video");
+    el.preload = "metadata";
+    const src = URL.createObjectURL(file);
+
+    const done = (result, error) => {
+      URL.revokeObjectURL(src);
+      el.removeAttribute("src");
+      error ? reject(error) : resolve(result);
+    };
+
+    el.addEventListener("loadedmetadata", () => done({
+      duration: el.duration,
+      width: el.videoWidth,
+      height: el.videoHeight,
+      bytes: file.size
+    }), { once: true });
+
+    el.addEventListener("error", () => done(null, new Error("That file could not be read as a video.")), { once: true });
+    el.src = src;
+  });
+}
+
+/** Human-readable reason a video cannot be used, or null when it is fine. */
+export function videoRejectionReason({ bytes, duration }) {
+  if (bytes > MAX_VIDEO_BYTES) {
+    return `That file is ${(bytes / 1048576).toFixed(0)} MB. Cloudinary's plan accepts up to ${MAX_VIDEO_BYTES / 1048576} MB — export it smaller, or use a YouTube or Vimeo link instead.`;
+  }
+  if (duration > MAX_VIDEO_SECONDS) {
+    return `That clip is ${Math.round(duration)} seconds. Anything over ${MAX_VIDEO_SECONDS} costs more monthly bandwidth than this site has to spend — trim it, or use a YouTube or Vimeo link instead.`;
+  }
+  return null;
+}
+
 
 /**
  * Cloudinary's URL layout is
@@ -299,7 +371,10 @@ function normaliseArtwork(id, data) {
     // back by falling through to the bundled list.
     hidden: data.hidden === true,
     description: data.description || "",
-    imageUrl: data.imageUrl || "",
+    // One choke point for delivery: everything that shows an artwork reads
+    // imageUrl from here, so the automatic-quality setting reaches all of them
+    // without every renderer having to remember to ask.
+    imageUrl: imageDeliveryUrl(data.imageUrl || "", autoQualityEnabled()),
     likes: data.likes || 0,
     uploaded: data.uploaded === true,
     publicId: data.publicId || null,
@@ -535,8 +610,12 @@ function normaliseComic(id, data) {
     title: data.title || "Untitled Story",
     categorySlug: data.categorySlug || "uncategorised",
     description: data.description || "",
-    coverUrl: data.coverUrl || data.pages?.[0] || "",
-    pages: Array.isArray(data.pages) ? data.pages.filter(Boolean) : [],
+    coverUrl: imageDeliveryUrl(data.coverUrl || data.pages?.[0] || "", autoQualityEnabled()),
+    // Comic pages are the heaviest thing on the site — a reader pulls every
+    // one of them — so they benefit from this more than anything else does.
+    pages: Array.isArray(data.pages)
+      ? data.pages.filter(Boolean).map(p => imageDeliveryUrl(p, autoQualityEnabled()))
+      : [],
     likes: data.likes || 0,
     order: typeof data.order === "number" ? data.order : 0,
     status: data.status || "published",

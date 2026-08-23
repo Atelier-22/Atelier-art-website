@@ -489,18 +489,28 @@
 }
 
 .story-media img,
-.story-media video {
+.story-media video,
+.story-media iframe {
   display: block;
   width: 100%;
   height: 100%;
   max-height: 70vh;
-  object-fit: cover;
+  border: 0;
 }
 
-/* A video needs its own aspect ratio rather than the portrait crop an image
-   gets, or the controls end up cropped off the bottom. */
-.story-media:has(video) { aspect-ratio: 16 / 9; }
+.story-media img,
+.story-media video { object-fit: cover; }
+
+/* Moving pictures get a landscape frame rather than the portrait crop an
+   image gets: a 16:9 clip letterboxed into a 4:5 box wastes half the space,
+   and a <video> cropped to fill loses its controls off the bottom edge. */
+.story-media:has(video),
+.story-media:has(iframe) { aspect-ratio: 16 / 9; }
 .story-media:has(img) { aspect-ratio: 4 / 5; }
+
+/* An embedded player is letterboxed by the provider, so a cover crop would
+   cut the black bars off and take the picture with them. */
+.story-media:has(iframe) { background: #000; }
 
 @media (max-width: 860px) {
   .story-grid { grid-template-columns: 1fr; }

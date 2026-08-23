@@ -201,6 +201,15 @@ export const DEFAULT_CONFIG = {
     }
   },
 
+  /**
+   * How images are delivered. Off by default: switching it on changes the URL
+   * every existing Cloudinary image is served from, which is the owner's call
+   * to make rather than a default to inherit.
+   */
+  delivery: {
+    autoQuality: false
+  },
+
   backgrounds: {
     home: "2.jpg",
     gallery: "1.jpg",
@@ -351,6 +360,48 @@ export function mergeConfig(remote) {
 }
 
 /* ------------------------------------------------------------------ */
+/*  Embedded video                                                     */
+/* ------------------------------------------------------------------ */
+
+/**
+ * Recognises a YouTube or Vimeo link and returns the player URL for it.
+ *
+ * This is the escape hatch for anything too long to host on Cloudinary. The
+ * YouTube form is the no-cookie player, which is the difference between
+ * embedding a video and embedding an advertising tracker on a gallery page.
+ *
+ * Returns null for anything unrecognised, which is what the settings page
+ * checks before saving — so a mistyped link is caught there rather than
+ * rendering an empty black rectangle on the homepage.
+ */
+export function parseEmbed(url) {
+  const raw = (url || "").trim();
+  if (!raw) return null;
+
+  const youtube = raw.match(
+    /(?:youtube\.com\/(?:watch\?(?:.*&)?v=|embed\/|shorts\/|live\/)|youtu\.be\/)([\w-]{6,})/i
+  );
+  if (youtube) {
+    return {
+      provider: "YouTube",
+      id: youtube[1],
+      src: `https://www.youtube-nocookie.com/embed/${youtube[1]}?rel=0`
+    };
+  }
+
+  const vimeo = raw.match(/vimeo\.com\/(?:video\/)?(\d{6,})/i);
+  if (vimeo) {
+    return {
+      provider: "Vimeo",
+      id: vimeo[1],
+      src: `https://player.vimeo.com/video/${vimeo[1]}?dnt=1`
+    };
+  }
+
+  return null;
+}
+
+/* ------------------------------------------------------------------ */
 /*  Preview mode                                                       */
 /* ------------------------------------------------------------------ */
 
@@ -400,6 +451,26 @@ function cacheConfig(config) {
     localStorage.setItem(CONFIG_CACHE_KEY, JSON.stringify(config));
     localStorage.setItem(THEME_CACHE_KEY, themeCss(config.theme));
   } catch { /* private mode — the page still works, it just repaints once */ }
+}
+
+/**
+ * The config as it stands right now, readable synchronously.
+ *
+ * The data layer decides how to build an image URL while it is normalising a
+ * snapshot, which is not a place that can await anything. It starts from the
+ * cached copy and is replaced whenever a live snapshot lands, so the first
+ * paint of a first-ever visit uses the shipped defaults and everything after
+ * uses the real thing.
+ */
+let activeConfig = null;
+
+export function currentConfig() {
+  if (!activeConfig) activeConfig = cachedConfig();
+  return activeConfig;
+}
+
+export function autoQualityEnabled() {
+  return currentConfig().delivery?.autoQuality === true;
 }
 
 export async function fetchConfig(which = "published") {
@@ -560,6 +631,7 @@ export function rewriteLinksForPreview(root = document) {
  */
 export function initSiteConfig(onConfig) {
   const paint = (config, meta) => {
+    activeConfig = config;
     applyTheme(config.theme);
     applyBindings(config);
     rewriteLinksForPreview();

@@ -592,3 +592,23 @@
    full strength so the Show button is still obviously live. */
 .m-card.is-hidden-piece img { filter: grayscale(1); opacity: 0.45; }
 .m-card.is-hidden-piece .m-card-body h4 { color: var(--fg-dim); }
+
+/* ---- Media picker extras ---- */
+.picker-item { position: relative; }
+
+.picker-badge {
+  position: absolute;
+  top: 5px;
+  left: 5px;
+  padding: 2px 6px;
+  border-radius: 2px;
+  background: rgba(20, 18, 14, 0.78);
+  color: #f4f1ea;
+  font-size: 0.58rem;
+  letter-spacing: 0.1em;
+  text-transform: uppercase;
+}
+
+/* A poster frame is landscape where a still is usually not, so the media
+   thumbnail is wider than the square one an image field uses. */
+.image-thumb.is-media { width: 150px; height: 92px; }
