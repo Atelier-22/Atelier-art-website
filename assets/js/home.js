@@ -1,7 +1,7 @@
 import { DEFAULT_ART_CATEGORIES, LOCAL_SEEDS, mergeCategories, categoryHref } from "./site-data.js?v=20260823a";
 import { observeReveals, onScrollFrame, sectionProgress, initNav, prefersReducedMotion } from "./reveal.js?v=20260823a";
-import { initContent, renderHeroCanvas } from "./site-content.js?v=20260823a";
-import { previewHref } from "./site-config.js?v=20260823a";
+import { renderHeroCanvas } from "./site-content.js?v=20260823a";
+import { previewHref, currentConfig } from "./site-config.js?v=20260823a";
 
 const TILE_LAYOUT = ["t-hero", "t-tall", "t-strip", "t-strip", "t-strip"];
 const FRAMES_PER_TILE = 3;
@@ -336,40 +336,65 @@ async function upgradeFromFirestore(sections) {
   }
 }
 
-function init() {
+let live = { host: null, sections: [], detachScroll: null };
+
+export function mount() {
   initNav();
 
   const host = document.getElementById("collections");
   if (!host) return;
 
-  let sections = mount(host);
+  // A remount starts from the shipped order; the stored one is fetched again
+  // below. Carrying the previous visit's pools over would mix collections.
+  pools.clear();
+  categories = DEFAULT_ART_CATEGORIES;
+
+  const sections = buildSections(host);
+  live = { host, sections, detachScroll: wireScrollMotion(sections) };
 
   observeReveals(document);
-  let detachScroll = wireScrollMotion(sections);
+  renderHeroCanvas(currentConfig());
+  wireHeroCanvas();
   upgradeFromFirestore(sections);
 
-  // Theme, copy, hero pictures, and the story block. The first call happens
-  // synchronously from the cached config, so the hero is wired before the
-  // first frame rather than a beat after it.
-  initContent((config) => {
-    renderHeroCanvas(config);
-    wireHeroCanvas();
-    observeReveals(document);
-  });
-
   loadCategoryOrder().then((remote) => {
+    if (live.host !== host) return;   // navigated away while fetching
     if (!remote || sameOrder(remote, categories)) return;
     categories = remote;
-    detachScroll();
+    live.detachScroll?.();
     host.innerHTML = "";
-    sections = mount(host);
+    const rebuilt = buildSections(host);
+    live.sections = rebuilt;
+    live.detachScroll = wireScrollMotion(rebuilt);
     observeReveals(document);
-    detachScroll = wireScrollMotion(sections);
-    upgradeFromFirestore(sections);
+    upgradeFromFirestore(rebuilt);
   });
 }
 
-function mount(host) {
+/**
+ * The homepage owns a scroll subscription and a timer per tile, none of which
+ * live in the DOM the router replaces. Left running they would keep animating
+ * elements that are no longer on the page.
+ */
+export function unmount() {
+  live.detachScroll?.();
+  live.sections.forEach((section) => {
+    section._tiles?.forEach((tile) => {
+      clearInterval(tile._timer);
+      tile._frames?.childNodes.forEach?.(img => clearTimeout(img._holdTimer));
+    });
+  });
+  clearInterval(heroTimer);
+  heroTimer = null;
+  live = { host: null, sections: [], detachScroll: null };
+}
+
+export function onConfig(config) {
+  if (renderHeroCanvas(config)) wireHeroCanvas();
+  observeReveals(document);
+}
+
+function buildSections(host) {
   return categories.map((category, i) => {
     pools.set(category.slug, seedPool(category));
     const section = buildSection(category, i);
@@ -393,4 +418,3 @@ async function loadCategoryOrder() {
   }
 }
 
-init();

@@ -1,10 +1,12 @@
 import { fetchCategories } from "./data.js?v=20260823a";
 import { CATEGORY_BY_SLUG, categoryHref, LOCAL_SEEDS, mergeCategories } from "./site-data.js?v=20260823a";
 import { observeReveals, initNav } from "./reveal.js?v=20260823a";
-import { initContent } from "./site-content.js?v=20260823a";
 import { escapeHtml, previewHref } from "./site-config.js?v=20260823a";
 
-const grid = document.querySelector(".index-grid");
+/* Looked up on mount rather than at import: the module outlives any one copy
+   of the page now, so a reference captured here would point at DOM the router
+   has already replaced. */
+let grid = null;
 
 /**
  * The seven cards used to be seven blocks of hand-written HTML: a cover image,
@@ -65,12 +67,19 @@ async function loadCategories() {
   render();
 }
 
-initNav();
-observeReveals(document);
+export function mount() {
+  grid = document.querySelector(".index-grid");
+  initNav();
+  observeReveals(document);
+  render();
+  loadCategories().catch(err => console.warn("Gallery index falling back to static cards.", err));
+}
 
-initContent((config) => {
+export function unmount() {
+  grid = null;
+}
+
+export function onConfig(config) {
   latestConfig = config;
   render();
-});
-
-loadCategories().catch(err => console.warn("Gallery index falling back to static cards.", err));
+}

@@ -11,6 +11,7 @@ function build() {
   overlay.setAttribute("aria-modal", "true");
   overlay.setAttribute("aria-label", "Artwork viewer");
   overlay.hidden = true;
+  overlay.dataset.persist = "";
   overlay.innerHTML = `
     <button class="lb-close" type="button" aria-label="Close viewer">&times;</button>
     <button class="lb-arrow lb-prev" type="button" aria-label="Previous">&#10094;</button>

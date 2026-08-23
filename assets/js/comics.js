@@ -5,11 +5,15 @@ import {
 } from "./data.js?v=20260823a";
 import { DEFAULT_COMIC_CATEGORIES } from "./site-data.js?v=20260823a";
 import { observeReveals, initNav } from "./reveal.js?v=20260823a";
-import { initContent } from "./site-content.js?v=20260823a";
 
-const shelvesHost = document.getElementById("comic-shelves");
-const emptyHost = document.getElementById("comics-empty");
-const filterHost = document.getElementById("comic-filters");
+/* Resolved on mount: the router replaces this page's DOM without reloading
+   the document, so a reference captured at import would go stale. */
+let shelvesHost = null;
+let emptyHost = null;
+let filterHost = null;
+
+/** Firestore subscriptions belonging to this page, released when it leaves. */
+let pageSubscriptions = [];
 
 /**
  * The sample story that ships with the site.
@@ -437,7 +441,13 @@ function openFromHash() {
   if (story && (!reader.story || reader.story.id !== story.id)) openReader(story);
 }
 
-async function init() {
+export function mount() {
+  shelvesHost = document.getElementById("comic-shelves");
+  emptyHost = document.getElementById("comics-empty");
+  filterHost = document.getElementById("comic-filters");
+  pageSubscriptions = [];
+  activeFilter = "all";
+
   initNav();
   if (!shelvesHost) return;
 
@@ -450,28 +460,47 @@ async function init() {
     render();
   });
 
-  initContent(() => observeReveals(document));
+  ensureGuestAuth().catch(() => null).then(() => {
+    if (!shelvesHost) return;
+    pageSubscriptions.push(watchAuth((user) => { owner = isOwner(user); }));
+  });
 
-  await ensureGuestAuth().catch(() => null);
-  watchAuth((user) => { owner = isOwner(user); });
-
-  watchCategories("comics", (items, meta) => {
+  pageSubscriptions.push(watchCategories("comics", (items, meta) => {
     categories = items;
     // The genres being present is the signal that this database has been set
     // up, which is what retires the bundled sample story.
     genresSeeded = meta?.seeded === true;
     render();
     openFromHash();
-  });
+  }));
 
-  watchComics((items) => {
+  pageSubscriptions.push(watchComics((items) => {
     comics = items;
     render();
     openFromHash();
   }, () => {
     comics = [];
     render();
-  }, { publishedOnly: true });
+  }, { publishedOnly: true }));
 }
 
-init();
+export function unmount() {
+  // The reader is a full-screen overlay parked on <body>, outside the page
+  // content the router swaps — so leaving Comics with a story open would
+  // carry it onto the next page.
+  if (reader.el && !reader.el.hidden) closeReader(true);
+  reader.el?.remove();
+  reader.el = null;
+  reader.story = null;
+  document.body.style.overflow = "";
+
+  pageSubscriptions.forEach((stop) => { try { stop?.(); } catch { /* already gone */ } });
+  pageSubscriptions = [];
+  shelvesHost = null;
+  emptyHost = null;
+  filterHost = null;
+}
+
+export function onConfig() {
+  observeReveals(document);
+}

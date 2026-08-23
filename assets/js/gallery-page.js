@@ -7,15 +7,20 @@ import { isPreview } from "./site-config.js?v=20260823a";
 import { LOCAL_SEEDS, CATEGORY_BY_SLUG, currentCategorySlug } from "./site-data.js?v=20260823a";
 import { bindGallery } from "./lightbox.js?v=20260823a";
 import { observeReveals, initNav } from "./reveal.js?v=20260823a";
-import { initContent } from "./site-content.js?v=20260823a";
 
-const slug = currentCategorySlug();
-const grid = document.getElementById("gallery-grid");
-const emptyEl = document.getElementById("gallery-empty");
+/* Resolved on mount, not at import. One collection page can be replaced by
+   another without the document reloading, so none of this can be captured
+   once — the slug in particular changes underneath the module. */
+let slug = "";
+let grid = null;
+let emptyEl = null;
 
 /** artId -> { el, item, unsubscribers[] } — the live model the lightbox reads. */
-const cards = new Map();
+let cards = new Map();
 let owner = false;
+
+/** Everything this page has subscribed to, so leaving can release all of it. */
+let pageSubscriptions = [];
 
 function escapeHtml(str) {
   const d = document.createElement("div");
@@ -329,12 +334,17 @@ async function paintHeader() {
   if (blurbEl) blurbEl.textContent = meta?.blurb || "";
 }
 
-async function init() {
+export function mount() {
+  slug = currentCategorySlug();
+  grid = document.getElementById("gallery-grid");
+  emptyEl = document.getElementById("gallery-empty");
+  cards = new Map();
+  pageSubscriptions = [];
+
   initNav();
-  initContent();
   if (!grid) return;
 
-  await paintHeader();
+  paintHeader();
 
   localItems().forEach(item => addCard(item));
   updateEmptyState();
@@ -342,20 +352,39 @@ async function init() {
 
   bindGallery(grid, orderedItems);
 
-  await ensureGuestAuth().catch(() => null);
-  watchAuth((user) => {
-    const next = isOwner(user);
-    if (next === owner) return;
-    owner = next;
-    document.body.classList.toggle("is-owner", owner);
+  ensureGuestAuth().catch(() => null).then(() => {
+    if (!grid) return;   // left before auth resolved
+    pageSubscriptions.push(watchAuth((user) => {
+      const next = isOwner(user);
+      if (next === owner) return;
+      owner = next;
+      document.body.classList.toggle("is-owner", owner);
+    }));
   });
 
   // In preview the owner may also read drafts, so unpublished pieces show up
   // alongside the live ones — which is the point of previewing before
   // publishing an upload.
-  watchGalleryPieces(slug, sync, () => {
+  pageSubscriptions.push(watchGalleryPieces(slug, sync, () => {
     if (emptyEl) emptyEl.hidden = cards.size > 0;
-  }, { includeDrafts: isPreview() });
+  }, { includeDrafts: isPreview() }));
 }
 
-init();
+/**
+ * Every card holds two Firestore listeners of its own — a like counter and a
+ * comment thread — on top of the page's own subscriptions. Twenty pieces is
+ * forty listeners, and leaving them behind on each navigation would have the
+ * site quietly reading the database for every collection ever visited.
+ */
+export function unmount() {
+  cards.forEach((_, id) => removeCard(id));
+  cards.clear();
+  pageSubscriptions.forEach((stop) => { try { stop?.(); } catch { /* already gone */ } });
+  pageSubscriptions = [];
+  grid = null;
+  emptyEl = null;
+}
+
+export function onConfig() {
+  observeReveals(document);
+}

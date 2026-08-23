@@ -9,7 +9,8 @@
  */
 
 import {
-  initSiteConfig, paragraphs, escapeHtml, previewHref, isPreview, parseEmbed
+  initSiteConfig, paragraphs, escapeHtml, previewHref, isPreview, parseEmbed,
+  applyBindings, rewriteLinksForPreview
 } from "./site-config.js?v=20260823a";
 import { posterFromVideo, videoDeliveryUrl } from "./cloudinary.js?v=20260823a";
 import { renderAmbient } from "./ambient.js?v=20260823a";
@@ -30,6 +31,7 @@ function renderPreviewBanner(meta) {
     bar = document.createElement("div");
     bar.id = "preview-banner";
     bar.className = "preview-banner";
+    bar.dataset.persist = "";
     document.body.appendChild(bar);
     document.body.classList.add("is-previewing");
   }
@@ -258,15 +260,38 @@ export function renderAboutBlocks(config) {
  * renders the repeated content, then keeps doing it as the config changes.
  * The callback runs afterwards so a page can do its own extra work.
  */
+let latest = null;
+let pageHook = null;
+
+function paint(config, meta) {
+  latest = config;
+  renderPreviewBanner(meta);
+  renderBranding(config);
+  renderHeroStats(config);
+  renderArtistCopy(config);
+  renderStory(config);
+  renderAboutBlocks(config);
+  renderAmbient(config);
+}
+
 export function initContent(onConfig) {
+  pageHook = onConfig;
   return initSiteConfig((config, meta) => {
-    renderPreviewBanner(meta);
-    renderBranding(config);
-    renderHeroStats(config);
-    renderArtistCopy(config);
-    renderStory(config);
-    renderAboutBlocks(config);
-    renderAmbient(config);
-    onConfig?.(config, meta);
+    paint(config, meta);
+    pageHook?.(config, meta);
   });
+}
+
+/**
+ * Re-applies the config to freshly swapped DOM.
+ *
+ * After the router replaces the body there is a new nav to brand, new bound
+ * fields to fill and a new story section to build — but the same config, and
+ * the same subscription. Repainting is not re-subscribing.
+ */
+export function repaintContent() {
+  if (!latest) return;
+  applyBindings(latest);
+  rewriteLinksForPreview();
+  paint(latest, { source: "navigation" });
 }

@@ -27,8 +27,22 @@ const STATE_KEY = "alafi_sound_state";
 const TITLE_MS = 6000;
 
 const store = {
-  wanted() {
-    try { return localStorage.getItem(PREF_KEY) === "on"; } catch { return false; }
+  /**
+   * Whether music should be playing.
+   *
+   * With autoplay on, the default is yes and the visitor's job is to turn it
+   * off; with it off, the default is no. Either way an explicit choice always
+   * wins and is remembered, so nobody is asked twice.
+   */
+  wanted(defaultOn) {
+    try {
+      const saved = localStorage.getItem(PREF_KEY);
+      if (saved === "on") return true;
+      if (saved === "off") return false;
+      return !!defaultOn;
+    } catch {
+      return !!defaultOn;
+    }
   },
   setWanted(on) {
     try { localStorage.setItem(PREF_KEY, on ? "on" : "off"); } catch { /* private mode */ }
@@ -129,11 +143,22 @@ function makePlayer() {
   el.preload = "none";
   el.volume = 0;
   el.crossOrigin = "anonymous";
+
   el.addEventListener("error", () => {
     // One bad file should not take the whole playlist down: step past it.
     if (playlist.length > 1) advance();
     else markUnavailable();
   });
+
+  // The safety net. The handover normally happens before a track finishes, so
+  // the two overlap; if it is ever missed — a stall, a seek, a tab that was
+  // asleep — reaching the end must still start the next one rather than
+  // leaving silence. Something always follows.
+  el.addEventListener("ended", () => {
+    if (el !== players[active] || el.loop) return;
+    advance();
+  });
+
   return el;
 }
 
@@ -342,6 +367,7 @@ function buildButton() {
   const el = document.createElement("button");
   el.type = "button";
   el.className = "ambient";
+  el.dataset.persist = "";
   el.innerHTML = `${SPEAKER}<span class="ambient-label">Music</span>`;
 
   el.addEventListener("click", async () => {
@@ -389,11 +415,19 @@ export function renderAmbient(config) {
   settings = {
     volume: Number(sound.volume) || 30,
     crossfade: Number(sound.crossfade) || 0,
-    shuffle: sound.shuffle !== false
+    shuffle: sound.shuffle !== false,
+    autoplay: sound.autoplay === true
   };
 
   document.body.classList.add("has-ambient");
-  if (!button) button = buildButton();
+  // The control belongs to the visit, not to the page: the router keeps
+  // anything marked persistent when it swaps the body underneath it, which is
+  // how the music survives a link click.
+  if (!button || !button.isConnected) {
+    button?.remove();
+    button = buildButton();
+    paint(players[active] ? !players[active].paused : false);
+  }
 
   const nextSignature = tracks.map(t => t.url).join("|");
   if (nextSignature !== signature) {
@@ -410,7 +444,41 @@ export function renderAmbient(config) {
     ramp(players[active], targetVolume(), 300);
   }
 
-  if (store.wanted() && (!players[active] || players[active].paused)) begin();
+  if (store.wanted(settings.autoplay) && (!players[active] || players[active].paused)) {
+    begin().then((ok) => { if (!ok) armFirstGesture(); });
+  }
+}
+
+/**
+ * Autoplay, as far as a browser will allow it.
+ *
+ * No browser will start audible sound before the visitor has interacted with
+ * the page — that is not a setting anyone can turn off, it is the rule. So
+ * when the attempt is refused we wait for the very first tap, click or key
+ * press and start then. In practice that is the first thing they do, and
+ * because the site no longer reloads between pages it only has to happen once
+ * for the whole visit.
+ */
+let gestureArmed = false;
+
+function armFirstGesture() {
+  if (gestureArmed) return;
+  gestureArmed = true;
+
+  const go = async () => {
+    if (!store.wanted(settings.autoplay)) { disarm(); return; }
+    const ok = await begin();
+    if (ok) disarm();
+  };
+
+  const disarm = () => {
+    gestureArmed = false;
+    ["pointerdown", "keydown", "touchstart"].forEach(type =>
+      window.removeEventListener(type, go, true));
+  };
+
+  ["pointerdown", "keydown", "touchstart"].forEach(type =>
+    window.addEventListener(type, go, { capture: true, passive: true }));
 }
 
 window.addEventListener("pagehide", () => {

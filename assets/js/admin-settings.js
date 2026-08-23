@@ -270,6 +270,10 @@ const TABS = [
       {
         title: "How it plays",
         fields: [
+          {
+            type: "toggle", path: "sound.autoplay", label: "Start playing on its own",
+            note: "Visitors arrive with the music already on and turn it off if they would rather not — rather than arriving in silence and having to find the button. No browser will make sound before someone has touched the page, so where that applies it starts at their first tap or click instead. Because the site no longer reloads between pages, that happens once for the whole visit."
+          },
           { type: "number", path: "sound.volume", label: "Volume", min: 5, max: 80, step: 5, suffix: "%", note: "Background music should sit under the room, not in front of it. Around 30 is right for most tracks — press play on one above to judge it by ear." },
           { type: "number", path: "sound.crossfade", label: "Overlap between tracks", min: 0, max: 12, step: 1, suffix: "s", note: "One piece begins underneath the last and they pass through each other, so there is never a gap or an abrupt cut. Zero switches straight over." },
           { type: "toggle", path: "sound.shuffle", label: "Play in a random order", note: "On, so two visitors are unlikely to hear the same opening — and neither will the same person coming back." }

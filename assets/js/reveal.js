@@ -57,7 +57,17 @@ export function sectionProgress(el, vh) {
   return Math.min(1, Math.max(0, (vh - rect.top) / span));
 }
 
+/**
+ * The scroll listener is registered on `window`, which outlives the nav
+ * element it is watching. Navigating without dropping it left one behind on
+ * every page change, each pointing at a nav that no longer exists.
+ */
+let detachNav = null;
+
 export function initNav() {
+  detachNav?.();
+  detachNav = null;
+
   const nav = document.querySelector(".site-nav");
   if (!nav) return;
   const toggle = nav.querySelector(".nav-toggle");
@@ -65,6 +75,7 @@ export function initNav() {
 
   const sync = () => nav.classList.toggle("is-stuck", window.scrollY > 40);
   window.addEventListener("scroll", sync, { passive: true });
+  detachNav = () => window.removeEventListener("scroll", sync);
   sync();
 
   if (toggle && links) {

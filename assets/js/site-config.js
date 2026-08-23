@@ -224,7 +224,11 @@ export const DEFAULT_CONFIG = {
     tracks: [],
     shuffle: true,
     crossfade: 6,
-    volume: 30
+    volume: 30,
+    // Starts by itself where the browser permits it, and at the visitor's
+    // first tap where it does not. Either way the control is right there to
+    // turn it off, and that choice is remembered.
+    autoplay: false
   },
 
   backgrounds: {
