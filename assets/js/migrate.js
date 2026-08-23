@@ -294,6 +294,21 @@ const STEPS = [
   planMediaBackfill
 ];
 
+/**
+ * Just the archive seeding, run on its own.
+ *
+ * Offered from the collections panel, where the owner actually notices the
+ * pieces cannot be deleted. Reaching it only through a step called "schema
+ * migration" under Maintenance meant that in practice nobody ran it, and the
+ * bundled pieces — most of the gallery — stayed unmanageable.
+ */
+export async function seedArchiveRecords() {
+  const plan = await planArchiveSeed();
+  if (plan.writes.length) await commitInChunks(plan.writes);
+  await logChange("archive.seed", "collections", `${plan.writes.length} records written`);
+  return plan.writes.length;
+}
+
 /** Reports exactly what would change, without writing anything. */
 export async function dryRun() {
   const plans = [];

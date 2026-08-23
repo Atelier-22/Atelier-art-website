@@ -210,6 +210,18 @@ export const DEFAULT_CONFIG = {
     autoQuality: false
   },
 
+  /**
+   * Background music. Even with a track loaded it never plays until a visitor
+   * asks for it — see ambient.js. `enabled` only decides whether the control
+   * appears at all.
+   */
+  sound: {
+    enabled: false,
+    trackUrl: "",
+    title: "",
+    volume: 40
+  },
+
   backgrounds: {
     home: "2.jpg",
     gallery: "1.jpg",

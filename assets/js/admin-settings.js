@@ -18,7 +18,8 @@ import {
 } from "./site-config.js?v=20260823a";
 import {
   uploadAndRecord, watchMedia, inspectVideo, videoRejectionReason,
-  resourceTypeFor, MAX_VIDEO_BYTES, MAX_VIDEO_SECONDS
+  resourceTypeFor, isAudio, MAX_VIDEO_BYTES, MAX_VIDEO_SECONDS,
+  MAX_AUDIO_BYTES, MAX_AUDIO_SECONDS
 } from "./data.js?v=20260823a";
 import { posterFromVideo } from "./cloudinary.js?v=20260823a";
 import { LOCAL_SEEDS, CATEGORY_BY_SLUG } from "./site-data.js?v=20260823a";
@@ -32,6 +33,7 @@ const state = {
   draft: null,
   published: null,
   tab: "theme",
+  view: "overview",
   dirty: false,
   saveTimer: null,
   mounted: false,
@@ -230,8 +232,13 @@ const TABS = [
   {
     id: "gallery",
     label: "Gallery",
-    note: "The collections index. Names and descriptions come from Categories; the cover images are here.",
+    note: "This tab is the collections index page — its wording and the cover picture on each card. The artwork inside a collection is managed in Artworks.",
     groups: [
+      {
+        title: "The pictures inside each collection",
+        note: "Deleting, replacing and reordering the artwork itself happens in Artworks, where you can open a collection and work through it.",
+        fields: [{ type: "link", label: "Open a collection", view: "artworks", focus: "#collection-panel", cta: "Go to Artworks" }]
+      },
       {
         title: "Header",
         fields: [
@@ -240,7 +247,28 @@ const TABS = [
           { type: "textarea", path: "gallery.blurb", label: "Introduction", rows: 3 }
         ]
       },
-      { title: "Collection covers", fields: [{ type: "covers", path: "gallery.covers" }] }
+      {
+        title: "Collection covers",
+        note: "Only the one picture shown on each card of the collections index — not the artwork inside.",
+        fields: [{ type: "covers", path: "gallery.covers" }]
+      }
+    ]
+  },
+
+  {
+    id: "sound",
+    label: "Sound",
+    note: "A piece of music that a visitor can choose to have playing while they look around. It never starts on its own — browsers block audio nobody asked for, and a gallery that makes noise at you is one people close.",
+    groups: [
+      {
+        title: "Background music",
+        fields: [
+          { type: "toggle", path: "sound.enabled", label: "Offer music on the site", note: "Puts a small control in the corner of every page. Visitors decide whether to use it, and their choice is remembered as they move around." },
+          { type: "audio", path: "sound.trackUrl", label: "Track", note: "It loops, so a short piece works as well as a long one." },
+          { type: "text", path: "sound.title", label: "What to call it", note: "Shown beside the control while it is playing. A title, or the composer." },
+          { type: "number", path: "sound.volume", label: "Volume", min: 5, max: 100, step: 5, suffix: "%", note: "Background music should sit under the room, not in front of it. Around 40 is usually right." }
+        ]
+      }
     ]
   },
 
@@ -296,6 +324,7 @@ function bundledImageGroups() {
 }
 
 const seconds = (n) => `${Math.round(n)}s`;
+const minutes = (n) => `${Math.floor(n / 60)}:${String(Math.round(n % 60)).padStart(2, "0")}`;
 const megabytes = (n) => `${(n / 1048576).toFixed(1)} MB`;
 
 /**
@@ -321,6 +350,8 @@ function bandwidthNote(bytes) {
 export function pickMedia(current = "", { allow = ["image"] } = {}) {
   const wantsVideo = allow.includes("video");
   const wantsEmbed = allow.includes("embed");
+  const wantsAudio = allow.includes("audio");
+  const audioOnly = wantsAudio && !wantsVideo && !allow.includes("image");
 
   return new Promise((resolve) => {
     let settled = false;
@@ -332,10 +363,16 @@ export function pickMedia(current = "", { allow = ["image"] } = {}) {
     };
 
     const groups = bundledImageGroups();
-    const accept = wantsVideo ? "image/*,video/*" : "image/*";
+    const accept = audioOnly ? "audio/*" : wantsVideo ? "image/*,video/*" : "image/*";
+
+    const dropHint = audioOnly
+      ? `An mp3 or m4a, up to ${MAX_AUDIO_BYTES / 1048576} MB and ${MAX_AUDIO_SECONDS / 60} minutes`
+      : wantsVideo
+        ? `Images, or video up to ${MAX_VIDEO_BYTES / 1048576} MB and ${MAX_VIDEO_SECONDS} seconds`
+        : "Uploaded to Cloudinary and added to your library";
 
     modal({
-      title: wantsVideo ? "Choose an image or video" : "Choose an image",
+      title: audioOnly ? "Choose a track" : wantsVideo ? "Choose an image or video" : "Choose an image",
       wide: true,
       hideConfirm: true,
       body: `
@@ -343,7 +380,7 @@ export function pickMedia(current = "", { allow = ["image"] } = {}) {
           <div class="picker-tabs">
             <button type="button" class="is-active" data-ptab="upload">Upload</button>
             <button type="button" data-ptab="library">Library</button>
-            <button type="button" data-ptab="bundled">Site images</button>
+            ${audioOnly ? "" : '<button type="button" data-ptab="bundled">Site images</button>'}
             ${wantsEmbed ? '<button type="button" data-ptab="embed">YouTube / Vimeo</button>' : ""}
             <button type="button" data-ptab="url">Address</button>
           </div>
@@ -351,9 +388,7 @@ export function pickMedia(current = "", { allow = ["image"] } = {}) {
           <div class="picker-pane is-active" data-pane="upload">
             <div class="dropzone" data-pick-drop>
               <strong>Drop a file here, or click to choose</strong>
-              <span>${wantsVideo
-                ? `Images, or video up to ${MAX_VIDEO_BYTES / 1048576} MB and ${MAX_VIDEO_SECONDS} seconds`
-                : "Uploaded to Cloudinary and added to your library"}</span>
+              <span>${dropHint}</span>
               <input type="file" accept="${accept}" data-pick-input>
             </div>
             <div class="progress" data-pick-progress hidden><span></span></div>
@@ -364,6 +399,7 @@ export function pickMedia(current = "", { allow = ["image"] } = {}) {
             <div class="picker-grid" data-pick-library><p class="empty-note">Loading…</p></div>
           </div>
 
+          ${audioOnly ? "" : `
           <div class="picker-pane" data-pane="bundled">
             <div class="toolbar">
               <select data-pick-group>
@@ -371,7 +407,7 @@ export function pickMedia(current = "", { allow = ["image"] } = {}) {
               </select>
             </div>
             <div class="picker-grid" data-pick-bundled></div>
-          </div>
+          </div>`}
 
           ${wantsEmbed ? `
             <div class="picker-pane" data-pane="embed">
@@ -414,21 +450,32 @@ export function pickMedia(current = "", { allow = ["image"] } = {}) {
 
         const upload = async (file) => {
           if (!file) return;
-          const isVideo = resourceTypeFor(file) === "video";
+          const audioFile = isAudio(file);
+          const timeBased = resourceTypeFor(file) === "video";
 
-          if (isVideo && !wantsVideo) {
+          if (audioFile && !wantsAudio) {
+            status.textContent = "This field does not take audio. Background music is set under Sound.";
+            return;
+          }
+          if (timeBased && !audioFile && !wantsVideo) {
             status.textContent = "This field takes an image. Video can be used in the Story section.";
+            return;
+          }
+          if (!timeBased && wantsAudio && !wantsVideo) {
+            status.textContent = "This field takes an audio file — an mp3 or m4a.";
             return;
           }
 
           // Measured before a byte leaves the machine: checking afterwards
           // would mean spending the upload to find out it was too long.
-          if (isVideo) {
+          if (timeBased) {
             try {
               const info = await inspectVideo(file);
-              const reason = videoRejectionReason(info);
+              const reason = videoRejectionReason(info, audioFile ? "audio" : "video");
               if (reason) { status.textContent = reason; return; }
-              status.textContent = `${seconds(info.duration)}, ${info.width}×${info.height} — ${bandwidthNote(info.bytes)}`;
+              status.textContent = audioFile
+                ? `${minutes(info.duration)} — ${bandwidthNote(info.bytes)}`
+                : `${seconds(info.duration)}, ${info.width}×${info.height} — ${bandwidthNote(info.bytes)}`;
             } catch (err) {
               status.textContent = err.message;
               return;
@@ -439,7 +486,7 @@ export function pickMedia(current = "", { allow = ["image"] } = {}) {
           const label = status.textContent;
           try {
             const asset = await uploadAndRecord(file, {
-              usedFor: isVideo ? "story-video" : "site",
+              usedFor: audioFile ? "music" : timeBased ? "story-video" : "site",
               onProgress: (p) => {
                 bar.firstElementChild.style.width = `${p * 100}%`;
                 status.textContent = `Uploading ${file.name}… ${Math.round(p * 100)}%`;
@@ -447,8 +494,8 @@ export function pickMedia(current = "", { allow = ["image"] } = {}) {
             });
             finish({
               url: asset.url,
-              type: asset.resourceType === "video" ? "video" : "image",
-              poster: asset.resourceType === "video" ? posterFromVideo(asset.url) : "",
+              type: audioFile ? "audio" : asset.resourceType === "video" ? "video" : "image",
+              poster: !audioFile && asset.resourceType === "video" ? posterFromVideo(asset.url) : "",
               bytes: asset.bytes,
               duration: asset.duration
             }, close);
@@ -468,42 +515,55 @@ export function pickMedia(current = "", { allow = ["image"] } = {}) {
           drop.addEventListener(ev, e => { e.preventDefault(); drop.classList.remove("is-dragging"); }));
         drop.addEventListener("drop", e => upload(e.dataTransfer.files[0]));
 
-        /* Library */
+        /* Library. Cloudinary serves audio through its video pipeline, so a
+           track and a clip share a resource type; what they were uploaded for
+           is the only thing that tells them apart. */
+        const kindOf = (m) => (m.usedFor === "music" ? "audio" : m.type === "video" ? "video" : "image");
         const libraryHost = $("[data-pick-library]", overlay);
-        const usable = state.media.filter(m => (m.type === "video" ? wantsVideo : true));
+        const usable = state.media.filter((m) => {
+          const kind = kindOf(m);
+          if (kind === "audio") return wantsAudio;
+          if (kind === "video") return wantsVideo;
+          return !audioOnly;
+        });
+
         libraryHost.innerHTML = usable.length
-          ? usable.map(m => {
-              const isVideo = m.type === "video";
-              const thumb = isVideo ? posterFromVideo(m.url) : m.url;
+          ? usable.map((m) => {
+              const kind = kindOf(m);
+              const thumb = kind === "video" ? posterFromVideo(m.url) : kind === "image" ? m.url : "";
               return `
                 <button type="button" class="picker-item${m.url === current ? " is-current" : ""}"
-                        data-url="${escapeHtml(m.url)}" data-type="${isVideo ? "video" : "image"}">
-                  <img src="${escapeHtml(thumb)}" alt="" loading="lazy">
-                  ${isVideo ? '<span class="picker-badge">Video</span>' : ""}
+                        data-url="${escapeHtml(m.url)}" data-type="${kind}">
+                  ${thumb
+                    ? `<img src="${escapeHtml(thumb)}" alt="" loading="lazy">`
+                    : '<span class="picker-audio">&#9834;</span>'}
+                  ${kind === "image" ? "" : `<span class="picker-badge">${kind === "audio" ? "Track" : "Video"}</span>`}
                   <span>${escapeHtml(m.filename || m.publicId || "")}</span>
                 </button>`;
             }).join("")
-          : '<p class="empty-note">Nothing uploaded yet. Use the Upload tab.</p>';
+          : `<p class="empty-note">Nothing ${audioOnly ? "here yet" : "uploaded yet"}. Use the Upload tab.</p>`;
 
         /* Bundled */
         const bundledHost = $("[data-pick-bundled]", overlay);
         const groupSelect = $("[data-pick-group]", overlay);
-        const paintBundled = () => {
-          const group = groups[Number(groupSelect.value)] || groups[0];
-          bundledHost.innerHTML = group.items.map(src => `
-            <button type="button" class="picker-item${src === current ? " is-current" : ""}"
-                    data-url="${escapeHtml(src)}" data-type="image">
-              <img src="${escapeHtml(src)}" alt="" loading="lazy">
-              <span>${escapeHtml(src.split("/").pop())}</span>
-            </button>`).join("");
-        };
-        groupSelect.addEventListener("change", paintBundled);
-        paintBundled();
+        if (bundledHost && groupSelect) {
+          const paintBundled = () => {
+            const group = groups[Number(groupSelect.value)] || groups[0];
+            bundledHost.innerHTML = group.items.map(src => `
+              <button type="button" class="picker-item${src === current ? " is-current" : ""}"
+                      data-url="${escapeHtml(src)}" data-type="image">
+                <img src="${escapeHtml(src)}" alt="" loading="lazy">
+                <span>${escapeHtml(src.split("/").pop())}</span>
+              </button>`).join("");
+          };
+          groupSelect.addEventListener("change", paintBundled);
+          paintBundled();
+        }
 
         overlay.addEventListener("click", (e) => {
           const item = e.target.closest(".picker-item");
           if (!item) return;
-          const type = item.dataset.type === "video" ? "video" : "image";
+          const type = item.dataset.type || "image";
           finish({
             url: item.dataset.url,
             type,
@@ -586,7 +646,8 @@ function fieldShell(label, note, control, extraClass = "") {
  * rather than on something inside it or it does nothing at all.
  */
 const FULL_WIDTH_FIELDS = new Set([
-  "images", "list", "blocks", "covers", "contrast", "swatches", "typepreview", "media"
+  "images", "list", "blocks", "covers", "contrast", "swatches", "typepreview",
+  "media", "link", "audio"
 ]);
 
 function renderField(field) {
@@ -704,6 +765,10 @@ function renderField(field) {
       el.appendChild(mediaField(field));
       break;
 
+    case "audio":
+      el.appendChild(audioField(field, value));
+      break;
+
     case "images":
       el.appendChild(imageListField(field));
       break;
@@ -718,6 +783,16 @@ function renderField(field) {
 
     case "covers":
       el.appendChild(coversField(field));
+      break;
+
+    // A signpost, not a setting. Settings is where people look for everything,
+    // so where the answer lives elsewhere it has to say so and take them there.
+    case "link":
+      el.innerHTML = `
+        <button type="button" class="btn is-primary" data-goto-view="${escapeHtml(field.view)}"
+                ${field.focus ? `data-goto-focus="${escapeHtml(field.focus)}"` : ""}>
+          ${escapeHtml(field.cta || field.label)} &#8594;
+        </button>`;
       break;
 
     case "contrast":
@@ -874,6 +949,57 @@ function mediaField(field) {
   });
 
   $("[data-clear]", el).addEventListener("click", () => write("", "", ""));
+
+  paint();
+  return el;
+}
+
+/**
+ * The music field, with the track playable right here. Choosing background
+ * music without hearing it in the room it will play in is guesswork, so the
+ * panel gives you the actual file at the actual volume.
+ */
+function audioField(field, value) {
+  const el = document.createElement("div");
+  el.className = "setting is-full";
+  el.innerHTML = `
+    <label class="setting-label">${escapeHtml(field.label)}</label>
+    <div class="setting-control">
+      <div class="audio-field">
+        <div class="audio-actions">
+          <button class="btn is-small" type="button" data-choose></button>
+          <button class="btn is-small is-danger" type="button" data-clear>Remove</button>
+        </div>
+        <audio data-audio controls preload="none"></audio>
+        <code class="image-path" data-path></code>
+      </div>
+    </div>
+    ${field.note ? `<p class="setting-note">${escapeHtml(field.note)}</p>` : ""}`;
+
+  const paint = () => {
+    const url = get(state.draft, field.path) || "";
+    const player = $("[data-audio]", el);
+    player.hidden = !url;
+    if (url && player.getAttribute("src") !== url) player.src = url;
+    player.volume = Math.min(1, Math.max(0, (Number(get(state.draft, "sound.volume")) || 40) / 100));
+    $("[data-choose]", el).textContent = url ? "Replace track" : "Choose a track";
+    $("[data-clear]", el).hidden = !url;
+    $("[data-path]", el).textContent = url;
+  };
+
+  $("[data-choose]", el).addEventListener("click", async () => {
+    const choice = await pickMedia(get(state.draft, field.path) || "", { allow: ["audio"] });
+    if (choice === null) return;
+    set(state.draft, field.path, choice.url);
+    paint();
+    markDirty();
+  });
+
+  $("[data-clear]", el).addEventListener("click", () => {
+    set(state.draft, field.path, "");
+    paint();
+    markDirty();
+  });
 
   paint();
   return el;
@@ -1231,27 +1357,51 @@ function unpublishedCount() {
   return count;
 }
 
+/** Views that show the publish bar even when there is nothing pending. */
+const DRAFT_VIEWS = new Set(["settings", "preview"]);
+
+export function setActiveView(view) {
+  state.view = view;
+  renderStatus();
+}
+
+/**
+ * The publish bar.
+ *
+ * It used to appear only on Settings and Preview, which quietly cost the owner
+ * a whole story: he wrote one, moved to another screen, and nothing anywhere
+ * said it was still sitting in the draft. Unpublished work is a property of
+ * the site, not of the screen you happen to be looking at, so once there is
+ * any, the bar follows you everywhere and says so in plain words.
+ */
 function renderStatus() {
   const host = $("#settings-status");
-  if (!host) return;
+  if (!host || !state.draft) return;
 
   const pending = unpublishedCount();
   const blocked = hasBlockingContrastFailure(state.draft.theme);
+  const waiting = pending > 0 || state.dirty;
 
   host.textContent = state.dirty
     ? "Saving…"
     : pending
-      ? `${pending} unpublished change${pending === 1 ? "" : "s"}`
+      ? `${pending} change${pending === 1 ? "" : "s"} not live yet — press Publish`
       : "Everything is published";
   host.className = `settings-status${pending ? " is-pending" : " is-clean"}`;
 
+  const bar = $("#publish-bar");
+  if (bar) {
+    bar.hidden = !waiting && !DRAFT_VIEWS.has(state.view);
+    bar.classList.toggle("is-pending", pending > 0);
+  }
+
   const publish = $("#settings-publish");
   if (publish) {
-    publish.disabled = blocked || (!pending && !state.dirty);
+    publish.disabled = blocked || !waiting;
     publish.title = blocked ? "Fix the readability warnings first." : "";
   }
   const discard = $("#settings-discard");
-  if (discard) discard.disabled = !pending && !state.dirty;
+  if (discard) discard.disabled = !waiting;
 }
 
 /* ------------------------------------------------------------------ */

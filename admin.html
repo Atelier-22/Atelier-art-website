@@ -152,36 +152,32 @@
         <p class="status-line" id="art-status"></p>
       </div>
 
-      <div class="panel">
-        <h2>Manage artworks</h2>
-        <p class="panel-sub">Everything published to the gallery. <span id="artwork-count"></span></p>
+      <!-- One place to open a collection and work through it. The uploads and
+           the pieces that shipped with the site used to be two separate
+           panels, which meant no screen ever answered "what is actually in
+           Paintings?" -->
+      <div class="panel" id="collection-panel">
+        <h2>Open a collection</h2>
+        <p class="panel-sub">Everything inside it, in the order visitors see it. Rename a piece, swap its picture, move it, take it off the site, or delete it.</p>
 
-        <div class="toolbar">
-          <div class="grow"><input type="search" id="artwork-search" placeholder="Search by title"></div>
-          <select id="artwork-filter"></select>
-        </div>
-
-        <div class="manage-grid" id="artwork-grid"></div>
-      </div>
-
-      <div class="panel">
-        <h2>The pieces that came with the site</h2>
-        <p class="panel-sub">Name them, replace the picture, reorder them, hide one, or delete it &mdash; the same control you have over anything you upload yourself.</p>
+        <div class="collection-chips" id="collection-chips"></div>
 
         <div class="alert is-warn" id="archive-notice" hidden>
-          These pieces don&rsquo;t have records yet, so for now you can only give them titles.
-          Run the migration under <b>Maintenance</b> and every one of them becomes fully manageable.
+          <b>The pieces that came with the site aren&rsquo;t set up yet.</b>
+          Until they are, you can give them titles but not replace or remove them.
+          <button class="btn is-small is-primary" id="archive-setup" style="margin-left:10px">Set them up now</button>
+          <span class="status-line" id="archive-setup-status" style="margin:6px 0 0"></span>
         </div>
 
         <div class="toolbar">
-          <select id="archive-filter"></select>
-          <div class="grow"><input type="search" id="archive-search" placeholder="Search titles"></div>
-          <span class="status-line" id="archive-count" style="margin:0"></span>
-          <button class="btn is-small" id="archive-migrate" hidden>Move this collection to Cloudinary</button>
+          <div class="grow"><input type="search" id="collection-search" placeholder="Search titles in this collection"></div>
+          <span class="status-line" id="collection-count" style="margin:0"></span>
+          <a class="btn is-small" id="collection-view" target="_blank" rel="noopener">View on the site &#8599;</a>
+          <button class="btn is-small" id="archive-migrate" hidden>Move to Cloudinary</button>
         </div>
         <p class="status-line" id="archive-migrate-status"></p>
 
-        <div class="manage-grid" id="archive-grid"></div>
+        <div class="manage-grid" id="collection-grid"></div>
       </div>
     </section>
 

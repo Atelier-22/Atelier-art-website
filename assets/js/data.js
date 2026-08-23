@@ -41,9 +41,27 @@ export function artworkId(categorySlug, titleOrFilename) {
 export const MAX_VIDEO_BYTES = 100 * 1024 * 1024;
 export const MAX_VIDEO_SECONDS = 90;
 
-/** Cloudinary keeps images, video and raw files on separate endpoints. */
+/**
+ * A background track is longer than a reel but far lighter per second, so it
+ * gets its own budget: ten minutes and ten megabytes, which comfortably fits
+ * a loop at a decent bitrate without any one visitor costing much.
+ */
+export const MAX_AUDIO_BYTES = 10 * 1024 * 1024;
+export const MAX_AUDIO_SECONDS = 600;
+
+/**
+ * Cloudinary keeps images, video and raw files on separate endpoints — and
+ * audio is served by the video pipeline, not a third one, so an mp3 uploads
+ * as resource type "video". Getting that wrong is a 400 with no useful
+ * explanation attached.
+ */
 export function resourceTypeFor(file) {
-  return (file?.type || "").startsWith("video/") ? "video" : "image";
+  const type = file?.type || "";
+  return type.startsWith("video/") || type.startsWith("audio/") ? "video" : "image";
+}
+
+export function isAudio(file) {
+  return (file?.type || "").startsWith("audio/");
 }
 
 export function uploadAsset(file, { resourceType, onProgress } = {}) {
@@ -116,9 +134,10 @@ export async function uploadAndRecord(file, { usedFor = "artwork", onProgress } 
 }
 
 /**
- * Reads a video's duration and dimensions in the browser, before a byte is
+ * Reads a clip's duration and dimensions in the browser, before a byte is
  * uploaded. Checking after the upload would mean spending the bandwidth to
- * discover the clip was too long to keep.
+ * discover it was too long to keep. Works for audio too — a <video> element
+ * reads an mp3's metadata perfectly well and reports no dimensions.
  */
 export function inspectVideo(file) {
   return new Promise((resolve, reject) => {
@@ -144,13 +163,21 @@ export function inspectVideo(file) {
   });
 }
 
-/** Human-readable reason a video cannot be used, or null when it is fine. */
-export function videoRejectionReason({ bytes, duration }) {
-  if (bytes > MAX_VIDEO_BYTES) {
-    return `That file is ${(bytes / 1048576).toFixed(0)} MB. Cloudinary's plan accepts up to ${MAX_VIDEO_BYTES / 1048576} MB — export it smaller, or use a YouTube or Vimeo link instead.`;
+/** Human-readable reason a clip cannot be used, or null when it is fine. */
+export function videoRejectionReason({ bytes, duration }, kind = "video") {
+  const audio = kind === "audio";
+  const maxBytes = audio ? MAX_AUDIO_BYTES : MAX_VIDEO_BYTES;
+  const maxSeconds = audio ? MAX_AUDIO_SECONDS : MAX_VIDEO_SECONDS;
+
+  if (bytes > maxBytes) {
+    return audio
+      ? `That file is ${(bytes / 1048576).toFixed(1)} MB. Keep a background track under ${maxBytes / 1048576} MB — every listener downloads all of it, so export it at a lower bitrate.`
+      : `That file is ${(bytes / 1048576).toFixed(0)} MB. Cloudinary's plan accepts up to ${maxBytes / 1048576} MB — export it smaller, or use a YouTube or Vimeo link instead.`;
   }
-  if (duration > MAX_VIDEO_SECONDS) {
-    return `That clip is ${Math.round(duration)} seconds. Anything over ${MAX_VIDEO_SECONDS} costs more monthly bandwidth than this site has to spend — trim it, or use a YouTube or Vimeo link instead.`;
+  if (duration > maxSeconds) {
+    return audio
+      ? `That track is ${Math.round(duration / 60)} minutes. Keep it under ${maxSeconds / 60} — it loops, so a short piece works as well as a long one and costs a fraction as much.`
+      : `That clip is ${Math.round(duration)} seconds. Anything over ${maxSeconds} costs more monthly bandwidth than this site has to spend — trim it, or use a YouTube or Vimeo link instead.`;
   }
   return null;
 }

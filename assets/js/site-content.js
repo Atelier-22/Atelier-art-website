@@ -12,6 +12,7 @@ import {
   initSiteConfig, paragraphs, escapeHtml, previewHref, isPreview, parseEmbed
 } from "./site-config.js?v=20260823a";
 import { posterFromVideo, videoDeliveryUrl } from "./cloudinary.js?v=20260823a";
+import { renderAmbient } from "./ambient.js?v=20260823a";
 
 /* ------------------------------------------------------------------ */
 /*  Preview banner                                                     */
@@ -265,6 +266,7 @@ export function initContent(onConfig) {
     renderArtistCopy(config);
     renderStory(config);
     renderAboutBlocks(config);
+    renderAmbient(config);
     onConfig?.(config, meta);
   });
 }

@@ -612,3 +612,71 @@
 /* A poster frame is landscape where a still is usually not, so the media
    thumbnail is wider than the square one an image field uses. */
 .image-thumb.is-media { width: 150px; height: 92px; }
+
+/* ---- Collection chips ----
+   Picking a collection is the first move on the Artworks screen, so it is a
+   row of real targets rather than a dropdown: you can see how many pieces are
+   in each and how many are hidden without opening anything. */
+.collection-chips {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 6px;
+  margin: 0 0 18px;
+}
+
+.collection-chip {
+  display: inline-flex;
+  align-items: center;
+  gap: 8px;
+  background: var(--control);
+  border: 1px solid var(--edge);
+  border-radius: 999px;
+  padding: 8px 15px;
+  font-family: inherit;
+  font-size: 0.82rem;
+  color: var(--fg-dim);
+  cursor: pointer;
+  transition: background 0.2s var(--ease), color 0.2s var(--ease), border-color 0.2s var(--ease);
+}
+
+.collection-chip:hover { background: var(--control-hover); color: var(--fg); }
+
+.collection-chip.is-active {
+  background: var(--gold-fill);
+  border-color: var(--gold);
+  color: var(--on-gold);
+}
+
+.collection-chip i {
+  font-style: normal;
+  font-size: 0.7rem;
+  font-variant-numeric: tabular-nums;
+  opacity: 0.72;
+}
+
+/* ---- Publish bar, when something is waiting ----
+   A grey line saying "2 unpublished changes" was quiet enough to write a whole
+   story past. When work is pending the bar is the accent colour and says so in
+   words, and it follows you onto every screen. */
+.publish-bar.is-pending {
+  background: var(--gold-soft);
+  border-color: var(--gold);
+}
+
+.publish-bar.is-pending .settings-status { color: var(--gold); font-weight: 500; }
+
+/* ---- Music field ----
+   The track is playable in the panel, because choosing background music
+   without hearing it is guesswork. */
+.audio-field { display: grid; gap: 12px; }
+.audio-actions { display: flex; gap: 8px; flex-wrap: wrap; }
+.audio-field audio { width: 100%; max-width: 460px; }
+
+.picker-audio {
+  display: grid;
+  place-items: center;
+  aspect-ratio: 4 / 3;
+  font-size: 1.6rem;
+  color: var(--fg-faint);
+  background: var(--bg-sunken);
+}

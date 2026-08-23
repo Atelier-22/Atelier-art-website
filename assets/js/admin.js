@@ -13,7 +13,9 @@ import { categoryHref, LOCAL_SEEDS, CATEGORY_BY_SLUG } from "./site-data.js?v=20
 import {
   $, $$, escapeHtml, relativeTime, toast, modal, confirmDelete
 } from "./admin-ui.js?v=20260823a";
-import { initSettings, setSettingsCategories, pickImage } from "./admin-settings.js?v=20260823a";
+import {
+  initSettings, setSettingsCategories, pickImage, setActiveView
+} from "./admin-settings.js?v=20260823a";
 import { initPreview, setPreviewCategories, onPreviewShown } from "./admin-preview.js?v=20260823a";
 
 const state = {
@@ -23,10 +25,8 @@ const state = {
   comics: [],
   comments: [],
   view: "overview",
-  artFilter: "all",
-  artSearch: "",
-  archiveFilter: "",
-  archiveSearch: "",
+  collection: "",
+  collectionSearch: "",
   comicFilter: "all",
   ready: false
 };
@@ -70,20 +70,32 @@ watchAuth((user) => {
 /*  Navigation                                                         */
 /* ------------------------------------------------------------------ */
 
-/** Views where an unpublished draft is the thing being worked on. */
-const DRAFT_VIEWS = new Set(["settings", "preview"]);
+function showView(view) {
+  state.view = view;
+  const btn = $(`.admin-menu button[data-view="${view}"]`);
+  $$(".admin-menu button").forEach(b => b.classList.toggle("is-active", b === btn));
+  $$(".admin-view").forEach(v => v.classList.toggle("is-active", v.id === `view-${view}`));
+  $("#view-title").textContent = btn.dataset.title;
+  $("#view-sub").textContent = btn.dataset.sub;
+  // The publish bar decides its own visibility: it follows unpublished work
+  // around rather than living on two screens.
+  setActiveView(view);
+  if (view === "preview") onPreviewShown();
+  window.scrollTo({ top: 0, behavior: "smooth" });
+}
 
 $$(".admin-menu button").forEach((btn) => {
-  btn.addEventListener("click", () => {
-    state.view = btn.dataset.view;
-    $$(".admin-menu button").forEach(b => b.classList.toggle("is-active", b === btn));
-    $$(".admin-view").forEach(v => v.classList.toggle("is-active", v.id === `view-${state.view}`));
-    $("#view-title").textContent = btn.dataset.title;
-    $("#view-sub").textContent = btn.dataset.sub;
-    $("#publish-bar").hidden = !DRAFT_VIEWS.has(state.view);
-    if (state.view === "preview") onPreviewShown();
-    window.scrollTo({ top: 0, behavior: "smooth" });
-  });
+  btn.addEventListener("click", () => showView(btn.dataset.view));
+});
+
+/** Cross-links between views, so a pointer somewhere can open another screen. */
+document.addEventListener("click", (e) => {
+  const link = e.target.closest("[data-goto-view]");
+  if (!link) return;
+  e.preventDefault();
+  showView(link.dataset.gotoView);
+  const focus = link.dataset.gotoFocus;
+  if (focus) setTimeout(() => $(focus)?.scrollIntoView({ behavior: "smooth", block: "center" }), 260);
 });
 
 /* ------------------------------------------------------------------ */
@@ -237,133 +249,43 @@ $("#art-upload-btn").addEventListener("click", async () => {
     toast(`${done} artwork${done === 1 ? "" : "s"} published.`, "ok");
   }
 });
-
 /* ------------------------------------------------------------------ */
-/*  Artwork management                                                 */
-/* ------------------------------------------------------------------ */
-
-function renderArtworks() {
-  const host = $("#artwork-grid");
-  const term = state.artSearch.toLowerCase();
-
-  const list = state.artworks
-    .filter(a => a.uploaded)
-    .filter(a => state.artFilter === "all" || a.category === state.artFilter)
-    .filter(a => !term || a.title.toLowerCase().includes(term))
-    .sort((a, b) => b.createdAt - a.createdAt);
-
-  $("#artwork-count").textContent = `${list.length} shown`;
-
-  host.innerHTML = list.length ? "" : '<p class="empty-note">Nothing here. Upload something, or clear the filters.</p>';
-
-  list.forEach((art) => {
-    const el = document.createElement("article");
-    el.className = "m-card";
-    el.innerHTML = `
-      <span class="m-badge">${art.likes} &#9829;</span>
-      <img src="${escapeHtml(art.imageUrl)}" alt="${escapeHtml(art.title)}" loading="lazy">
-      <div class="m-card-body">
-        <h4>${escapeHtml(art.title)}</h4>
-        <p>${escapeHtml(categoryName("art", art.category))}</p>
-      </div>
-      <div class="m-card-actions">
-        <button class="btn is-small" data-edit>Edit</button>
-        <button class="btn is-small is-danger" data-del>Delete</button>
-      </div>
-    `;
-
-    $("[data-edit]", el).addEventListener("click", () => editArtwork(art));
-    $("[data-del]", el).addEventListener("click", () => {
-      confirmDelete({
-        what: "artwork",
-        name: art.title,
-        extra: "Its likes and comments go with it.",
-        onConfirm: async () => {
-          await deleteArtwork(art.id);
-          toast("Artwork deleted.", "ok");
-        }
-      });
-    });
-
-    host.appendChild(el);
-  });
-}
-
-function editArtwork(art) {
-  modal({
-    title: "Edit artwork",
-    body: `
-      <div class="field">
-        <label for="ea-title">Title</label>
-        <input id="ea-title" type="text" value="${escapeHtml(art.title)}">
-      </div>
-      <div class="field">
-        <label for="ea-cat">Category</label>
-        <select id="ea-cat">${categoryOptions("art", art.category)}</select>
-      </div>
-      <div class="field">
-        <label for="ea-desc">Description</label>
-        <textarea id="ea-desc">${escapeHtml(art.description)}</textarea>
-      </div>
-    `,
-    confirmLabel: "Save changes",
-    onConfirm: async () => {
-      await updateArtwork(art.id, {
-        title: $("#ea-title").value.trim() || art.title,
-        category: $("#ea-cat").value,
-        description: $("#ea-desc").value.trim()
-      });
-      toast("Artwork updated.", "ok");
-    }
-  });
-}
-
-$("#artwork-search").addEventListener("input", (e) => {
-  state.artSearch = e.target.value;
-  renderArtworks();
-});
-
-$("#artwork-filter").addEventListener("change", (e) => {
-  state.artFilter = e.target.value;
-  renderArtworks();
-});
-
-/* ------------------------------------------------------------------ */
-/*  Archive pieces — the images that ship with the site                */
+/*  Collections — open one and work through everything inside it       */
 /*                                                                     */
-/*  These have never had a record of their own, so the gallery could   */
-/*  only label them by position: "Portrait No. 03". Naming one writes  */
-/*  a document at the same id the piece's likes already use, so a      */
-/*  title, a meaning, a like count and a comment thread all live       */
-/*  together and the page picks the name up immediately.               */
+/*  The uploads and the pieces that shipped with the site used to be   */
+/*  two separate panels, filtered independently. That meant no screen  */
+/*  ever answered the obvious question -- what is actually in          */
+/*  Paintings? -- and the shipped pieces, which are most of the        */
+/*  gallery, could only be given a title. They are one list here, in   */
+/*  the order visitors see them, and everything in it can be renamed,  */
+/*  repictured, moved, hidden or deleted.                              */
 /* ------------------------------------------------------------------ */
 
-/** Categories that actually ship images, in site order. */
-function archiveCategories() {
-  return Object.keys(LOCAL_SEEDS)
+/** Collections that exist, whether from Firestore or the shipped folders. */
+function collectionSlugs() {
+  const fromCategories = state.artCategories
+    .filter(c => c.slug !== "comics")
+    .map(c => c.slug);
+  const fromFolders = Object.keys(LOCAL_SEEDS)
     .filter(slug => (LOCAL_SEEDS[slug] || []).length && !CATEGORY_BY_SLUG[slug]?.isComics);
+  return Array.from(new Set([...fromCategories, ...fromFolders]));
 }
 
-/** The placeholder the gallery shows for an unnamed piece. */
+/** The placeholder the gallery shows for an unnamed bundled piece. */
 function archivePlaceholder(slug, i) {
-  const label = CATEGORY_BY_SLUG[slug]?.label || slug;
+  const label = CATEGORY_BY_SLUG[slug]?.label || categoryName("art", slug);
   return `${label.replace(/s$/, "")} No. ${String(i + 1).padStart(2, "0")}`;
 }
 
 /**
- * True once every bundled piece has a record of its own. Until then these
- * pieces are drawn from a list in the code and there is nothing to delete,
- * reorder, or repoint — only a title to attach.
+ * True once the bundled pieces in this collection have records. Until then
+ * there is nothing to delete, reorder or repoint -- only a title to attach.
  */
 function archiveSeeded(slug) {
   return state.artworks.some(a => a.archive && a.category === slug && a.imageUrl);
 }
 
-/**
- * The pieces for a collection, preferring their records and falling back to
- * the shipped list. Both paths produce the same shape so the card renderer
- * does not have to know which one it got.
- */
+/** The bundled pieces, from their records where those exist. */
 function archivePieces(slug) {
   if (archiveSeeded(slug)) {
     return state.artworks
@@ -374,6 +296,7 @@ function archivePieces(slug) {
         return {
           id: record.id,
           slug,
+          kind: "archive",
           position,
           imageUrl: record.imageUrl,
           title: record.hasTitle ? record.title : "",
@@ -381,7 +304,6 @@ function archivePieces(slug) {
           description: record.description,
           likes: record.likes,
           hidden: record.hidden,
-          publicId: record.publicId,
           onCloudinary: /^https?:/i.test(record.imageUrl),
           managed: true
         };
@@ -392,7 +314,7 @@ function archivePieces(slug) {
     const id = archivePieceId(slug, i);
     const saved = state.artworks.find(a => a.id === id);
     return {
-      id, slug, position: i, imageUrl: src,
+      id, slug, kind: "archive", position: i, imageUrl: src,
       title: saved?.hasTitle ? saved.title : "",
       placeholder: archivePlaceholder(slug, i),
       description: saved?.description || "",
@@ -404,78 +326,125 @@ function archivePieces(slug) {
   });
 }
 
-function renderArchive() {
-  const host = $("#archive-grid");
+/** The pieces the owner uploaded, newest first, as the site orders them. */
+function uploadedPieces(slug) {
+  return state.artworks
+    .filter(a => a.uploaded && a.imageUrl && a.category === slug)
+    .sort((a, b) => b.createdAt - a.createdAt)
+    .map(a => ({
+      id: a.id,
+      slug,
+      kind: "upload",
+      imageUrl: a.imageUrl,
+      title: a.title,
+      placeholder: a.title,
+      description: a.description,
+      likes: a.likes,
+      hidden: a.hidden,
+      onCloudinary: /^https?:/i.test(a.imageUrl),
+      managed: true
+    }));
+}
+
+/** Everything in a collection, in the order the gallery page shows it. */
+function collectionPieces(slug) {
+  return [...uploadedPieces(slug), ...archivePieces(slug)];
+}
+
+function activeCollection() {
+  const slugs = collectionSlugs();
+  if (!slugs.includes(state.collection)) state.collection = slugs[0] || "";
+  return state.collection;
+}
+
+function renderCollectionChips() {
+  const host = $("#collection-chips");
+  if (!host) return;
+  const active = activeCollection();
+
+  host.innerHTML = collectionSlugs().map((slug) => {
+    const pieces = collectionPieces(slug);
+    const hidden = pieces.filter(p => p.hidden).length;
+    return `
+      <button type="button" class="collection-chip${slug === active ? " is-active" : ""}" data-collection="${escapeHtml(slug)}">
+        ${escapeHtml(categoryName("art", slug))}
+        <i>${pieces.length}${hidden ? ` &minus;${hidden}` : ""}</i>
+      </button>`;
+  }).join("");
+}
+
+function renderCollection() {
+  const host = $("#collection-grid");
   if (!host) return;
 
-  const slug = state.archiveFilter || archiveCategories()[0] || "";
-  const term = state.archiveSearch.trim().toLowerCase();
-  const all = archivePieces(slug);
-  const seeded = all.some(p => p.managed);
+  const slug = activeCollection();
+  const term = state.collectionSearch.trim().toLowerCase();
+  const all = collectionPieces(slug);
+  const seeded = !all.some(p => p.kind === "archive" && !p.managed);
+  const archiveCount = archivePieces(slug).length;
 
   const list = all.filter(p =>
     !term || p.title.toLowerCase().includes(term) || p.placeholder.toLowerCase().includes(term));
 
-  const named = all.filter(p => p.title).length;
+  const hidden = all.filter(p => p.hidden).length;
   const onCloud = all.filter(p => p.onCloudinary).length;
-  $("#archive-count").textContent = all.length
-    ? `${named} of ${all.length} named · ${onCloud} of ${all.length} on Cloudinary`
-    : "";
 
-  // The notice is the difference between "these cannot be managed" and "these
-  // cannot be managed YET", which is worth spelling out rather than leaving
-  // the owner to wonder why the buttons are missing.
+  $("#collection-count").textContent = all.length
+    ? `${all.length} piece${all.length === 1 ? "" : "s"}`
+      + (hidden ? ` · ${hidden} hidden` : "")
+      + ` · ${onCloud} of ${all.length} on Cloudinary`
+    : "nothing here yet";
+
+  const viewLink = $("#collection-view");
+  if (viewLink) viewLink.href = categoryHref({ slug });
+
   const notice = $("#archive-notice");
-  if (notice) {
-    notice.hidden = seeded;
-    $("#archive-migrate").hidden = !seeded;
-  }
+  if (notice) notice.hidden = seeded;
+  $("#archive-migrate").hidden = !seeded || !all.length || onCloud === all.length;
 
-  host.innerHTML = list.length ? "" : '<p class="empty-note">Nothing matches that search.</p>';
+  host.innerHTML = list.length
+    ? ""
+    : `<p class="empty-note">${all.length ? "Nothing matches that search." : "This collection is empty. Upload something above."}</p>`;
 
   list.forEach((piece) => {
     const el = document.createElement("article");
     el.className = `m-card${piece.hidden ? " is-hidden-piece" : ""}`;
+    const shown = piece.title || piece.placeholder;
+
     el.innerHTML = `
       ${piece.likes ? `<span class="m-badge">${piece.likes} &#9829;</span>` : ""}
-      <img src="${escapeHtml(piece.imageUrl)}" alt="${escapeHtml(piece.title || piece.placeholder)}" loading="lazy">
+      <img src="${escapeHtml(piece.imageUrl)}" alt="${escapeHtml(shown)}" loading="lazy">
       <div class="m-card-body">
-        <h4>${escapeHtml(piece.title || piece.placeholder)}</h4>
+        <h4>${escapeHtml(shown)}</h4>
         <p>
-          ${piece.title ? "Named" : "Unnamed"}
+          ${piece.kind === "upload" ? "Uploaded" : piece.title ? "Named" : "Unnamed"}
           ${piece.hidden ? ' · <b style="color:var(--danger)">Hidden</b>' : ""}
           ${piece.onCloudinary ? " · Cloudinary" : ""}
         </p>
       </div>
       <div class="m-card-actions">
-        <button class="btn is-small" data-name>${piece.title ? "Edit" : "Add a title"}</button>
+        <button class="btn is-small" data-edit>${piece.kind === "upload" || piece.title ? "Edit" : "Add a title"}</button>
         ${piece.managed ? `
           <button class="btn is-small" data-replace>Replace</button>
-          <button class="btn is-small" data-up ${piece.position === 0 ? "disabled" : ""} aria-label="Move earlier">&#9650;</button>
-          <button class="btn is-small" data-down ${piece.position === all.length - 1 ? "disabled" : ""} aria-label="Move later">&#9660;</button>
+          ${piece.kind === "archive" ? `
+            <button class="btn is-small" data-up ${piece.position === 0 ? "disabled" : ""} aria-label="Move earlier">&#9650;</button>
+            <button class="btn is-small" data-down ${piece.position === archiveCount - 1 ? "disabled" : ""} aria-label="Move later">&#9660;</button>` : ""}
           <button class="btn is-small" data-visible>${piece.hidden ? "Show" : "Hide"}</button>
           <button class="btn is-small is-danger" data-del>Delete</button>` : ""}
       </div>
     `;
 
-    $("[data-name]", el).addEventListener("click", () => nameArchivePiece(piece));
+    $("[data-edit]", el).addEventListener("click", () => editPiece(piece));
 
     if (piece.managed) {
       $("[data-replace]", el).addEventListener("click", async () => {
         const next = await pickImage(piece.imageUrl);
         if (!next) return;
-        await replaceArchiveImage(piece.id, { imageUrl: next, publicId: publicIdFromUrl(next) });
+        const patch = { imageUrl: next, publicId: publicIdFromUrl(next) };
+        if (piece.kind === "upload") await updateArtwork(piece.id, patch);
+        else await replaceArchiveImage(piece.id, patch);
         toast("Picture replaced — its title, likes and comments are untouched.", "ok");
       });
-
-      const move = async (delta) => {
-        const ids = all.map(p => p.id);
-        const i = piece.position;
-        [ids[i + delta], ids[i]] = [ids[i], ids[i + delta]];
-        await reorderArchivePieces(ids);
-      };
-      $("[data-up]", el).addEventListener("click", () => move(-1));
-      $("[data-down]", el).addEventListener("click", () => move(1));
 
       $("[data-visible]", el).addEventListener("click", async () => {
         await setArchiveVisibility(piece.id, piece.hidden);
@@ -485,7 +454,7 @@ function renderArchive() {
       $("[data-del]", el).addEventListener("click", () => {
         confirmDelete({
           what: "piece",
-          name: piece.title || piece.placeholder,
+          name: shown,
           extra: "Its likes and comments go with it. To take it off the site without losing them, use Hide instead.",
           onConfirm: async () => {
             await deleteArtwork(piece.id);
@@ -493,6 +462,17 @@ function renderArchive() {
           }
         });
       });
+
+      if (piece.kind === "archive") {
+        const move = async (delta) => {
+          const ids = archivePieces(slug).map(p => p.id);
+          const i = piece.position;
+          [ids[i + delta], ids[i]] = [ids[i], ids[i + delta]];
+          await reorderArchivePieces(ids);
+        };
+        $("[data-up]", el).addEventListener("click", () => move(-1));
+        $("[data-down]", el).addEventListener("click", () => move(1));
+      }
     }
 
     host.appendChild(el);
@@ -500,15 +480,97 @@ function renderArchive() {
 }
 
 /**
- * Copies a whole collection's bundled files into Cloudinary. Offered per
- * collection rather than site-wide because it is roughly a hundred megabytes
- * across the seven of them, and a folder at a time is something you can watch
- * finish.
+ * One editor for both kinds. An upload can also be moved to another
+ * collection; a bundled piece cannot, because its place in the shipped folder
+ * is what its number is derived from.
+ */
+function editPiece(piece) {
+  const isUpload = piece.kind === "upload";
+
+  modal({
+    title: isUpload ? "Edit artwork" : piece.title ? "Edit this piece" : "Name this piece",
+    body: `
+      <div class="field">
+        <label for="ep-title">Title</label>
+        <input id="ep-title" type="text" value="${escapeHtml(piece.title)}"
+               placeholder="${escapeHtml(piece.placeholder)}">
+        ${isUpload ? "" : `<p class="form-note">Leave this blank and the piece goes back to showing &ldquo;${escapeHtml(piece.placeholder)}&rdquo;.</p>`}
+      </div>
+      ${isUpload ? `
+        <div class="field">
+          <label for="ep-cat">Collection</label>
+          <select id="ep-cat">${categoryOptions("art", piece.slug)}</select>
+        </div>` : ""}
+      <div class="field">
+        <label for="ep-desc">${isUpload ? "Description" : "What it means"}</label>
+        <textarea id="ep-desc" placeholder="Shown under the title on the collection page.">${escapeHtml(piece.description)}</textarea>
+      </div>
+    `,
+    confirmLabel: "Save",
+    onConfirm: async () => {
+      const title = $("#ep-title").value;
+      const description = $("#ep-desc").value.trim();
+
+      if (isUpload) {
+        await updateArtwork(piece.id, {
+          title: title.trim() || piece.title,
+          category: $("#ep-cat").value,
+          description
+        });
+      } else {
+        await saveArchivePiece(piece.id, { categorySlug: piece.slug, title, description });
+      }
+      toast("Saved — it's live on the site.", "ok");
+    }
+  });
+}
+
+$("#collection-chips")?.addEventListener("click", (e) => {
+  const chip = e.target.closest("[data-collection]");
+  if (!chip) return;
+  state.collection = chip.dataset.collection;
+  state.collectionSearch = "";
+  $("#collection-search").value = "";
+  renderCollectionChips();
+  renderCollection();
+});
+
+$("#collection-search")?.addEventListener("input", (e) => {
+  state.collectionSearch = e.target.value;
+  renderCollection();
+});
+
+/**
+ * Gives the bundled pieces their records, from the panel where the owner
+ * notices they are missing. It used to be reachable only as one step of a
+ * "schema migration" under Maintenance, which is not somewhere anyone looking
+ * for a delete button would ever think to open.
+ */
+$("#archive-setup")?.addEventListener("click", async () => {
+  const btn = $("#archive-setup");
+  const status = $("#archive-setup-status");
+  btn.disabled = true;
+  status.textContent = "Setting up…";
+  try {
+    const { seedArchiveRecords } = await import("./migrate.js?v=20260823a");
+    const written = await seedArchiveRecords();
+    status.textContent = "";
+    toast(`${written} pieces are now fully manageable.`, "ok");
+  } catch (err) {
+    console.error(err);
+    status.textContent = err.message || "That didn't work.";
+    btn.disabled = false;
+  }
+});
+
+/**
+ * Copies a collection's bundled files into Cloudinary. Offered per collection
+ * because it is roughly a hundred megabytes across all of them, and a folder
+ * at a time is something you can start and watch finish.
  */
 function migrateCategoryToCloudinary() {
-  const slug = state.archiveFilter || archiveCategories()[0] || "";
-  const pieces = archivePieces(slug).filter(p => p.managed);
-  const pending = pieces.filter(p => !p.onCloudinary);
+  const slug = activeCollection();
+  const pending = collectionPieces(slug).filter(p => p.managed && !p.onCloudinary);
 
   if (!pending.length) {
     toast("This collection is already on Cloudinary.", "ok");
@@ -516,7 +578,7 @@ function migrateCategoryToCloudinary() {
   }
 
   modal({
-    title: `Move ${CATEGORY_BY_SLUG[slug]?.label || slug} to Cloudinary?`,
+    title: `Move ${categoryName("art", slug)} to Cloudinary?`,
     body: `<b>${pending.length}</b> image${pending.length === 1 ? "" : "s"} will be uploaded to Cloudinary,
            and each piece will start using the uploaded copy.<br><br>
            Nothing is deleted and nothing on the site changes visually. It is safe to
@@ -537,47 +599,7 @@ function migrateCategoryToCloudinary() {
   });
 }
 
-function nameArchivePiece(piece) {
-  modal({
-    title: piece.title ? "Edit this piece" : "Name this piece",
-    body: `
-      <div class="field">
-        <label for="ap-title">Title</label>
-        <input id="ap-title" type="text" value="${escapeHtml(piece.title)}"
-               placeholder="${escapeHtml(piece.placeholder)}">
-        <p class="form-note">Leave this blank and the piece goes back to showing &ldquo;${escapeHtml(piece.placeholder)}&rdquo;.</p>
-      </div>
-      <div class="field">
-        <label for="ap-desc">What it means</label>
-        <textarea id="ap-desc" placeholder="Say what this piece is about — shown under the title.">${escapeHtml(piece.description)}</textarea>
-      </div>
-    `,
-    confirmLabel: "Save",
-    onConfirm: async () => {
-      await saveArchivePiece(piece.id, {
-        categorySlug: piece.slug,
-        title: $("#ap-title").value,
-        description: $("#ap-desc").value
-      });
-      toast($("#ap-title").value.trim() ? "Saved — it's live on the site." : "Title cleared.", "ok");
-    }
-  });
-}
-
-$("#archive-filter")?.addEventListener("change", (e) => {
-  state.archiveFilter = e.target.value;
-  state.archiveSearch = "";
-  $("#archive-search").value = "";
-  renderArchive();
-});
-
-$("#archive-search")?.addEventListener("input", (e) => {
-  state.archiveSearch = e.target.value;
-  renderArchive();
-});
-
 $("#archive-migrate")?.addEventListener("click", migrateCategoryToCloudinary);
-
 /* ------------------------------------------------------------------ */
 /*  Comic upload — cover + ordered page sequence                       */
 /* ------------------------------------------------------------------ */
@@ -969,31 +991,16 @@ wireCategoryCreate("art", "#art-cat-form", "#art-cat-name");
 wireCategoryCreate("comics", "#comic-cat-form", "#comic-cat-name");
 
 function refreshCategorySelects() {
-  const art = $("#art-category");
-  const artFilter = $("#artwork-filter");
-  const comic = $("#comic-category");
-  const comicFilter = $("#comic-filter");
+  const keep = (el, html) => {
+    if (!el) return;
+    const v = el.value;
+    el.innerHTML = html;
+    el.value = v || el.options[0]?.value;
+  };
 
-  const keep = (el, html) => { const v = el.value; el.innerHTML = html; el.value = v || el.options[0]?.value; };
-
-  keep(art, categoryOptions("art"));
-  keep(comic, categoryOptions("comics"));
-  keep(artFilter, `<option value="all">All categories</option>${categoryOptions("art")}`);
-  keep(comicFilter, `<option value="all">All genres</option>${categoryOptions("comics")}`);
-
-  // The archive list is per-category on purpose: twenty pieces at a time is a
-  // sitting you can finish, where a hundred and twenty is a chore nobody
-  // starts. Its options come from the shipped folders, not from Firestore,
-  // because a category with no bundled images has nothing to name.
-  const archiveFilter = $("#archive-filter");
-  if (archiveFilter) {
-    const slugs = archiveCategories();
-    if (!state.archiveFilter) state.archiveFilter = slugs[0] || "";
-    archiveFilter.innerHTML = slugs
-      .map(s => `<option value="${s}">${escapeHtml(CATEGORY_BY_SLUG[s]?.label || s)}</option>`)
-      .join("");
-    archiveFilter.value = state.archiveFilter;
-  }
+  keep($("#art-category"), categoryOptions("art"));
+  keep($("#comic-category"), categoryOptions("comics"));
+  keep($("#comic-filter"), `<option value="all">All genres</option>${categoryOptions("comics")}`);
 }
 
 /* ------------------------------------------------------------------ */
@@ -1163,17 +1170,19 @@ function renderChangeLog(entries) {
 /* ------------------------------------------------------------------ */
 
 function boot() {
-  // The archive list is driven by the bundled folders, not by Firestore, so
-  // it can be drawn immediately rather than waiting for a snapshot.
+  // The bundled pieces come from the shipped folders rather than Firestore,
+  // so a collection can be drawn immediately rather than waiting on a
+  // snapshot.
   refreshCategorySelects();
-  renderArchive();
+  renderCollectionChips();
+  renderCollection();
 
   watchCategories("art", (items) => {
     state.artCategories = items;
     refreshCategorySelects();
     renderCategoryList("art");
-    renderArtworks();
-    renderArchive();
+    renderCollectionChips();
+    renderCollection();
     renderOverview();
     // The settings page needs one cover picker per collection, and the
     // preview needs every collection in its page list.
@@ -1191,8 +1200,8 @@ function boot() {
 
   watchAllArtworks((items) => {
     state.artworks = items;
-    renderArtworks();
-    renderArchive();
+    renderCollectionChips();
+    renderCollection();
     renderCategoryList("art");
     renderOverview();
   });
