@@ -3,7 +3,7 @@ import {
   watchGalleryPieces, watchPieceMeta, toggleLike, hasLiked,
   watchComments, addComment, deleteComment, fetchCategories, archivePieceId
 } from "./data.js?v=20260823a";
-import { isPreview } from "./site-config.js?v=20260823a";
+import { isPreview, currentConfig } from "./site-config.js?v=20260823a";
 import { LOCAL_SEEDS, CATEGORY_BY_SLUG, currentCategorySlug } from "./site-data.js?v=20260823a";
 import { bindGallery } from "./lightbox.js?v=20260823a";
 import { observeReveals, initNav } from "./reveal.js?v=20260823a";
@@ -328,7 +328,20 @@ async function paintHeader() {
     meta = remote.find(c => c.slug === slug);
   }
   const label = meta?.label || meta?.name || slug.replace(/-/g, " ");
-  document.title = `${label} | Alafi Art Work`;
+
+  // Google renders the page before reading its title, so whatever is set here
+  // is what it indexes — a hand-written title in the HTML counts for nothing
+  // if this overwrites it a moment later. The seven built-in collections have
+  // titles written for search and keep them; only a collection created in the
+  // admin, which has no static page of its own, gets one built here. Either
+  // way the artist's name is in it, because that is what people search for.
+  const config = currentConfig();
+  const artist = (config.home?.artistName || "Alafi Jonathan").trim();
+  const brand = (config.branding?.siteTitle || "Alafi Art Work").trim();
+  if (!CATEGORY_BY_SLUG[slug]) {
+    document.title = `${label} by ${artist} | ${brand}`;
+  }
+
   titleEl.textContent = label;
   if (taglineEl) taglineEl.textContent = meta?.tagline || "";
   if (blurbEl) blurbEl.textContent = meta?.blurb || "";
