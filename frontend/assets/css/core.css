@@ -587,3 +587,13 @@ body.is-previewing .ambient { bottom: 58px; }
   cursor: default;
   border-style: dashed;
 }
+
+.footer-legal { display: flex; gap: 18px; }
+
+.footer-legal a {
+  color: inherit;
+  text-decoration: none;
+  transition: color 0.35s var(--ease);
+}
+
+.footer-legal a:hover { color: var(--gold); }

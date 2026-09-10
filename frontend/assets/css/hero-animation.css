@@ -1,3 +1,32 @@
+.hero-cards { display: none; }
+
+.hero-cta {
+  display: inline-flex;
+  align-items: center;
+  gap: 12px;
+  text-decoration: none;
+  font-size: 0.74rem;
+  letter-spacing: 0.2em;
+  text-transform: uppercase;
+  color: var(--bg-raised);
+  background: var(--fg);
+  border: 1px solid var(--fg);
+  border-radius: 999px;
+  padding: 16px 32px;
+  margin: 0 0 30px;
+  transition: background 0.4s var(--ease), border-color 0.4s var(--ease), transform 0.4s var(--ease-out), box-shadow 0.4s var(--ease-out);
+}
+
+.hero-cta:hover {
+  background: var(--gold);
+  border-color: var(--gold);
+  transform: translateY(-2px);
+  box-shadow: var(--shadow-md);
+}
+
+.hero-cta .arrow { transition: transform 0.45s var(--ease-out); }
+.hero-cta:hover .arrow { transform: translateX(5px); }
+
 html.hero-anim .hero [data-reveal],
 html.hero-anim .hero .reveal-mask > * {
   opacity: 1;
@@ -9,59 +38,114 @@ html.hero-anim .hero .reveal-mask { overflow: visible; }
 
 html.hero-anim .hero h1:not(.is-split),
 html.hero-anim .hero .eyebrow,
+html.hero-anim .hero-cta,
 html.hero-anim .hero-foot > p,
 html.hero-anim .hero-meta,
 html.hero-anim .scroll-cue,
-html.hero-anim .hero-canvas img {
+html.hero-anim .hero-card {
   opacity: 0;
 }
 
 html.hero-anim .hero-word {
   display: inline-block;
-  will-change: transform, opacity, filter;
+  will-change: transform, opacity;
 }
+
+html.hero-anim .hero {
+  --card-w: clamp(200px, min(24vw, 31vh), 320px);
+  align-items: center;
+  padding-top: clamp(84px, 11vh, 110px);
+  padding-bottom: clamp(28px, 4vh, 48px);
+}
+
+html.hero-anim .hero-canvas { display: none; }
 
 html.hero-anim .hero-inner {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  text-align: center;
+  padding-bottom: 0;
+}
+
+html.hero-anim .hero .eyebrow { margin-bottom: 22px; }
+
+html.hero-anim .hero h1 {
+  font-size: clamp(2.5rem, 6vw, 5.4rem);
+  line-height: 0.96;
+  max-width: none;
+  margin: 0 0 clamp(18px, 3vh, 30px);
+}
+
+html.hero-anim .hero-cards {
+  --fan-spread: 44;
+  --fan-rotate: 7;
+  --fan-drop: 4;
+  display: block;
   position: relative;
-  z-index: 2;
+  width: var(--card-w);
+  aspect-ratio: 3 / 2;
+  margin: 0 auto clamp(40px, 6vh, 60px);
 }
 
-html.hero-anim .hero-canvas {
+html.hero-anim .hero-card {
   position: absolute;
-  inset: auto;
-  top: -4px;
-  right: var(--gutter);
-  width: clamp(170px, 21vw, 300px);
-  aspect-ratio: 4 / 5;
-  z-index: 1;
-  pointer-events: none;
+  inset: 0;
+  margin: 0;
+  border-radius: 6px;
+  overflow: hidden;
+  border: 5px solid var(--bg-raised);
+  background: var(--bg-raised);
+  box-shadow: var(--shadow-lg);
+  will-change: transform, opacity;
 }
 
-html.hero-anim .hero-canvas img {
+html.hero-anim .hero-card img {
   position: absolute;
   inset: 0;
   width: 100%;
   height: 100%;
   object-fit: cover;
-  box-sizing: border-box;
-  border: 6px solid var(--bg-raised);
-  border-radius: 3px;
-  background: var(--bg-raised);
-  box-shadow: var(--shadow-lg);
-  animation: none;
-  transition: none;
-  transform-origin: 50% 60%;
-  will-change: transform, opacity;
+  display: block;
 }
 
-@media (max-width: 700px) {
-  html.hero-anim .hero-inner { padding-top: 90px; }
+html.hero-anim .hero-cta { margin: 0 0 20px; }
 
-  html.hero-anim .hero-canvas {
-    position: relative;
-    top: auto;
-    right: auto;
-    width: min(40vw, 170px);
-    margin: 0 6% 28px auto;
+html.hero-anim .hero-foot {
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  gap: 22px;
+  border-top: 0;
+  padding-top: 0;
+  width: auto;
+}
+
+html.hero-anim .hero-foot p {
+  max-width: 52ch;
+  font-size: clamp(0.92rem, 1.2vw, 1.02rem);
+}
+
+html.hero-anim .hero-meta { justify-content: center; width: auto; }
+html.hero-anim .hero-meta div { text-align: center; }
+
+@media (max-width: 700px) {
+  html.hero-anim .hero {
+    --card-w: min(46vw, 180px);
+    padding-top: 84px;
+    padding-bottom: 30px;
   }
+
+  html.hero-anim .hero h1 { font-size: clamp(2.1rem, 10vw, 3rem); }
+
+  html.hero-anim .hero-cards {
+    --fan-spread: 25;
+    --fan-rotate: 6;
+    --fan-drop: 3;
+    margin-bottom: 38px;
+  }
+
+  html.hero-anim .hero-card { border-width: 4px; border-radius: 4px; }
+  html.hero-anim .hero-cta { padding: 14px 26px; }
+  html.hero-anim .hero-foot { gap: 20px; }
 }
