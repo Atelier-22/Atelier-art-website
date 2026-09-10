@@ -1,4 +1,5 @@
-.hero-cards { display: none; }
+.hero-stage,
+.hero-story { display: none; }
 
 .hero-cta {
   display: inline-flex;
@@ -17,7 +18,8 @@
   transition: background 0.4s var(--ease), border-color 0.4s var(--ease), transform 0.4s var(--ease-out), box-shadow 0.4s var(--ease-out);
 }
 
-.hero-cta:hover {
+.hero-cta:hover,
+.hero-cta:focus-visible {
   background: var(--gold);
   border-color: var(--gold);
   transform: translateY(-2px);
@@ -36,13 +38,12 @@ html.hero-anim .hero .reveal-mask > * {
 
 html.hero-anim .hero .reveal-mask { overflow: visible; }
 
-html.hero-anim .hero h1:not(.is-split),
 html.hero-anim .hero .eyebrow,
+html.hero-anim .hero h1,
 html.hero-anim .hero-cta,
 html.hero-anim .hero-foot > p,
 html.hero-anim .hero-meta,
-html.hero-anim .scroll-cue,
-html.hero-anim .hero-card {
+html.hero-anim .scroll-cue {
   opacity: 0;
 }
 
@@ -51,99 +52,238 @@ html.hero-anim .hero-word {
   will-change: transform, opacity;
 }
 
-html.hero-anim .hero {
-  --card-w: clamp(200px, min(24vw, 31vh), 320px);
+html.hero-anim .hero,
+html.hero-still .hero {
+  --card-w: clamp(150px, 17vw, 250px);
   align-items: center;
   padding-top: clamp(84px, 11vh, 110px);
   padding-bottom: clamp(28px, 4vh, 48px);
 }
 
-html.hero-anim .hero-inner {
-  display: flex;
-  flex-direction: column;
+html.hero-anim .hero-canvas,
+html.hero-still .hero-canvas { opacity: 0.55; }
+
+html.hero-anim .hero-inner,
+html.hero-still .hero-inner {
+  display: grid;
+  grid-template-columns: minmax(0, 0.92fr) minmax(0, 1.08fr);
+  gap: clamp(24px, 4vw, 64px);
   align-items: center;
-  text-align: center;
   padding-bottom: 0;
+}
+
+html.hero-anim .hero-copy,
+html.hero-still .hero-copy {
+  position: relative;
+  z-index: 2;
 }
 
 html.hero-anim .hero .eyebrow { margin-bottom: 22px; }
 
-html.hero-anim .hero h1 {
-  font-size: clamp(2.5rem, 6vw, 5.4rem);
-  line-height: 0.96;
-  max-width: none;
-  margin: 0 0 clamp(18px, 3vh, 30px);
-}
-
-html.hero-anim .hero-cards {
-  --fan-spread: 44;
-  --fan-rotate: 7;
-  --fan-drop: 4;
-  display: block;
+html.hero-anim .hero-headline,
+html.hero-still .hero-headline {
   position: relative;
-  width: var(--card-w);
-  aspect-ratio: 3 / 2;
-  margin: 0 auto clamp(40px, 6vh, 60px);
+  margin: 0 0 clamp(18px, 3vh, 28px);
+  font-family: var(--display);
+  font-size: clamp(2.3rem, 4.3vw, 4.5rem);
+  line-height: 1;
+  letter-spacing: -0.02em;
 }
 
-html.hero-anim .hero-card {
+html.hero-anim .hero-headline { min-height: 3.05em; }
+
+html.hero-anim .hero h1,
+html.hero-still .hero h1 {
+  font-size: inherit;
+  line-height: inherit;
+  letter-spacing: inherit;
+  margin: 0;
+  max-width: none;
+}
+
+html.hero-anim .hero-story {
+  display: block;
   position: absolute;
   inset: 0;
   margin: 0;
-  border-radius: 6px;
-  overflow: hidden;
-  border: 5px solid var(--bg-raised);
-  background: var(--bg-raised);
-  box-shadow: var(--shadow-lg);
-  will-change: transform, opacity;
+  font-weight: 400;
 }
 
-html.hero-anim .hero-card img {
+html.hero-anim .hero-story > span {
   position: absolute;
-  inset: 0;
-  width: 100%;
-  height: 100%;
-  object-fit: cover;
+  left: 0;
+  right: 0;
+  top: 0;
   display: block;
+  opacity: 0;
 }
 
-html.hero-anim .hero-cta { margin: 0 0 20px; }
+html.hero-anim .hero-cta,
+html.hero-still .hero-cta { margin: 0 0 20px; }
 
-html.hero-anim .hero-foot {
+html.hero-anim .hero-foot,
+html.hero-still .hero-foot {
   flex-direction: column;
-  align-items: center;
-  justify-content: center;
+  align-items: flex-start;
   gap: 22px;
   border-top: 0;
   padding-top: 0;
   width: auto;
 }
 
-html.hero-anim .hero-foot p {
-  max-width: 52ch;
-  font-size: clamp(0.92rem, 1.2vw, 1.02rem);
+html.hero-anim .hero-foot p,
+html.hero-still .hero-foot p {
+  max-width: 44ch;
+  font-size: clamp(0.92rem, 1.1vw, 1rem);
 }
 
-html.hero-anim .hero-meta { justify-content: center; width: auto; }
-html.hero-anim .hero-meta div { text-align: center; }
+html.hero-anim .hero-stage,
+html.hero-still .hero-stage {
+  display: block;
+  position: relative;
+  height: min(78vh, 720px);
+  perspective: 1400px;
+  transform-style: preserve-3d;
+}
+
+html.hero-anim .hero-card,
+html.hero-still .hero-card {
+  position: absolute;
+  left: 50%;
+  top: 50%;
+  width: var(--card-w);
+  aspect-ratio: var(--ar, 4 / 5);
+  margin: 0;
+  border-radius: 6px;
+  opacity: 0;
+  transform-origin: 50% 50%;
+  will-change: transform, opacity;
+}
+
+html.hero-anim .hero-card::before,
+html.hero-still .hero-card::before {
+  content: "";
+  position: absolute;
+  inset: 0;
+  border-radius: 6px;
+  background: linear-gradient(110deg, var(--bg-raised) 20%, var(--bg-sunken) 50%, var(--bg-raised) 80%);
+  background-size: 200% 100%;
+  animation: heroShimmer 1.6s linear infinite;
+  box-shadow: var(--shadow-lg);
+}
+
+html.hero-anim .hero-card.is-ready::before,
+html.hero-still .hero-card.is-ready::before {
+  animation: none;
+  background: var(--bg-raised);
+}
+
+html.hero-anim .hero-card img,
+html.hero-still .hero-card img {
+  position: absolute;
+  inset: 0;
+  width: 100%;
+  height: 100%;
+  object-fit: cover;
+  border-radius: 6px;
+  border: 5px solid var(--bg-raised);
+  box-sizing: border-box;
+  box-shadow: var(--shadow-lg);
+  background: var(--bg-raised);
+  opacity: 0;
+  transition: opacity 0.5s var(--ease);
+}
+
+html.hero-anim .hero-card.is-ready img,
+html.hero-still .hero-card.is-ready img { opacity: 1; }
+
+html.hero-anim .hero-tag,
+html.hero-still .hero-tag {
+  position: absolute;
+  left: -10px;
+  bottom: -12px;
+  padding: 7px 12px;
+  border-radius: 999px;
+  background: var(--fg);
+  color: var(--bg-raised);
+  font-family: var(--body);
+  font-size: 0.58rem;
+  letter-spacing: 0.2em;
+  text-transform: uppercase;
+  white-space: nowrap;
+  opacity: 0;
+  box-shadow: var(--shadow-md);
+}
+
+@keyframes heroShimmer {
+  from { background-position: 200% 0; }
+  to { background-position: -200% 0; }
+}
+
+html.hero-still .hero-card { opacity: 1; }
+html.hero-still .hero-card:nth-child(1) { transform: translate(-50%, -50%) rotate(-2deg); z-index: 5; }
+html.hero-still .hero-card:nth-child(2) { transform: translate(-150%, -80%) rotate(-8deg) scale(0.72); z-index: 3; }
+html.hero-still .hero-card:nth-child(3) { transform: translate(50%, -85%) rotate(7deg) scale(0.7); z-index: 3; }
+html.hero-still .hero-card:nth-child(4) { transform: translate(-140%, 5%) rotate(5deg) scale(0.66); z-index: 2; }
+html.hero-still .hero-card:nth-child(5) { transform: translate(55%, 0%) rotate(-6deg) scale(0.68); z-index: 2; }
+html.hero-still .hero-card:nth-child(n + 6) { display: none; }
+html.hero-still .hero-card:nth-child(1) .hero-tag { opacity: 1; }
+
+@media (max-width: 999px) {
+  html.hero-anim .hero,
+  html.hero-still .hero { --card-w: clamp(140px, 24vw, 220px); }
+
+  html.hero-anim .hero-inner,
+  html.hero-still .hero-inner {
+    grid-template-columns: 1fr;
+    gap: 18px;
+  }
+
+  html.hero-anim .hero-copy,
+  html.hero-still .hero-copy { text-align: center; }
+
+  html.hero-anim .hero-story > span { text-align: center; }
+
+  html.hero-anim .hero-foot,
+  html.hero-still .hero-foot { align-items: center; }
+
+  html.hero-anim .hero-meta,
+  html.hero-still .hero-meta { justify-content: center; width: auto; }
+
+  html.hero-anim .hero-meta div,
+  html.hero-still .hero-meta div { text-align: center; }
+
+  html.hero-anim .hero-stage,
+  html.hero-still .hero-stage { height: min(52vh, 520px); }
+
+  html.hero-still .hero-card:nth-child(n + 4) { display: none; }
+}
 
 @media (max-width: 700px) {
-  html.hero-anim .hero {
-    --card-w: min(46vw, 180px);
+  html.hero-anim .hero,
+  html.hero-still .hero {
+    --card-w: 38vw;
     padding-top: 84px;
     padding-bottom: 30px;
   }
 
-  html.hero-anim .hero h1 { font-size: clamp(2.1rem, 10vw, 3rem); }
+  html.hero-anim .hero-headline,
+  html.hero-still .hero-headline { font-size: clamp(2rem, 9vw, 2.8rem); }
 
-  html.hero-anim .hero-cards {
-    --fan-spread: 25;
-    --fan-rotate: 6;
-    --fan-drop: 3;
-    margin-bottom: 38px;
-  }
+  html.hero-anim .hero-headline { min-height: 3.15em; }
 
-  html.hero-anim .hero-card { border-width: 4px; border-radius: 4px; }
-  html.hero-anim .hero-cta { padding: 14px 26px; }
-  html.hero-anim .hero-foot { gap: 20px; }
+  html.hero-anim .hero-stage,
+  html.hero-still .hero-stage { height: min(46vh, 380px); }
+
+  html.hero-anim .hero-cta,
+  html.hero-still .hero-cta { padding: 14px 26px; }
+
+  html.hero-anim .hero-foot,
+  html.hero-still .hero-foot { gap: 20px; }
+
+  html.hero-anim .hero-card img,
+  html.hero-still .hero-card img { border-width: 4px; }
+
+  html.hero-anim .hero-tag,
+  html.hero-still .hero-tag { font-size: 0.52rem; padding: 6px 10px; }
 }
