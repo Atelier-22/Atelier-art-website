@@ -15,20 +15,14 @@
   var gsapFailed = false;
   var current = null;
 
-  var POOL = [
-    "artworks/paintings/painting7.jpg",
-    "artworks/portraits/portrait4.jpg",
-    "2.jpg",
-    "artworks/sketches/sketch5.jpg",
-    "artworks/portraits/portrait6.jpg",
-    "artworks/comics/comic1.jpg",
-    "artworks/paintings/painting12.jpg",
-    "artworks/digital/digital15.jpg",
-    "artworks/sketches/sketch9.jpg",
-    "artworks/sculptures/sculpture7.jpg",
-    "artworks/graphics/graphic10.jpg",
-    "artworks/portraits/portrait11.jpg",
-    "artworks/digital/digital3.jpg"
+  var COLLECTIONS = [
+    ["paintings", "painting", 20],
+    ["sketches", "sketch", 20],
+    ["digital", "digital", 20],
+    ["sculptures", "sculpture", 20],
+    ["portraits", "portrait", 20],
+    ["graphics", "graphic", 20],
+    ["comics", "comic", 3]
   ];
 
   var T = {
@@ -43,7 +37,8 @@
     cueAt: 1.45,
     idleDelay: 2.2,
     idleEvery: 3.4,
-    idleFade: 1.6
+    idleFade: 1.6,
+    entryImageWait: 1200
   };
 
   function slice(list) { return Array.prototype.slice.call(list); }
@@ -52,6 +47,39 @@
     bailed = true;
     root.classList.remove(CLASS);
     if (current) { current(); current = null; }
+  }
+
+  function seeds(collection) {
+    var out = [];
+    for (var i = 1; i <= collection[2]; i++) out.push("artworks/" + collection[0] + "/" + collection[1] + i + ".jpg");
+    return out;
+  }
+
+  function shuffle(list) {
+    var a = list.slice();
+    for (var i = a.length - 1; i > 0; i--) {
+      var j = Math.floor(Math.random() * (i + 1));
+      var t = a[i];
+      a[i] = a[j];
+      a[j] = t;
+    }
+    return a;
+  }
+
+  function choosePieces(exclude, count) {
+    var lists = COLLECTIONS.map(function (c) {
+      return seeds(c).filter(function (s) { return !exclude[s]; });
+    });
+    var picks = [];
+    shuffle(lists.map(function (_, i) { return i; })).forEach(function (i) {
+      if (picks.length >= count || !lists[i].length) return;
+      picks.push(lists[i][Math.floor(Math.random() * lists[i].length)]);
+    });
+    var used = {};
+    picks.forEach(function (s) { used[s] = true; });
+    var rest = [];
+    lists.forEach(function (l) { l.forEach(function (s) { if (!used[s]) rest.push(s); }); });
+    return { picks: picks, pool: shuffle(rest) };
   }
 
   function wrapWord(node) {
@@ -149,9 +177,27 @@
     var cardsEl = hero.querySelector(".hero-cards");
     var cards = cardsEl ? slice(cardsEl.querySelectorAll(".hero-card")) : [];
     var center = Math.floor(cards.length / 2);
-    var state = { timeline: null, done: false, idle: false, timer: null, breathing: [] };
+    var state = { timeline: null, done: false, idle: false, timer: null, breathing: [], ready: false, dead: false, waiting: null };
     var observers = [];
     var resizeTimer = null;
+
+    var exclude = {};
+    slice(hero.querySelectorAll(".hero-canvas img")).forEach(function (img) { exclude[img.getAttribute("src")] = true; });
+    var chosen = choosePieces(exclude, cards.length);
+    var pool = chosen.pool;
+    var slots = [center].concat(cards.map(function (_, i) { return i; }).filter(function (i) { return i !== center; }));
+    slots.forEach(function (slot, n) {
+      var src = chosen.picks[n];
+      var card = cards[slot];
+      if (!src || !card) return;
+      var img = document.createElement("img");
+      img.alt = "";
+      img.decoding = "async";
+      img.setAttribute("fetchpriority", n === 0 ? "high" : "auto");
+      img.src = src;
+      card.textContent = "";
+      card.appendChild(img);
+    });
 
     function collect() {
       lines.forEach(splitWords);
@@ -179,41 +225,58 @@
       });
     }
 
+    function showing(src) {
+      return cards.some(function (card) {
+        var img = card.querySelector("img");
+        return img && img.getAttribute("src") === src;
+      });
+    }
+
+    function nextPiece() {
+      for (var tries = 0; tries < pool.length + 1; tries++) {
+        if (!pool.length) return null;
+        if (state.next >= pool.length) { pool = shuffle(pool); state.next = 0; }
+        var src = pool[state.next++];
+        if (!showing(src)) return src;
+      }
+      return null;
+    }
+
     function startIdle() {
       if (state.idle || !cards.length) return;
       state.idle = true;
+      state.next = 0;
       breathe();
-      var pool = cards.map(function (c) { return c.querySelector("img").getAttribute("src"); }).concat(POOL);
       var slot = 0;
-      var next = cards.length;
       function tick() {
         if (!state.idle) return;
         var card = cards[slot];
         slot = (slot + 1) % cards.length;
-        var src = pool[next % pool.length];
-        next++;
-        preload(src).then(function () {
-          if (!state.idle) return;
-          var base = card.querySelector("img");
-          var top = card.querySelector(".hero-card-next");
-          if (!top) {
-            top = document.createElement("img");
-            top.className = "hero-card-next";
-            top.alt = "";
-            top.decoding = "async";
-            card.appendChild(top);
-          }
-          top.src = src;
-          gsap.fromTo(top, { opacity: 0 }, {
-            opacity: 1,
-            duration: T.idleFade,
-            ease: "sine.inOut",
-            onComplete: function () {
-              base.src = src;
-              gsap.set(top, { opacity: 0 });
+        var src = nextPiece();
+        if (src) {
+          preload(src).then(function () {
+            if (!state.idle) return;
+            var base = card.querySelector("img");
+            var top = card.querySelector(".hero-card-next");
+            if (!top) {
+              top = document.createElement("img");
+              top.className = "hero-card-next";
+              top.alt = "";
+              top.decoding = "async";
+              card.appendChild(top);
             }
+            top.src = src;
+            gsap.fromTo(top, { opacity: 0 }, {
+              opacity: 1,
+              duration: T.idleFade,
+              ease: "sine.inOut",
+              onComplete: function () {
+                if (base) base.src = src;
+                gsap.set(top, { opacity: 0 });
+              }
+            });
           });
-        });
+        }
         state.timer = gsap.delayedCall(T.idleEvery, tick);
       }
       state.timer = gsap.delayedCall(T.idleDelay, tick);
@@ -228,6 +291,7 @@
     }
 
     function resync() {
+      if (!state.ready) return;
       var changed = lines.some(function (line) { return !line.querySelector(".hero-word"); });
       if (!changed) return;
       if (state.done) {
@@ -252,6 +316,13 @@
       resizeTimer = setTimeout(relayout, 200);
     }
 
+    function start() {
+      if (state.dead || state.ready) return;
+      clearTimeout(state.waiting);
+      state.ready = true;
+      build(0);
+    }
+
     if (window.MutationObserver) {
       lines.forEach(function (node) {
         var observer = new MutationObserver(resync);
@@ -261,9 +332,17 @@
     }
     window.addEventListener("resize", onResize);
 
-    build(0);
+    var entry = cards[center] && cards[center].querySelector("img");
+    if (entry) {
+      state.waiting = setTimeout(start, T.entryImageWait);
+      preload(entry.getAttribute("src")).then(start);
+    } else {
+      start();
+    }
 
     return function teardown() {
+      state.dead = true;
+      clearTimeout(state.waiting);
       window.removeEventListener("resize", onResize);
       clearTimeout(resizeTimer);
       observers.forEach(function (o) { o.disconnect(); });
