@@ -7,3 +7,10 @@ interaction-test.mjs
 package-lock.json
 slide-test.mjs
 .preview-test/
+
+backend/.env
+backend/serviceAccount*.json
+backend/*.json.key
+backend/.venv/
+__pycache__/
+*.pyc

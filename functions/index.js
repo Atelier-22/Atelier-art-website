@@ -10,11 +10,6 @@ const CLOUDINARY_CLOUD_NAME = "pmhpabd8";
 const CLOUDINARY_API_KEY = defineSecret("CLOUDINARY_API_KEY");
 const CLOUDINARY_API_SECRET = defineSecret("CLOUDINARY_API_SECRET");
 
-/**
- * The only accounts allowed to become admin. Bootstrapping is gated on the
- * signed email claim, which cannot be forged: Firebase will not issue a token
- * for an address unless the caller authenticated as it.
- */
 const ADMIN_EMAILS = [
   "jonathanalafi@gmail.com",
   "muhwezipetros@gmail.com"
@@ -29,13 +24,6 @@ function requireAdmin(request) {
   return auth;
 }
 
-/**
- * Grants the admin custom claim to the calling account.
- *
- * Safe to expose: it only ever elevates an account that has already proven it
- * controls one of the allow-listed addresses, and it can only elevate the
- * caller — never a third party.
- */
 exports.grantAdminClaim = onCall(async (request) => {
   const auth = request.auth;
   if (!auth) throw new HttpsError("unauthenticated", "Sign in first.");
@@ -54,13 +42,6 @@ exports.grantAdminClaim = onCall(async (request) => {
   };
 });
 
-/**
- * Permanently removes an asset from Cloudinary.
- *
- * Deletion requires a request signed with the API secret, which must never
- * reach the browser — so it happens here instead. The signature is
- * sha1(sorted params + secret), per Cloudinary's spec.
- */
 exports.deleteCloudinaryAsset = onCall(
   { secrets: [CLOUDINARY_API_KEY, CLOUDINARY_API_SECRET] },
   async (request) => {
@@ -99,8 +80,6 @@ exports.deleteCloudinaryAsset = onCall(
       throw new HttpsError("internal", `Cloudinary returned ${res.status}: ${payload.error?.message || "unknown error"}`);
     }
 
-    // "not found" means the asset is already gone — treat that as success so a
-    // retry after a partial failure can still clear the Firestore record.
     if (payload.result !== "ok" && payload.result !== "not found") {
       throw new HttpsError("internal", `Cloudinary refused the delete: ${payload.result}`);
     }

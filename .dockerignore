@@ -1,0 +1,15 @@
+.git
+.gitignore
+.claude
+.deep-copilot
+.firebase
+.preview-test
+node_modules
+functions
+backend/.venv
+backend/.env
+backend/serviceAccount*.json
+backend/*.json.key
+**/__pycache__
+*.mjs
+SETUP_README.md
