@@ -60,9 +60,6 @@ html.hero-still .hero {
   padding-bottom: clamp(28px, 4vh, 48px);
 }
 
-html.hero-anim .hero-canvas,
-html.hero-still .hero-canvas { opacity: 0.55; }
-
 html.hero-anim .hero-inner,
 html.hero-still .hero-inner {
   display: grid;
