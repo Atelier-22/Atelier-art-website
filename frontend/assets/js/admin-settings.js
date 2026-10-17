@@ -2,7 +2,7 @@ import {
   DEFAULT_CONFIG, DISPLAY_FONTS, BODY_FONTS, fetchConfig, saveDraft,
   publishDraft, discardDraft, contrastReport, hasBlockingContrastFailure,
   derivePalette, mergeConfig, parseEmbed, updateState, timeLeft, UPDATE_DURATIONS
-} from "./site-config.js?v=20260823a";
+} from "./site-config.js?v=20261017b";
 import {
   uploadAndRecord, watchMedia, inspectVideo, videoRejectionReason,
   videoTrimNotice, resourceTypeFor, isAudio, MAX_VIDEO_BYTES,
@@ -89,7 +89,7 @@ const TABS = [
       {
         title: "Name and mark",
         fields: [
-          { type: "image", path: "branding.logoUrl", label: "Logo", note: "Optional. When set it replaces the written wordmark in the header on every page. Leave empty to use the text below." },
+          { type: "image", path: "branding.logoUrl", label: "Logo", note: "Optional. Upload one to replace the built-in AJONA mark that sits above the site name in the header. Leave empty to keep the built-in mark." },
           { type: "text", path: "branding.wordmark", label: "Wordmark", placeholder: "Alafi" },
           { type: "text", path: "branding.wordmarkDot", label: "Accent character", note: "The bit after the name, shown in the accent colour." },
           { type: "text", path: "branding.siteTitle", label: "Site name", note: "Used in the footer." }

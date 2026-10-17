@@ -15,7 +15,7 @@ import {
 } from "./admin-ui.js?v=20260823a";
 import {
   initSettings, setSettingsCategories, pickImage, setActiveView
-} from "./admin-settings.js?v=20260823a";
+} from "./admin-settings.js?v=20261017b";
 import { initPreview, setPreviewCategories, onPreviewShown } from "./admin-preview.js?v=20260823a";
 
 const state = {

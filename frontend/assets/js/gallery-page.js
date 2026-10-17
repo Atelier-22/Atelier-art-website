@@ -3,7 +3,7 @@ import {
   watchGalleryPieces, watchPieceMeta, toggleLike, hasLiked,
   watchComments, addComment, deleteComment, fetchCategories, archivePieceId
 } from "./data.js?v=20260823a";
-import { isPreview, currentConfig } from "./site-config.js?v=20260823a";
+import { isPreview, currentConfig } from "./site-config.js?v=20261017b";
 import { LOCAL_SEEDS, CATEGORY_BY_SLUG, currentCategorySlug } from "./site-data.js?v=20260823a";
 import { bindGallery } from "./lightbox.js?v=20260823a";
 import { observeReveals, initNav } from "./reveal.js?v=20260823a";

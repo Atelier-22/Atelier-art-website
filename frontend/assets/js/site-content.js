@@ -1,9 +1,10 @@
 import {
-  initSiteConfig, paragraphs, escapeHtml, previewHref, isPreview, parseEmbed,
+  DEFAULT_CONFIG, initSiteConfig, paragraphs, escapeHtml, previewHref, isPreview, parseEmbed,
   applyBindings, rewriteLinksForPreview, updateState, timeAgo
-} from "./site-config.js?v=20260823a";
+} from "./site-config.js?v=20261017b";
 import { posterFromVideo, videoDeliveryUrl } from "./cloudinary.js?v=20260823a";
 import { renderAmbient } from "./ambient.js?v=20260823a";
+import { isHex, isDark } from "./color.js?v=20260823a";
 
 
 function renderPreviewBanner(meta) {
@@ -72,28 +73,19 @@ export function renderUpdate(config) {
 
 
 export function renderBranding(config) {
-  const logo = (config.branding?.logoUrl || "").trim();
+  const brand = { ...DEFAULT_CONFIG.branding, ...(config.branding || {}) };
+  const bg = config.theme?.bg;
+  const onDark = isHex(bg) && isDark(bg);
+  const mark = (brand.logoUrl || "").trim() || (onDark ? brand.logoMarkOnDark : brand.logoMark);
+  const full = onDark ? brand.logoFullOnDark : brand.logoFull;
 
-  document.querySelectorAll(".wordmark").forEach((mark) => {
-    const hasLogo = !!logo;
-    mark.classList.toggle("has-logo", hasLogo);
-
-    if (!hasLogo) {
-      if (mark.dataset.logoMounted) {
-        mark.innerHTML = `<b data-cfg-text="branding.wordmark">${escapeHtml(config.branding?.wordmark || "")}</b><span data-cfg-text="branding.wordmarkDot">${escapeHtml(config.branding?.wordmarkDot || "")}</span>`;
-        delete mark.dataset.logoMounted;
-      }
-      return;
-    }
-
-    const img = mark.querySelector("img");
-    if (img) {
-      if (img.getAttribute("src") !== logo) img.src = logo;
-      return;
-    }
-    mark.innerHTML = `<img src="${escapeHtml(logo)}" alt="${escapeHtml(config.branding?.siteTitle || "Home")}">`;
-    mark.dataset.logoMounted = "1";
-  });
+  const swap = (selector, url) => {
+    document.querySelectorAll(selector).forEach((img) => {
+      if (img.getAttribute("src") !== url) img.src = url;
+    });
+  };
+  swap(".wordmark-mark", mark);
+  swap(".footer-logo", full);
 }
 
 

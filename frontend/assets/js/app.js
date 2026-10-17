@@ -1,4 +1,4 @@
-import { initContent, repaintContent } from "./site-content.js?v=20260823a";
+import { initContent, repaintContent } from "./site-content.js?v=20261017b";
 import { initRouter } from "./router.js?v=20260823a";
 
 function pageKind(doc = document) {
