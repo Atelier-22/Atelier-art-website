@@ -18,3 +18,5 @@ without them the hero simply shows.
 To run the whole thing locally, see `backend/README.md`. To serve the site
 alone, any static server pointed at `frontend/` will do
 (`python -m http.server` inside it, for instance).
+
+How to deploy: push to GitHub, then run `bash tools/deploy.sh` (it clones `main` on the server and syncs `frontend/` into the live folder).
