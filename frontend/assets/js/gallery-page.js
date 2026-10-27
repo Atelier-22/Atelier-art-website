@@ -7,6 +7,7 @@ import { isPreview, currentConfig } from "./site-config.js?v=20261017b";
 import { LOCAL_SEEDS, CATEGORY_BY_SLUG, currentCategorySlug } from "./site-data.js?v=20260823a";
 import { bindGallery } from "./lightbox.js?v=20260823a";
 import { observeReveals, initNav } from "./reveal.js?v=20260823a";
+import { modal } from "./admin-ui.js?v=20261027d";
 
 let slug = "";
 let grid = null;
@@ -197,9 +198,16 @@ function wireCard(el, item) {
     const btn = e.target.closest(".comment-del");
     if (!btn) return;
     const id = btn.closest(".comment").dataset.commentId;
-    if (!confirm("Delete this comment?")) return;
-    try { await deleteComment("artworks", item.id, id); }
-    catch (err) { showError(el, "Couldn't delete that comment."); console.error(err); }
+    modal({
+      title: "Delete 1 item permanently?",
+      body: "This comment will be permanently deleted. This cannot be undone.",
+      confirmLabel: "Delete",
+      danger: true,
+      onConfirm: async () => {
+        try { await deleteComment("artworks", item.id, id); }
+        catch (err) { showError(el, "Couldn't delete that comment."); throw err; }
+      }
+    });
   });
 
   form.addEventListener("submit", async (e) => {

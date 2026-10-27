@@ -5,7 +5,7 @@ import {
   watchAllArtworks, createArtwork, updateArtwork, deleteArtwork,
   archivePieceId, saveArchivePiece, setArchiveVisibility, replaceArchiveImage,
   reorderArchivePieces, moveArchiveToCloudinary, publicIdFromUrl,
-  watchComics, createComic, updateComic, deleteComic, reorderComics,
+  watchComics, createComic, updateComic, getComicDeletionPlan, deleteComic, reorderComics,
   watchAllComments, deleteComment, uploadAndRecord,
   grantAdminClaim, watchChangeLog, logChange
 } from "./data.js?v=20260823a";
@@ -609,13 +609,20 @@ async function deleteSelected(kind) {
   const art = kind === "art";
   const ids = [...(art ? state.selectedArt : state.selectedComics)];
   if (!ids.length) return;
-  const noun = art ? "image" : "story";
-  const pages = art ? 0 : state.comics.filter(c => ids.includes(c.id)).reduce((sum, c) => sum + c.pages.length, 0);
-  confirmBulkDelete(ids.length, pages, async () => {
-    for (const id of ids) {
+  let plans = [];
+  if (!art) {
+    try { plans = await Promise.all(ids.map(id => getComicDeletionPlan(id))); }
+    catch (err) { toast(err.message || "Couldn't check the selected stories.", "error"); return; }
+  }
+  const pages = plans.reduce((sum, plan) => sum + plan.pages.length, 0);
+  const existingCount = art ? ids.length : plans.filter(plan => plan.exists).length;
+  if (!existingCount) { toast("Those items no longer exist.", "error"); return; }
+  confirmBulkDelete(existingCount, pages, async () => {
+    for (let i = 0; i < ids.length; i++) {
+      const id = ids[i];
       if (art) await deleteArtwork(id);
       else {
-        await deleteComic(id);
+        await deleteComic(id, plans[i]);
         if (editingComicId === id) resetComicForm();
       }
     }

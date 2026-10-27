@@ -5,6 +5,7 @@ import {
 } from "./data.js?v=20260823a";
 import { DEFAULT_COMIC_CATEGORIES } from "./site-data.js?v=20260823a";
 import { observeReveals, initNav } from "./reveal.js?v=20260823a";
+import { modal } from "./admin-ui.js?v=20261027d";
 
 let shelvesHost = null;
 let emptyHost = null;
@@ -132,9 +133,18 @@ function buildReader() {
   el.querySelector(".comments-list").addEventListener("click", async (e) => {
     const btn = e.target.closest(".comment-del");
     if (!btn || !reader.story) return;
-    if (!confirm("Delete this comment?")) return;
-    try { await deleteComment("comics", reader.story.id, btn.closest(".comment").dataset.commentId); }
-    catch (err) { console.error(err); }
+    const storyId = reader.story.id;
+    const commentId = btn.closest(".comment").dataset.commentId;
+    modal({
+      title: "Delete 1 item permanently?",
+      body: "This comment will be permanently deleted. This cannot be undone.",
+      confirmLabel: "Delete",
+      danger: true,
+      onConfirm: async () => {
+        try { await deleteComment("comics", storyId, commentId); }
+        catch (err) { console.error(err); throw err; }
+      }
+    });
   });
 
   el.querySelector(".reader-like").addEventListener("click", async () => {

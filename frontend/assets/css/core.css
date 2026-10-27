@@ -539,6 +539,34 @@ body.is-previewing { padding-bottom: 40px; }
 
 .ambient:hover { color: var(--fg); border-color: var(--gold-edge); }
 
+/* Shared accessible confirmation dialog used on public pages and in admin. */
+.modal {
+  position: fixed; inset: 0; z-index: 10000; display: flex; align-items: center;
+  justify-content: center; padding: 24px; background: rgba(12, 10, 8, .68);
+  opacity: 0; transition: opacity .18s ease;
+}
+.modal.is-open { opacity: 1; }
+.modal-box {
+  width: min(100%, 480px); max-height: min(88vh, 760px); overflow: auto;
+  padding: clamp(22px, 4vw, 32px); background: var(--bg-raised); color: var(--fg);
+  border: 1px solid var(--gold-edge); box-shadow: 0 20px 70px rgba(0,0,0,.3);
+}
+.modal-box h3 { margin: 0 0 12px; font: 500 clamp(1.35rem, 3vw, 1.75rem)/1.2 "Cormorant Garamond", serif; }
+.modal-box .modal-sub { margin: 0 0 24px; color: var(--fg-dim); font-size: .94rem; line-height: 1.6; }
+.modal-actions { display: flex; flex-wrap: wrap; justify-content: flex-end; gap: 12px; }
+.modal-actions .btn {
+  min-width: 132px; min-height: 48px; padding: 12px 20px; border: 1px solid var(--gold-edge);
+  background: transparent; color: var(--fg); font: inherit; cursor: pointer;
+}
+.modal-actions .btn.is-danger { border-color: #9b332b; background: #9b332b; color: #fff; }
+.modal-actions .btn:disabled { opacity: .6; cursor: wait; }
+@media (max-width: 520px) {
+  .modal { padding: 14px; }
+  .modal-box { width: 100%; }
+  .modal-actions { flex-direction: column-reverse; }
+  .modal-actions .btn { width: 100%; }
+}
+
 .ambient:focus-visible {
   outline: none;
   border-color: var(--gold);

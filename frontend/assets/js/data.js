@@ -583,8 +583,48 @@ export async function updateComic(id, patch) {
   await updateDoc(doc(db, "comics", id), { ...patch, updatedAt: serverTimestamp() });
 }
 
-export async function deleteComic(id) {
-  await deleteDoc(doc(db, "comics", id));
+export async function getComicDeletionPlan(id) {
+  const comicSnap = await getDoc(doc(db, "comics", id));
+  if (!comicSnap.exists()) return { id, exists: false, pages: [], coverUrl: "" };
+  const comic = comicSnap.data();
+  return {
+    id,
+    exists: true,
+    pages: Array.isArray(comic.pages) ? comic.pages.filter(Boolean) : [],
+    coverUrl: comic.coverUrl || ""
+  };
+}
+
+export async function deleteComic(id, plan = null) {
+  const comicRef = doc(db, "comics", id);
+  const deletion = plan || await getComicDeletionPlan(id);
+  if (!deletion.exists) return { pages: 0 };
+  const pageUrls = deletion.pages;
+
+  // Story pages are Cloudinary assets (with a media-library record). Remove
+  // each unique page and cover asset before deleting the Firestore story.
+  const cloudAssets = new Map();
+  for (const url of [...pageUrls, deletion.coverUrl].filter(Boolean)) {
+    const publicId = publicIdFromUrl(url);
+    if (publicId && /(^|\.)cloudinary\.com\//i.test(url)) {
+      cloudAssets.set(publicId, { publicId, resourceType: "image" });
+    }
+  }
+  for (const asset of cloudAssets.values()) {
+    await deleteMedia(slugify(asset.publicId, "asset"), asset.publicId, asset.resourceType);
+  }
+
+  // Firestore does not cascade deletes to subcollections.
+  const commentSnaps = await getDocs(collection(db, "comics", id, "comments"));
+  for (const comment of commentSnaps.docs) await deleteDoc(comment.ref);
+  const chapterSnaps = await getDocs(collection(db, "comics", id, "chapters"));
+  for (const chapter of chapterSnaps.docs) {
+    const pageSnaps = await getDocs(collection(db, "comics", id, "chapters", chapter.id, "pages"));
+    for (const page of pageSnaps.docs) await deleteDoc(page.ref);
+    await deleteDoc(chapter.ref);
+  }
+  await deleteDoc(comicRef);
+  return { pages: pageUrls.length, assets: cloudAssets.size };
 }
 
 export async function reorderComics(orderedIds) {
