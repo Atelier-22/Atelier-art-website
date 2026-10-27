@@ -114,8 +114,22 @@ const LOGIN_ERRORS = {
   "auth/too-many-requests": "Too many attempts from this device. Wait a few minutes and try again.",
   "auth/network-request-failed": "No connection to the server. Check the network and try again.",
   "auth/user-disabled": "That account has been disabled.",
+  "auth/unauthorized-domain": "This site is not authorized to sign in with Firebase. Contact the site administrator.",
+  "auth/invalid-api-key": "Firebase sign-in is misconfigured for this site. Contact the site administrator.",
+  "auth/requests-to-this-api-blocked": "Firebase is blocking sign-in requests from this site. Contact the site administrator.",
   "auth/operation-not-allowed": "Email sign-in is switched off for this project."
 };
+
+$("#login-pass-toggle").addEventListener("click", () => {
+  const password = $("#login-pass");
+  const visible = password.type === "password";
+  password.type = visible ? "text" : "password";
+  const toggle = $("#login-pass-toggle");
+  toggle.setAttribute("aria-pressed", String(visible));
+  toggle.setAttribute("aria-label", visible ? "Hide password" : "Show password");
+  toggle.title = visible ? "Hide password" : "Show password";
+  toggle.classList.toggle("is-visible", visible);
+});
 
 $("#login-form").addEventListener("submit", async (e) => {
   e.preventDefault();
@@ -129,7 +143,6 @@ $("#login-form").addEventListener("submit", async (e) => {
     const code = error?.code || "";
     err.textContent = LOGIN_ERRORS[code] || `Sign-in failed (${code || error?.message || "unknown"}).`;
     err.hidden = false;
-    $("#login-pass").value = "";
     console.error("Sign-in failed:", error);
   } finally {
     submit.disabled = false;

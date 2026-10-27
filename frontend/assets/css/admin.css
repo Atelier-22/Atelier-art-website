@@ -39,6 +39,20 @@ body.admin { background: var(--bg); }
 
 .login-box .sub { color: var(--fg-dim); font-size: 0.82rem; margin: 0 0 32px; letter-spacing: 0.06em; }
 
+.password-control { position: relative; }
+.login-box .password-control input { padding-right: 62px; }
+.password-toggle {
+  position: absolute; top: 50%; right: 5px; transform: translateY(-50%);
+  display: grid; place-items: center; width: 46px; height: 46px;
+  border: 0; border-radius: 3px; background: transparent; color: var(--fg-dim);
+  cursor: pointer; touch-action: manipulation;
+}
+.password-toggle:hover { color: var(--fg); background: var(--control-hover); }
+.password-toggle:focus-visible { outline: 2px solid var(--gold); outline-offset: 1px; }
+.password-toggle svg { width: 21px; height: 21px; fill: none; stroke: currentColor; stroke-width: 1.7; stroke-linecap: round; stroke-linejoin: round; }
+.password-eye-slash { display: none; }
+.password-toggle.is-visible .password-eye-slash { display: block; }
+
 .field { display: grid; gap: 7px; margin-bottom: 16px; }
 
 .field label {

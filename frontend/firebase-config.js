@@ -66,11 +66,21 @@ export function ensureGuestAuth() {
 }
 
 export function isOwner(user) {
-  return !!user && ADMIN_EMAILS.includes(user.email);
+  return !!user && ADMIN_EMAILS.includes((user.email || "").trim().toLowerCase());
 }
 
 export function watchAuth(callback) {
-  return onAuthStateChanged(auth, callback);
+  let active = true;
+  let unsubscribe = null;
+  // Wait until the chosen persistence store has been initialized before
+  // observing auth; otherwise the first null state can briefly win a refresh.
+  authReady.then(() => {
+    if (active) unsubscribe = onAuthStateChanged(auth, callback);
+  });
+  return () => {
+    active = false;
+    unsubscribe?.();
+  };
 }
 
 export async function ownerLogin(email, password) {

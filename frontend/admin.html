@@ -35,8 +35,18 @@
     </div>
     <div class="field">
       <label for="login-pass">Password</label>
-      <input type="password" id="login-pass" autocomplete="current-password" required
-             autocapitalize="none" autocorrect="off" spellcheck="false">
+      <div class="password-control">
+        <input type="password" id="login-pass" autocomplete="current-password" required
+               autocapitalize="none" autocorrect="off" spellcheck="false">
+        <button class="password-toggle" id="login-pass-toggle" type="button"
+                aria-label="Show password" aria-pressed="false" title="Show password">
+          <svg viewBox="0 0 24 24" aria-hidden="true" focusable="false">
+            <path d="M2 12s3.6-7 10-7 10 7 10 7-3.6 7-10 7S2 12 2 12Z" />
+            <circle cx="12" cy="12" r="3" />
+            <path class="password-eye-slash" d="m4 4 16 16" />
+          </svg>
+        </button>
+      </div>
     </div>
 
     <button class="btn is-primary" type="submit" style="width:100%;justify-content:center;margin-top:8px">Sign in</button>
