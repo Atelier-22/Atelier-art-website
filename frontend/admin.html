@@ -15,7 +15,7 @@
   <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
   <link href="https://fonts.googleapis.com/css2?family=Cormorant+Garamond:ital,wght@0,300;0,400;0,500;0,600&family=Inter:wght@300;400;500&display=swap" rel="stylesheet">
   <link rel="stylesheet" href="assets/css/core.css?v=20261017b">
-  <link rel="stylesheet" href="assets/css/admin.css?v=20261017b">
+  <link rel="stylesheet" href="assets/css/admin.css?v=20261027a">
   <link rel="stylesheet" href="assets/css/settings.css?v=20260823a">
 </head>
 <body class="admin">
@@ -176,6 +176,8 @@
           <span class="status-line" id="collection-count" style="margin:0"></span>
           <a class="btn is-small" id="collection-view" target="_blank" rel="noopener">View on the site &#8599;</a>
           <button class="btn is-small" id="archive-migrate" hidden>Move to Cloudinary</button>
+          <button class="btn is-small" type="button" id="art-select-toggle">Select to delete</button>
+          <button class="btn is-small is-danger" type="button" id="art-delete-selected" hidden disabled>Delete selected (0)</button>
         </div>
         <p class="status-line" id="archive-migrate-status"></p>
 
@@ -238,6 +240,8 @@
 
         <div class="toolbar">
           <select id="comic-filter"></select>
+          <button class="btn is-small" type="button" id="comic-select-toggle">Select to delete</button>
+          <button class="btn is-small is-danger" type="button" id="comic-delete-selected" hidden disabled>Delete selected (0)</button>
         </div>
 
         <div class="manage-grid" id="comic-grid"></div>
@@ -364,6 +368,6 @@
   </main>
 </div>
 
-<script type="module" src="assets/js/admin.js?v=20260823a"></script>
+<script type="module" src="assets/js/admin.js?v=20261027a"></script>
 </body>
 </html>

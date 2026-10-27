@@ -27,6 +27,10 @@ const state = {
   view: "overview",
   collection: "",
   collectionSearch: "",
+  selectingArt: false,
+  selectedArt: new Set(),
+  selectingComics: false,
+  selectedComics: new Set(),
   comicFilter: "all",
   ready: false
 };
@@ -403,6 +407,7 @@ function renderCollection() {
   list.forEach((piece) => {
     const el = document.createElement("article");
     el.className = `m-card${piece.hidden ? " is-hidden-piece" : ""}`;
+    if (state.selectingArt && piece.managed) el.classList.add("is-selectable", ...(state.selectedArt.has(piece.id) ? ["is-selected"] : []));
     const shown = piece.title || piece.placeholder;
 
     el.innerHTML = `
@@ -417,6 +422,7 @@ function renderCollection() {
         </p>
       </div>
       <div class="m-card-actions">
+        ${state.selectingArt && piece.managed ? `<label class="bulk-select"><input type="checkbox" data-select-piece ${state.selectedArt.has(piece.id) ? "checked" : ""}> Select</label>` : ""}
         <button class="btn is-small" data-edit>${piece.kind === "upload" || piece.title ? "Edit" : "Add a title"}</button>
         ${piece.managed ? `
           <button class="btn is-small" data-replace>Replace</button>
@@ -424,14 +430,20 @@ function renderCollection() {
             <button class="btn is-small" data-up ${piece.position === 0 ? "disabled" : ""} aria-label="Move earlier">&#9650;</button>
             <button class="btn is-small" data-down ${piece.position === archiveCount - 1 ? "disabled" : ""} aria-label="Move later">&#9660;</button>` : ""}
           <button class="btn is-small" data-visible>${piece.hidden ? "Show" : "Hide"}</button>
-          <button class="btn is-small is-danger" data-del>Delete</button>` : ""}
+          ${state.selectingArt ? "" : '<button class="btn is-small is-danger" data-del>Select to delete</button>'}` : ""}
       </div>
     `;
 
-    $("[data-edit]", el).addEventListener("click", () => editPiece(piece));
+    if (state.selectingArt && piece.managed) {
+      $("[data-select-piece]", el).addEventListener("change", (e) => {
+        e.target.checked ? state.selectedArt.add(piece.id) : state.selectedArt.delete(piece.id);
+        updateBulkControls("art");
+      });
+    }
+    if (!state.selectingArt) $("[data-edit]", el).addEventListener("click", () => editPiece(piece));
 
     if (piece.managed) {
-      $("[data-replace]", el).addEventListener("click", async () => {
+      if (!state.selectingArt) $("[data-replace]", el).addEventListener("click", async () => {
         const next = await pickImage(piece.imageUrl);
         if (!next) return;
         const patch = { imageUrl: next, publicId: publicIdFromUrl(next) };
@@ -440,21 +452,16 @@ function renderCollection() {
         toast("Picture replaced — its title, likes and comments are untouched.", "ok");
       });
 
-      $("[data-visible]", el).addEventListener("click", async () => {
+      if (!state.selectingArt) $("[data-visible]", el).addEventListener("click", async () => {
         await setArchiveVisibility(piece.id, piece.hidden);
         toast(piece.hidden ? "Back on the site." : "Hidden from the site — you can put it back.", "ok");
       });
 
-      $("[data-del]", el).addEventListener("click", () => {
-        confirmDelete({
-          what: "piece",
-          name: shown,
-          extra: "Its likes and comments go with it. To take it off the site without losing them, use Hide instead.",
-          onConfirm: async () => {
-            await deleteArtwork(piece.id);
-            toast("Piece deleted.", "ok");
-          }
-        });
+      if (!state.selectingArt) $("[data-del]", el).addEventListener("click", () => {
+        state.selectingArt = true;
+        state.selectedArt.clear();
+        state.selectedArt.add(piece.id);
+        renderCollection();
       });
 
       if (piece.kind === "archive") {
@@ -471,7 +478,56 @@ function renderCollection() {
 
     host.appendChild(el);
   });
+  updateBulkControls("art");
 }
+
+function updateBulkControls(kind) {
+  const art = kind === "art";
+  const selecting = art ? state.selectingArt : state.selectingComics;
+  const count = (art ? state.selectedArt : state.selectedComics).size;
+  const toggle = $(art ? "#art-select-toggle" : "#comic-select-toggle");
+  const action = $(art ? "#art-delete-selected" : "#comic-delete-selected");
+  if (toggle) toggle.textContent = selecting ? "Cancel selection" : "Select to delete";
+  if (action) {
+    action.hidden = !selecting;
+    action.disabled = !count;
+    action.textContent = `Delete selected (${count})`;
+  }
+}
+
+async function deleteSelected(kind) {
+  const art = kind === "art";
+  const ids = [...(art ? state.selectedArt : state.selectedComics)];
+  if (!ids.length) return;
+  const noun = art ? "image" : "story";
+  const pages = art ? 0 : state.comics.filter(c => ids.includes(c.id)).reduce((sum, c) => sum + c.pages.length, 0);
+  modal({
+    title: `Delete ${ids.length} ${noun}${ids.length === 1 ? "" : "s"}?`,
+    body: `This will permanently delete <b>${ids.length} ${noun}${ids.length === 1 ? "" : "s"}</b>${pages ? ` and all <b>${pages} page${pages === 1 ? "" : "s"}</b> in those stories` : ""}. This can't be undone.`,
+    confirmLabel: `Delete ${ids.length}`,
+    danger: true,
+    onConfirm: async () => {
+      for (const id of ids) {
+        if (art) await deleteArtwork(id);
+        else {
+          await deleteComic(id);
+          if (editingComicId === id) resetComicForm();
+        }
+      }
+      if (art) { state.selectedArt.clear(); state.selectingArt = false; }
+      else { state.selectedComics.clear(); state.selectingComics = false; }
+      art ? renderCollection() : renderComics();
+      toast(`${ids.length} ${noun}${ids.length === 1 ? "" : "s"} permanently deleted.`, "ok");
+    }
+  });
+}
+
+$("#art-select-toggle")?.addEventListener("click", () => {
+  state.selectingArt = !state.selectingArt;
+  state.selectedArt.clear();
+  renderCollection();
+});
+$("#art-delete-selected")?.addEventListener("click", () => deleteSelected("art"));
 
 function editPiece(piece) {
   const isUpload = piece.kind === "upload";
@@ -768,6 +824,7 @@ function renderComics() {
   list.forEach((comic, i) => {
     const el = document.createElement("article");
     el.className = "m-card is-story";
+    if (state.selectingComics) el.classList.add("is-selectable", ...(state.selectedComics.has(comic.id) ? ["is-selected"] : []));
     el.innerHTML = `
       <span class="m-badge">${comic.pages.length}p · ${comic.likes} &#9829;</span>
       <img class="m-cover" src="${escapeHtml(comic.coverUrl)}" alt="${escapeHtml(comic.title)}" loading="lazy">
@@ -776,48 +833,55 @@ function renderComics() {
         <p>${escapeHtml(categoryName("comics", comic.categorySlug))}</p>
       </div>
       <div class="m-card-actions">
+        ${state.selectingComics ? `<label class="bulk-select"><input type="checkbox" data-select-story ${state.selectedComics.has(comic.id) ? "checked" : ""}> Select</label>` : ""}
+        ${state.selectingComics ? "" : `
         <button class="btn is-small" data-edit>Edit</button>
         <button class="btn is-small" data-up ${i === 0 ? "disabled" : ""}>&#9650;</button>
         <button class="btn is-small" data-down ${i === list.length - 1 ? "disabled" : ""}>&#9660;</button>
-        <button class="btn is-small is-danger" data-del>Delete</button>
+        <button class="btn is-small is-danger" data-del>Select to delete</button>`}
       </div>
     `;
 
-    $("[data-edit]", el).addEventListener("click", () => loadComicIntoForm(comic));
+    if (state.selectingComics) $("[data-select-story]", el).addEventListener("change", (e) => {
+      e.target.checked ? state.selectedComics.add(comic.id) : state.selectedComics.delete(comic.id);
+      updateBulkControls("comics");
+    });
+    if (!state.selectingComics) $("[data-edit]", el).addEventListener("click", () => loadComicIntoForm(comic));
 
-    $("[data-up]", el).addEventListener("click", async () => {
+    if (!state.selectingComics) $("[data-up]", el).addEventListener("click", async () => {
       const ids = list.map(c => c.id);
       [ids[i - 1], ids[i]] = [ids[i], ids[i - 1]];
       await reorderComics(ids);
     });
 
-    $("[data-down]", el).addEventListener("click", async () => {
+    if (!state.selectingComics) $("[data-down]", el).addEventListener("click", async () => {
       const ids = list.map(c => c.id);
       [ids[i + 1], ids[i]] = [ids[i], ids[i + 1]];
       await reorderComics(ids);
     });
 
-    $("[data-del]", el).addEventListener("click", () => {
-      confirmDelete({
-        what: "story",
-        name: comic.title,
-        extra: `All ${comic.pages.length} pages, likes, and comments go with it.`,
-        onConfirm: async () => {
-          await deleteComic(comic.id);
-          if (editingComicId === comic.id) resetComicForm();
-          toast("Story deleted.", "ok");
-        }
-      });
+    if (!state.selectingComics) $("[data-del]", el).addEventListener("click", () => {
+      state.selectingComics = true;
+      state.selectedComics.clear();
+      state.selectedComics.add(comic.id);
+      renderComics();
     });
 
     host.appendChild(el);
   });
+  updateBulkControls("comics");
 }
 
 $("#comic-filter").addEventListener("change", (e) => {
   state.comicFilter = e.target.value;
   renderComics();
 });
+$("#comic-select-toggle")?.addEventListener("click", () => {
+  state.selectingComics = !state.selectingComics;
+  state.selectedComics.clear();
+  renderComics();
+});
+$("#comic-delete-selected")?.addEventListener("click", () => deleteSelected("comics"));
 
 
 function categoryList(kind) {

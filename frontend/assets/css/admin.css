@@ -560,6 +560,11 @@ button.stat { width: 100%; text-align: left; font-family: inherit; cursor: point
 }
 
 .m-card:hover { border-color: var(--gold-edge); box-shadow: var(--shadow-md); }
+.m-card.is-selectable { cursor: pointer; }
+.m-card.is-selectable .m-card-actions > button { display: none; }
+.m-card.is-selected { border-color: var(--danger); box-shadow: 0 0 0 2px var(--danger); }
+.bulk-select { display: flex; align-items: center; gap: 10px; min-height: 42px; padding: 0 4px; font-size: 0.9rem; cursor: pointer; }
+.bulk-select input { width: 22px; height: 22px; accent-color: var(--danger); }
 
 .m-card > img,
 .m-card .m-cover {
