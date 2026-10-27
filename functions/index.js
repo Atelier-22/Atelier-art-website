@@ -18,7 +18,9 @@ const ADMIN_EMAILS = [
 function requireAdmin(request) {
   const auth = request.auth;
   if (!auth) throw new HttpsError("unauthenticated", "Sign in first.");
-  if (auth.token.admin !== true) {
+  const email = (auth.token.email || "").trim().toLowerCase();
+  const isOwner = ADMIN_EMAILS.some(ownerEmail => ownerEmail.trim().toLowerCase() === email);
+  if (auth.token.admin !== true && !isOwner) {
     throw new HttpsError("permission-denied", "Admin privileges required.");
   }
   return auth;

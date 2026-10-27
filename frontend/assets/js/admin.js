@@ -697,20 +697,36 @@ async function deleteSelected(kind) {
   const existingCount = art ? ids.length : plans.filter(plan => plan.exists).length;
   if (!existingCount) { toast("Those items no longer exist.", "error"); return; }
   confirmBulkDelete(existingCount, pages, async (report) => {
-    for (let i = 0; i < ids.length; i++) {
-      const id = ids[i];
-      report(`Deleting ${i + 1} of ${ids.length}…`);
-      if (art) await deleteArtwork(id);
-      else {
-        await deleteComic(id, plans[i]);
-        if (editingComicId === id) resetComicForm();
+    const selected = art ? state.selectedArt : state.selectedComics;
+    const errors = [];
+    let deleted = 0;
+    const pending = ids.filter(id => selected.has(id));
+    for (let i = 0; i < pending.length; i++) {
+      const id = pending[i];
+      report(`Deleting ${i + 1} of ${pending.length}…`);
+      try {
+        if (art) await deleteArtwork(id);
+        else {
+          const index = ids.indexOf(id);
+          await deleteComic(id, plans[index]);
+          if (editingComicId === id) resetComicForm();
+        }
+        selected.delete(id);
+        deleted++;
+      } catch (err) {
+        errors.push({ id, message: err.message || "Delete failed." });
       }
-      (art ? state.selectedArt : state.selectedComics).delete(id);
     }
-    if (art) { state.selectedArt.clear(); state.selectingArt = false; }
-    else { state.selectedComics.clear(); state.selectingComics = false; }
+    if (!errors.length) {
+      selected.clear();
+      if (art) state.selectingArt = false; else state.selectingComics = false;
+    }
     art ? renderCollection() : renderComics();
-    toast(`${ids.length} item${ids.length === 1 ? "" : "s"} permanently deleted.`, "ok");
+    if (errors.length) {
+      const first = errors[0];
+      toast(`${deleted} deleted; ${errors.length} failed. ${first.id}: ${first.message}`, "error");
+      report(`${deleted} deleted. ${errors.length} still selected; close and retry after fixing the error.`);
+    } else toast(`${deleted} item${deleted === 1 ? "" : "s"} permanently deleted.`, "ok");
   });
 }
 
