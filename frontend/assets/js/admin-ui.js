@@ -40,7 +40,7 @@ export function toast(message, kind = "") {
 
 export function modal({
   title, body, confirmLabel = "Confirm", danger = false, onConfirm,
-  confirmPhrase, wide = false, onMount, hideConfirm = false
+  wide = false, onMount, hideConfirm = false, cancelLabel = "Cancel", onCancel
 }) {
   const overlay = document.createElement("div");
   overlay.className = `modal${wide ? " is-wide" : ""}`;
@@ -48,15 +48,10 @@ export function modal({
     <div class="modal-box" role="dialog" aria-modal="true">
       <h3>${escapeHtml(title)}</h3>
       <div class="modal-sub">${body}</div>
-      ${confirmPhrase ? `
-        <div class="confirm-guard">
-          <p>This can't be undone. Type <code>${escapeHtml(confirmPhrase)}</code> to confirm.</p>
-          <input type="text" class="guard-input" autocomplete="off" placeholder="${escapeHtml(confirmPhrase)}">
-        </div>` : ""}
       <div class="modal-actions">
-        <button class="btn" data-cancel>${hideConfirm ? "Close" : "Cancel"}</button>
+        <button class="btn" data-cancel>${hideConfirm ? "Close" : escapeHtml(cancelLabel)}</button>
         ${hideConfirm ? "" : `
-          <button class="btn ${danger ? "is-danger" : "is-primary"}" data-confirm ${confirmPhrase ? "disabled" : ""}>
+          <button class="btn ${danger ? "is-danger" : "is-primary"}" data-confirm>
             ${escapeHtml(confirmLabel)}
           </button>`}
       </div>
@@ -66,16 +61,7 @@ export function modal({
   requestAnimationFrame(() => overlay.classList.add("is-open"));
 
   const confirmBtn = $("[data-confirm]", overlay);
-  const guard = $(".guard-input", overlay);
-
-  if (guard) {
-    guard.addEventListener("input", () => {
-      confirmBtn.disabled = guard.value.trim() !== confirmPhrase;
-    });
-    guard.focus();
-  } else {
-    confirmBtn?.focus();
-  }
+  confirmBtn?.focus();
 
   function close() {
     overlay.classList.remove("is-open");
@@ -83,10 +69,24 @@ export function modal({
     setTimeout(() => overlay.remove(), 320);
   }
 
-  function onKey(e) { if (e.key === "Escape") close(); }
+  function onKey(e) {
+    if (e.key === "Escape") { e.preventDefault(); e.stopImmediatePropagation(); close(); }
+    else if (e.key === "Enter" && confirmBtn && !confirmBtn.disabled && !e.target.closest("textarea, button, select")) {
+      e.preventDefault();
+      e.stopImmediatePropagation();
+      confirmBtn.click();
+    }
+  }
   document.addEventListener("keydown", onKey);
 
-  $("[data-cancel]", overlay).addEventListener("click", close);
+  $("[data-cancel]", overlay).addEventListener("click", async () => {
+    if (onCancel) {
+      const cancel = $("[data-cancel]", overlay);
+      cancel.disabled = true;
+      try { await onCancel(); } catch (err) { toast(err.message || "That didn't work.", "error"); cancel.disabled = false; return; }
+    }
+    close();
+  });
   overlay.addEventListener("click", (e) => { if (e.target === overlay) close(); });
 
   confirmBtn?.addEventListener("click", async () => {
@@ -103,15 +103,4 @@ export function modal({
 
   onMount?.(overlay, close);
   return { close, overlay };
-}
-
-export function confirmDelete({ what, name, extra = "", onConfirm }) {
-  return modal({
-    title: `Delete this ${what}?`,
-    body: `<b>${escapeHtml(name)}</b> will be permanently removed from the site.${extra ? ` ${extra}` : ""}`,
-    confirmLabel: `Delete ${what}`,
-    danger: true,
-    confirmPhrase: "DELETE",
-    onConfirm
-  });
 }

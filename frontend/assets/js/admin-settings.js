@@ -11,7 +11,7 @@ import {
 import { posterFromVideo, VIDEO_TRIM_SECONDS } from "./cloudinary.js?v=20260823a";
 import { readTrackName, titleFromFilename } from "./id3.js?v=20260823a";
 import { LOCAL_SEEDS, CATEGORY_BY_SLUG } from "./site-data.js?v=20260823a";
-import { $, $$, escapeHtml, toast, modal } from "./admin-ui.js?v=20260823a";
+import { $, $$, escapeHtml, toast, modal } from "./admin-ui.js?v=20261027d";
 
 const ROOT_IMAGES = ["1.jpg", "2.jpg", "AJ.jpeg", "AJ1.jpg", "AJ2.JPG", "tt.JPG"];
 
@@ -21,7 +21,11 @@ const state = {
   tab: "theme",
   view: "overview",
   dirty: false,
+  saveError: false,
+  publishError: false,
+  publishing: false,
   saveTimer: null,
+  readyPromise: null,
   mounted: false,
   categories: [],
   media: [],
@@ -631,6 +635,7 @@ export async function pickImage(current = "") {
 
 function markDirty() {
   state.dirty = true;
+  state.publishError = false;
   renderStatus();
   clearTimeout(state.saveTimer);
   state.saveTimer = setTimeout(commit, 550);
@@ -640,10 +645,12 @@ async function commit() {
   try {
     await saveDraft(state.draft);
     state.dirty = false;
+    state.saveError = false;
     renderStatus();
     state.onChange?.(state.draft);
   } catch (err) {
     console.error(err);
+    state.saveError = true;
     toast(err.message || "Could not save the draft.", "error");
   }
 }
@@ -1501,10 +1508,12 @@ function renderStatus() {
 
   const pending = unpublishedCount();
   const blocked = hasBlockingContrastFailure(state.draft.theme);
-  const waiting = pending > 0 || state.dirty;
+  const waiting = pending > 0;
 
-  host.textContent = state.dirty
-    ? "Saving…"
+  host.textContent = state.publishing
+    ? "Publishing…"
+    : state.dirty && pending
+      ? `${pending} change${pending === 1 ? "" : "s"} ${state.saveError ? "could not be saved — try Publish" : state.publishError ? "could not be published — try again" : "saving…"}`
     : pending
       ? `${pending} change${pending === 1 ? "" : "s"} not live yet — press Publish`
       : "Everything is published";
@@ -1520,7 +1529,7 @@ function renderStatus() {
 
   const publish = $("#settings-publish");
   if (publish) {
-    publish.disabled = blocked || !waiting;
+    publish.disabled = blocked || !waiting || state.publishing;
     publish.title = blocked ? "Fix the readability warnings first." : "";
   }
   const discard = $("#settings-discard");
@@ -1537,6 +1546,9 @@ function renderTabs() {
     const button = e.target.closest("[data-tab]");
     if (!button) return;
     state.tab = button.dataset.tab;
+    const url = new URL(location.href);
+    url.searchParams.set("tab", state.tab);
+    history.pushState({ admin: true }, "", url.href);
     $$("[data-tab]", host).forEach(b => b.classList.toggle("is-active", b === button));
     renderBody();
   });
@@ -1575,51 +1587,85 @@ async function loadDrafts() {
 }
 
 export async function initSettings({ onChange } = {}) {
-  if (state.mounted) return;
+  if (state.mounted) return state.readyPromise;
   state.mounted = true;
   state.onChange = onChange;
-
-  await loadDrafts();
-
-  renderTabs();
-  renderBody();
-
-  watchMedia((items) => { state.media = items; }, () => { state.media = []; });
-
-  $("#settings-publish").addEventListener("click", async () => {
-    const button = $("#settings-publish");
-    button.disabled = true;
-    try {
-      clearTimeout(state.saveTimer);
-      await saveDraft(state.draft);
-      state.published = await publishDraft();
-      state.dirty = false;
-      toast("Published — the change is live.", "ok");
-      renderStatus();
-      state.onChange?.(state.draft);
-    } catch (err) {
-      console.error(err);
-      toast(err.message || "Could not publish.", "error");
-      button.disabled = false;
-    }
-  });
-
-  $("#settings-discard").addEventListener("click", () => {
-    modal({
-      title: "Throw away the draft?",
-      body: "Every unpublished change goes back to what is currently live. This cannot be undone.",
-      confirmLabel: "Discard changes",
-      danger: true,
-      onConfirm: async () => {
-        clearTimeout(state.saveTimer);
-        state.draft = await discardDraft();
-        state.dirty = false;
-        renderBody();
-        toast("Draft reset to the live site.", "ok");
-        state.onChange?.(state.draft);
-      }
+  state.readyPromise = (async () => {
+    await loadDrafts();
+    const urlTab = new URLSearchParams(location.search).get("tab");
+    if (TABS.some(tab => tab.id === urlTab)) state.tab = urlTab;
+    renderTabs();
+    renderBody();
+    window.addEventListener("popstate", () => {
+      const tab = new URLSearchParams(location.search).get("tab");
+      if (!TABS.some(item => item.id === tab)) return;
+      state.tab = tab;
+      $$(`[data-tab]`, $("#settings-tabs")).forEach(button => button.classList.toggle("is-active", button.dataset.tab === tab));
+      renderBody();
     });
-  });
+    watchMedia((items) => { state.media = items; }, () => { state.media = []; });
+    $("#settings-publish").addEventListener("click", async () => {
+      try { await publishSettingsChanges(); }
+      catch (err) { console.error(err); toast(err.message || "Could not publish. Your changes are still waiting.", "error"); }
+    });
+    $("#settings-discard").addEventListener("click", () => {
+      modal({
+        title: "Throw away the draft?",
+        body: "Every unpublished change goes back to what is currently live. This cannot be undone.",
+        confirmLabel: "Discard changes",
+        danger: true,
+        onConfirm: async () => {
+          clearTimeout(state.saveTimer);
+          state.draft = await discardDraft();
+          state.published = mergeConfig(state.draft);
+          state.dirty = false;
+          state.saveError = false;
+          state.publishError = false;
+          renderBody();
+          toast("Draft reset to the live site.", "ok");
+          state.onChange?.(state.draft);
+        }
+      });
+    });
+  })();
+  return state.readyPromise;
+}
+
+export async function hasUnpublishedChanges() {
+  if (!state.mounted) await initSettings();
+  else await state.readyPromise;
+  return unpublishedCount() > 0;
+}
+
+export async function publishSettingsChanges() {
+  if (!state.mounted) await initSettings();
+  else await state.readyPromise;
+  if (!unpublishedCount()) return;
+  const button = $("#settings-publish");
+  state.publishing = true;
+  if (button) button.textContent = "Publishing...";
+  renderStatus();
+  clearTimeout(state.saveTimer);
+  try {
+    await saveDraft(state.draft);
+    state.dirty = false;
+    state.published = await publishDraft();
+    state.draft = mergeConfig(state.published);
+    state.saveError = false;
+    state.publishError = false;
+    toast("Published successfully", "ok");
+    renderStatus();
+    state.onChange?.(state.draft);
+  } catch (err) {
+    state.dirty = true;
+    state.publishError = true;
+    renderStatus();
+    throw err;
+  } finally {
+    state.publishing = false;
+    if (button) button.textContent = "Publish changes";
+    renderStatus();
+  }
 }
 
 export function setSettingsCategories(categories) {

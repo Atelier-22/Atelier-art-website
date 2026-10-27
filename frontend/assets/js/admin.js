@@ -11,11 +11,12 @@ import {
 } from "./data.js?v=20260823a";
 import { categoryHref, LOCAL_SEEDS, CATEGORY_BY_SLUG } from "./site-data.js?v=20260823a";
 import {
-  $, $$, escapeHtml, relativeTime, toast, modal, confirmDelete
-} from "./admin-ui.js?v=20260823a";
+  $, $$, escapeHtml, relativeTime, toast, modal
+} from "./admin-ui.js?v=20261027d";
 import {
-  initSettings, setSettingsCategories, pickImage, setActiveView
-} from "./admin-settings.js?v=20261017b";
+  initSettings, setSettingsCategories, pickImage, setActiveView,
+  hasUnpublishedChanges, publishSettingsChanges
+} from "./admin-settings.js?v=20261027d";
 import { initPreview, setPreviewCategories, onPreviewShown } from "./admin-preview.js?v=20260823a";
 
 const state = {
@@ -24,13 +25,23 @@ const state = {
   artworks: [],
   comics: [],
   comments: [],
-  view: "overview",
+  view: ["overview", "artworks", "comics", "categories", "settings", "preview", "maintenance", "engagement", "changelog"].includes(new URLSearchParams(location.search).get("section"))
+    ? new URLSearchParams(location.search).get("section") : "overview",
   collection: "",
   collectionSearch: "",
   selectingArt: false,
   selectedArt: new Set(),
+  artAnchor: null,
   selectingComics: false,
   selectedComics: new Set(),
+  comicAnchor: null,
+  selectingArtCats: false,
+  selectedArtCats: new Set(),
+  selectingComicCats: false,
+  selectedComicCats: new Set(),
+  selectingComments: false,
+  selectedComments: new Set(),
+  dashboardRestored: false,
   comicFilter: "all",
   ready: false
 };
@@ -38,6 +49,61 @@ const state = {
 
 const loginScreen = $("#login-screen");
 const shell = $("#admin-shell");
+
+function restoreSelectionFocus(container, selector, key) {
+  const input = $$(selector, container).find(node => node.closest("[data-selection-key]")?.dataset.selectionKey === key);
+  input?.focus({ preventScroll: true });
+}
+const DASHBOARD_STATE_KEY = "alafi-admin-dashboard-state-v2";
+
+function saveDashboardState() {
+  if (!state.dashboardRestored) return;
+  try {
+    sessionStorage.setItem(DASHBOARD_STATE_KEY, JSON.stringify({
+      view: state.view, collection: state.collection, collectionSearch: state.collectionSearch,
+      comicFilter: state.comicFilter, selectingArt: state.selectingArt, selectedArt: [...state.selectedArt],
+      selectingComics: state.selectingComics, selectedComics: [...state.selectedComics],
+      selectingArtCats: state.selectingArtCats, selectedArtCats: [...state.selectedArtCats],
+      selectingComicCats: state.selectingComicCats, selectedComicCats: [...state.selectedComicCats],
+      selectingComments: state.selectingComments, selectedComments: [...state.selectedComments], scrollY: window.scrollY
+    }));
+  } catch { }
+}
+
+function restoreDashboardState() {
+  try {
+    const saved = JSON.parse(sessionStorage.getItem(DASHBOARD_STATE_KEY) || "null");
+    if (!saved) { state.dashboardRestored = true; return; }
+    state.collection = saved.collection || state.collection;
+    state.collectionSearch = saved.collectionSearch || "";
+    state.comicFilter = saved.comicFilter || "all";
+    state.selectingArt = !!saved.selectingArt;
+    state.selectedArt = new Set(saved.selectedArt || []);
+    state.selectingComics = !!saved.selectingComics;
+    state.selectedComics = new Set(saved.selectedComics || []);
+    state.selectingArtCats = !!saved.selectingArtCats;
+    state.selectedArtCats = new Set(saved.selectedArtCats || []);
+    state.selectingComicCats = !!saved.selectingComicCats;
+    state.selectedComicCats = new Set(saved.selectedComicCats || []);
+    state.selectingComments = !!saved.selectingComments;
+    state.selectedComments = new Set(saved.selectedComments || []);
+    $("#collection-search").value = state.collectionSearch;
+    renderCollectionChips(); renderCollection(); renderComics();
+    const targetY = Number(saved.scrollY) || 0;
+    let attempts = 0;
+    const restoreScroll = () => {
+      if (document.documentElement.scrollHeight >= targetY + window.innerHeight || attempts++ >= 20) {
+        window.scrollTo(0, targetY);
+        state.dashboardRestored = true;
+        saveDashboardState();
+      } else setTimeout(restoreScroll, 200);
+    };
+    requestAnimationFrame(() => requestAnimationFrame(restoreScroll));
+  } catch { state.dashboardRestored = true; }
+}
+
+window.addEventListener("scroll", saveDashboardState, { passive: true });
+window.addEventListener("pagehide", saveDashboardState);
 
 const LOGIN_ERRORS = {
   "auth/invalid-email": "That doesn't look like an email address.",
@@ -81,7 +147,17 @@ authReady.then((mode) => {
   }
 });
 
-$("#logout").addEventListener("click", () => ownerLogout());
+$("#logout").addEventListener("click", async () => {
+  if (!await hasUnpublishedChanges()) { await ownerLogout(); return; }
+  modal({
+    title: "Unpublished changes",
+    body: "You have unpublished changes. Publish them now?",
+    confirmLabel: "Yes, publish",
+    cancelLabel: "No, log out",
+    onConfirm: async () => { await publishSettingsChanges(); await ownerLogout(); },
+    onCancel: ownerLogout
+  });
+});
 
 watchAuth((user) => {
   if (isOwner(user)) {
@@ -89,7 +165,11 @@ watchAuth((user) => {
     shell.hidden = false;
     $("#who").textContent = user.email;
     paintIdentity(user).catch(err => console.warn("Identity panel failed:", err));
-    if (!state.ready) { state.ready = true; boot(); }
+    if (!state.ready) {
+      state.ready = true; boot();
+      restoreDashboardState();
+      showView(state.view, { push: false, scroll: false });
+    }
   } else {
     loginScreen.hidden = false;
     shell.hidden = true;
@@ -97,7 +177,7 @@ watchAuth((user) => {
 });
 
 
-function showView(view) {
+function showView(view, { push = true, scroll = true } = {}) {
   state.view = view;
   const btn = $(`.admin-menu button[data-view="${view}"]`);
   $$(".admin-menu button").forEach(b => b.classList.toggle("is-active", b === btn));
@@ -106,11 +186,21 @@ function showView(view) {
   $("#view-sub").textContent = btn.dataset.sub;
   setActiveView(view);
   if (view === "preview") onPreviewShown();
-  window.scrollTo({ top: 0, behavior: "smooth" });
+  const url = new URL(location.href);
+  url.searchParams.set("section", view);
+  if (push) history.pushState({ admin: true }, "", url.href);
+  else history.replaceState({ admin: true }, "", url.href);
+  if (scroll) window.scrollTo({ top: 0, behavior: "smooth" });
+  saveDashboardState();
 }
 
 $$(".admin-menu button").forEach((btn) => {
   btn.addEventListener("click", () => showView(btn.dataset.view));
+});
+
+window.addEventListener("popstate", () => {
+  const view = new URLSearchParams(location.search).get("section") || "overview";
+  if ($(`.admin-menu button[data-view="${view}"]`)) showView(view, { push: false, scroll: false });
 });
 
 document.addEventListener("click", (e) => {
@@ -407,6 +497,8 @@ function renderCollection() {
   list.forEach((piece) => {
     const el = document.createElement("article");
     el.className = `m-card${piece.hidden ? " is-hidden-piece" : ""}`;
+    el.dataset.selectionKey = piece.id;
+    if (state.selectingArt) el.classList.add("is-selection-mode");
     if (state.selectingArt && piece.managed) el.classList.add("is-selectable", ...(state.selectedArt.has(piece.id) ? ["is-selected"] : []));
     const shown = piece.title || piece.placeholder;
 
@@ -435,9 +527,18 @@ function renderCollection() {
     `;
 
     if (state.selectingArt && piece.managed) {
-      $("[data-select-piece]", el).addEventListener("change", (e) => {
-        e.target.checked ? state.selectedArt.add(piece.id) : state.selectedArt.delete(piece.id);
-        updateBulkControls("art");
+      $("[data-select-piece]", el).addEventListener("click", (e) => {
+        const selectable = list.filter(p => p.managed);
+        const index = selectable.findIndex(p => p.id === piece.id);
+        if (e.shiftKey && state.artAnchor) {
+          const anchorIndex = selectable.findIndex(p => p.id === state.artAnchor);
+          if (anchorIndex >= 0) selectable.slice(Math.min(anchorIndex, index), Math.max(anchorIndex, index) + 1).forEach(p => e.target.checked ? state.selectedArt.add(p.id) : state.selectedArt.delete(p.id));
+        } else {
+          e.target.checked ? state.selectedArt.add(piece.id) : state.selectedArt.delete(piece.id);
+          state.artAnchor = piece.id;
+        }
+        renderCollection();
+        restoreSelectionFocus(host, "[data-select-piece]", piece.id);
       });
     }
     if (!state.selectingArt) $("[data-edit]", el).addEventListener("click", () => editPiece(piece));
@@ -461,6 +562,7 @@ function renderCollection() {
         state.selectingArt = true;
         state.selectedArt.clear();
         state.selectedArt.add(piece.id);
+        state.artAnchor = piece.id;
         renderCollection();
       });
 
@@ -487,12 +589,20 @@ function updateBulkControls(kind) {
   const count = (art ? state.selectedArt : state.selectedComics).size;
   const toggle = $(art ? "#art-select-toggle" : "#comic-select-toggle");
   const action = $(art ? "#art-delete-selected" : "#comic-delete-selected");
-  if (toggle) toggle.textContent = selecting ? "Cancel selection" : "Select to delete";
+  const items = art
+    ? collectionPieces(activeCollection()).filter(p => p.managed && (!state.collectionSearch.trim() || p.title.toLowerCase().includes(state.collectionSearch.trim().toLowerCase()) || p.placeholder.toLowerCase().includes(state.collectionSearch.trim().toLowerCase())))
+    : state.comics.filter(c => state.comicFilter === "all" || c.categorySlug === state.comicFilter);
+  const countHost = $(art ? "#art-selected-count" : "#comic-selected-count");
+  const allButton = $(art ? "#art-select-all" : "#comic-select-all");
+  if (toggle) toggle.textContent = selecting ? "Cancel" : "Delete";
+  if (countHost) { countHost.hidden = !selecting; countHost.textContent = `${count} selected`; }
+  if (allButton) { allButton.hidden = !selecting || !items.length; allButton.textContent = items.length && items.every(item => (art ? state.selectedArt : state.selectedComics).has(item.id)) ? "Unselect all" : "Select all"; }
   if (action) {
     action.hidden = !selecting;
     action.disabled = !count;
     action.textContent = `Delete selected (${count})`;
   }
+  saveDashboardState();
 }
 
 async function deleteSelected(kind) {
@@ -501,33 +611,47 @@ async function deleteSelected(kind) {
   if (!ids.length) return;
   const noun = art ? "image" : "story";
   const pages = art ? 0 : state.comics.filter(c => ids.includes(c.id)).reduce((sum, c) => sum + c.pages.length, 0);
-  modal({
-    title: `Delete ${ids.length} ${noun}${ids.length === 1 ? "" : "s"}?`,
-    body: `This will permanently delete <b>${ids.length} ${noun}${ids.length === 1 ? "" : "s"}</b>${pages ? ` and all <b>${pages} page${pages === 1 ? "" : "s"}</b> in those stories` : ""}. This can't be undone.`,
-    confirmLabel: `Delete ${ids.length}`,
-    danger: true,
-    onConfirm: async () => {
-      for (const id of ids) {
-        if (art) await deleteArtwork(id);
-        else {
-          await deleteComic(id);
-          if (editingComicId === id) resetComicForm();
-        }
+  confirmBulkDelete(ids.length, pages, async () => {
+    for (const id of ids) {
+      if (art) await deleteArtwork(id);
+      else {
+        await deleteComic(id);
+        if (editingComicId === id) resetComicForm();
       }
-      if (art) { state.selectedArt.clear(); state.selectingArt = false; }
-      else { state.selectedComics.clear(); state.selectingComics = false; }
-      art ? renderCollection() : renderComics();
-      toast(`${ids.length} ${noun}${ids.length === 1 ? "" : "s"} permanently deleted.`, "ok");
     }
+    if (art) { state.selectedArt.clear(); state.selectingArt = false; }
+    else { state.selectedComics.clear(); state.selectingComics = false; }
+    art ? renderCollection() : renderComics();
+    toast(`${ids.length} item${ids.length === 1 ? "" : "s"} permanently deleted.`, "ok");
+  });
+}
+
+function confirmBulkDelete(count, pages, remove) {
+  if (!count) return;
+  modal({
+    title: `Delete ${count} ${count === 1 ? "item" : "items"} permanently?`,
+    body: `This cannot be undone.${pages ? ` This also removes all <b>${pages} page${pages === 1 ? "" : "s"}</b> in the selected stories.` : ""}`,
+    confirmLabel: "Delete",
+    danger: true,
+    onConfirm: remove
   });
 }
 
 $("#art-select-toggle")?.addEventListener("click", () => {
   state.selectingArt = !state.selectingArt;
   state.selectedArt.clear();
+  state.artAnchor = null;
   renderCollection();
 });
 $("#art-delete-selected")?.addEventListener("click", () => deleteSelected("art"));
+$("#art-select-all")?.addEventListener("click", () => {
+  const set = state.selectedArt;
+  const term = state.collectionSearch.trim().toLowerCase();
+  const items = collectionPieces(activeCollection()).filter(p => p.managed && (!term || p.title.toLowerCase().includes(term) || p.placeholder.toLowerCase().includes(term)));
+  const allSelected = items.every(item => set.has(item.id));
+  items.forEach(item => allSelected ? set.delete(item.id) : set.add(item.id));
+  renderCollection();
+});
 
 function editPiece(piece) {
   const isUpload = piece.kind === "upload";
@@ -575,14 +699,18 @@ $("#collection-chips")?.addEventListener("click", (e) => {
   if (!chip) return;
   state.collection = chip.dataset.collection;
   state.collectionSearch = "";
+  state.selectedArt.clear();
+  state.artAnchor = null;
   $("#collection-search").value = "";
   renderCollectionChips();
   renderCollection();
+  saveDashboardState();
 });
 
 $("#collection-search")?.addEventListener("input", (e) => {
   state.collectionSearch = e.target.value;
   renderCollection();
+  saveDashboardState();
 });
 
 $("#archive-setup")?.addEventListener("click", async () => {
@@ -824,6 +952,7 @@ function renderComics() {
   list.forEach((comic, i) => {
     const el = document.createElement("article");
     el.className = "m-card is-story";
+    el.dataset.selectionKey = comic.id;
     if (state.selectingComics) el.classList.add("is-selectable", ...(state.selectedComics.has(comic.id) ? ["is-selected"] : []));
     el.innerHTML = `
       <span class="m-badge">${comic.pages.length}p · ${comic.likes} &#9829;</span>
@@ -842,9 +971,17 @@ function renderComics() {
       </div>
     `;
 
-    if (state.selectingComics) $("[data-select-story]", el).addEventListener("change", (e) => {
-      e.target.checked ? state.selectedComics.add(comic.id) : state.selectedComics.delete(comic.id);
-      updateBulkControls("comics");
+    if (state.selectingComics) $("[data-select-story]", el).addEventListener("click", (e) => {
+      if (e.shiftKey && state.comicAnchor) {
+        const anchorIndex = list.findIndex(c => c.id === state.comicAnchor);
+        const index = list.findIndex(c => c.id === comic.id);
+        if (anchorIndex >= 0) list.slice(Math.min(anchorIndex, index), Math.max(anchorIndex, index) + 1).forEach(c => e.target.checked ? state.selectedComics.add(c.id) : state.selectedComics.delete(c.id));
+      } else {
+        e.target.checked ? state.selectedComics.add(comic.id) : state.selectedComics.delete(comic.id);
+        state.comicAnchor = comic.id;
+      }
+      renderComics();
+      restoreSelectionFocus(host, "[data-select-story]", comic.id);
     });
     if (!state.selectingComics) $("[data-edit]", el).addEventListener("click", () => loadComicIntoForm(comic));
 
@@ -864,6 +1001,7 @@ function renderComics() {
       state.selectingComics = true;
       state.selectedComics.clear();
       state.selectedComics.add(comic.id);
+      state.comicAnchor = comic.id;
       renderComics();
     });
 
@@ -874,14 +1012,36 @@ function renderComics() {
 
 $("#comic-filter").addEventListener("change", (e) => {
   state.comicFilter = e.target.value;
+  state.selectedComics.clear();
+  state.comicAnchor = null;
   renderComics();
+  saveDashboardState();
 });
 $("#comic-select-toggle")?.addEventListener("click", () => {
   state.selectingComics = !state.selectingComics;
   state.selectedComics.clear();
+  state.comicAnchor = null;
   renderComics();
 });
 $("#comic-delete-selected")?.addEventListener("click", () => deleteSelected("comics"));
+$("#comic-select-all")?.addEventListener("click", () => {
+  const set = state.selectedComics;
+  const items = state.comics.filter(c => state.comicFilter === "all" || c.categorySlug === state.comicFilter);
+  const allSelected = items.every(item => set.has(item.id));
+  items.forEach(item => allSelected ? set.delete(item.id) : set.add(item.id));
+  renderComics();
+});
+
+document.addEventListener("keydown", (e) => {
+  if (e.key !== "Escape") return;
+  let changed = false;
+  if (state.selectingArt) { state.selectingArt = false; state.selectedArt.clear(); state.artAnchor = null; renderCollection(); changed = true; }
+  if (state.selectingComics) { state.selectingComics = false; state.selectedComics.clear(); state.comicAnchor = null; renderComics(); changed = true; }
+  if (state.selectingArtCats) { state.selectingArtCats = false; state.selectedArtCats.clear(); renderCategoryList("art"); changed = true; }
+  if (state.selectingComicCats) { state.selectingComicCats = false; state.selectedComicCats.clear(); renderCategoryList("comics"); changed = true; }
+  if (state.selectingComments) { state.selectingComments = false; state.selectedComments.clear(); renderComments(); changed = true; }
+  if (changed) e.stopPropagation();
+});
 
 
 function categoryList(kind) {
@@ -907,6 +1067,8 @@ function usageCount(kind, slug) {
 function renderCategoryList(kind) {
   const host = $(kind === "comics" ? "#comic-cat-rows" : "#art-cat-rows");
   const list = categoryList(kind);
+  const selecting = kind === "comics" ? state.selectingComicCats : state.selectingArtCats;
+  const selected = kind === "comics" ? state.selectedComicCats : state.selectedArtCats;
 
   host.innerHTML = list.length ? "" : '<p class="empty-note">No categories yet.</p>';
 
@@ -914,6 +1076,8 @@ function renderCategoryList(kind) {
     const used = usageCount(kind, cat.slug);
     const row = document.createElement("div");
     row.className = "row";
+    row.dataset.selectionKey = cat.id;
+    if (selecting && selected.has(cat.id)) row.classList.add("is-selected");
     row.innerHTML = `
       <div class="handle">
         <button type="button" data-up ${i === 0 ? "disabled" : ""} aria-label="Move up">&#9650;</button>
@@ -924,27 +1088,35 @@ function renderCategoryList(kind) {
         <small>/${escapeHtml(cat.slug)} · ${used} item${used === 1 ? "" : "s"}</small>
       </div>
       <div class="row-actions">
+        ${selecting ? `<label class="bulk-select"><input type="checkbox" data-select-category ${selected.has(cat.id) ? "checked" : ""}> Select</label>` : ""}
+        ${selecting ? "" : `
         ${kind === "art" ? `<a class="btn is-small" href="${escapeHtml(categoryHref({ slug: cat.slug }))}" target="_blank" rel="noopener">View</a>` : ""}
         <button class="btn is-small" data-rename>Rename</button>
-        <button class="btn is-small is-danger" data-del>Delete</button>
+        <button class="btn is-small is-danger" data-del>Select to delete</button>`}
       </div>
     `;
 
-    $("[data-up]", row).addEventListener("click", async () => {
+    if (selecting) $("[data-select-category]", row).addEventListener("click", (e) => {
+      e.target.checked ? selected.add(cat.id) : selected.delete(cat.id);
+      row.classList.toggle("is-selected", e.target.checked);
+      updateDeleteSelection(kind === "comics" ? "comicCats" : "artCats");
+    });
+
+    if (!selecting) $("[data-up]", row).addEventListener("click", async () => {
       const ids = list.map(c => c.id);
       [ids[i - 1], ids[i]] = [ids[i], ids[i - 1]];
       await ensureSeeded(kind);
       await reorderCategories(kind, ids);
     });
 
-    $("[data-down]", row).addEventListener("click", async () => {
+    if (!selecting) $("[data-down]", row).addEventListener("click", async () => {
       const ids = list.map(c => c.id);
       [ids[i + 1], ids[i]] = [ids[i], ids[i + 1]];
       await ensureSeeded(kind);
       await reorderCategories(kind, ids);
     });
 
-    $("[data-rename]", row).addEventListener("click", () => {
+    if (!selecting) $("[data-rename]", row).addEventListener("click", () => {
       const main = $(".row-main", row);
       const original = main.innerHTML;
       main.innerHTML = `<input type="text" value="${escapeHtml(cat.name)}">`;
@@ -972,25 +1144,96 @@ function renderCategoryList(kind) {
       });
     });
 
-    $("[data-del]", row).addEventListener("click", () => {
-      const noun = kind === "comics" ? "stories" : "artworks";
-      confirmDelete({
-        what: "category",
-        name: cat.name,
-        extra: used
-          ? `<br><br><b style="color:var(--danger)">${used} ${noun}</b> are still assigned to it. They won't be deleted, but they'll stop appearing until you reassign them.`
-          : "",
-        onConfirm: async () => {
-          await ensureSeeded(kind);
-          await deleteCategory(kind, cat.id);
-          toast("Category deleted.", "ok");
-        }
-      });
+    if (!selecting) $("[data-del]", row).addEventListener("click", () => {
+      const isComic = kind === "comics";
+      const selection = isComic ? state.selectedComicCats : state.selectedArtCats;
+      if (isComic) state.selectingComicCats = true; else state.selectingArtCats = true;
+      selection.clear(); selection.add(cat.id);
+      renderCategoryList(kind);
+      updateDeleteSelection(isComic ? "comicCats" : "artCats");
     });
 
     host.appendChild(row);
   });
+  updateDeleteSelection(kind === "comics" ? "comicCats" : "artCats");
 }
+
+function updateDeleteSelection(type) {
+  const config = {
+    artCats: ["#art-cat-select-toggle", "#art-cat-selected-count", "#art-cat-select-all", "#art-cat-delete-selected", state.selectedArtCats, state.selectingArtCats, state.artCategories],
+    comicCats: ["#comic-cat-select-toggle", "#comic-cat-selected-count", "#comic-cat-select-all", "#comic-cat-delete-selected", state.selectedComicCats, state.selectingComicCats, state.comicCategories],
+    comments: ["#comment-select-toggle", "#comment-selected-count", "#comment-select-all", "#comment-delete-selected", state.selectedComments, state.selectingComments, state.comments]
+  }[type];
+  if (!config) return;
+  const [toggleSel, countSel, allSel, deleteSel, selected, selecting, items] = config;
+  const toggle = $(toggleSel), count = $(countSel), all = $(allSel), del = $(deleteSel);
+  if (toggle) toggle.textContent = selecting ? "Cancel" : "Delete";
+  if (count) { count.hidden = !selecting; count.textContent = `${selected.size} selected`; }
+  if (all) { all.hidden = !selecting || !items.length; all.textContent = items.length && items.every(item => selected.has(selectionKey(type, item))) ? "Unselect all" : "Select all"; }
+  if (del) { del.hidden = !selecting; del.disabled = !selected.size; del.textContent = `Delete selected (${selected.size})`; }
+  saveDashboardState();
+}
+
+function selectionKey(type, item) {
+  return type === "comments" ? `${item.parentCollection}/${item.parentId}/${item.id}` : item.id;
+}
+
+async function deleteSelectedRecords(type) {
+  const map = {
+    artCats: [state.selectedArtCats, state.artCategories],
+    comicCats: [state.selectedComicCats, state.comicCategories],
+    comments: [state.selectedComments, state.comments]
+  }[type];
+  const [selected, items] = map;
+  const chosen = items.filter(item => selected.has(selectionKey(type, item)));
+  if (!chosen.length) return;
+  confirmBulkDelete(chosen.length, 0, async () => {
+    for (const item of chosen) {
+      if (type === "comments") await deleteComment(item.parentCollection, item.parentId, item.id);
+      else {
+        const kind = type === "comicCats" ? "comics" : "art";
+        await ensureSeeded(kind);
+        await deleteCategory(kind, item.id);
+      }
+    }
+    selected.clear();
+    if (type === "comments") { state.selectingComments = false; renderComments(); }
+    else {
+      if (type === "comicCats") state.selectingComicCats = false; else state.selectingArtCats = false;
+      renderCategoryList(type === "comicCats" ? "comics" : "art");
+    }
+    toast(`${chosen.length} item${chosen.length === 1 ? "" : "s"} permanently deleted.`, "ok");
+  });
+}
+
+function wireDeleteSelection(type) {
+  const selectors = {
+    artCats: ["#art-cat-select-toggle", "#art-cat-select-all", "#art-cat-delete-selected"],
+    comicCats: ["#comic-cat-select-toggle", "#comic-cat-select-all", "#comic-cat-delete-selected"],
+    comments: ["#comment-select-toggle", "#comment-select-all", "#comment-delete-selected"]
+  }[type];
+  const [toggleSel, allSel, deleteSel] = selectors;
+  const get = () => type === "artCats" ? [state.selectedArtCats, state.artCategories, "selectingArtCats"]
+    : type === "comicCats" ? [state.selectedComicCats, state.comicCategories, "selectingComicCats"]
+    : [state.selectedComments, state.comments, "selectingComments"];
+  $(toggleSel)?.addEventListener("click", () => {
+    const [selected, , flag] = get();
+    state[flag] = !state[flag]; selected.clear();
+    if (type === "comments") renderComments(); else renderCategoryList(type === "comicCats" ? "comics" : "art");
+    updateDeleteSelection(type);
+  });
+  $(allSel)?.addEventListener("click", () => {
+    const [selected, items] = get();
+    const allSelected = items.every(item => selected.has(selectionKey(type, item)));
+    items.forEach(item => allSelected ? selected.delete(selectionKey(type, item)) : selected.add(selectionKey(type, item)));
+    if (type === "comments") renderComments(); else renderCategoryList(type === "comicCats" ? "comics" : "art");
+  });
+  $(deleteSel)?.addEventListener("click", () => deleteSelectedRecords(type));
+}
+
+wireDeleteSelection("artCats");
+wireDeleteSelection("comicCats");
+wireDeleteSelection("comments");
 
 async function ensureSeeded(kind) {
   await seedDefaultCategories(kind);
@@ -1033,43 +1276,41 @@ function refreshCategorySelects() {
 function renderComments() {
   const host = $("#comment-rows");
   $("#comment-total").textContent = state.comments.length;
-
   host.innerHTML = state.comments.length ? "" : '<p class="empty-note">No comments yet.</p>';
-
   state.comments.forEach((c) => {
+    const key = selectionKey("comments", c);
     const source = c.parentCollection === "comics"
       ? state.comics.find(x => x.id === c.parentId)?.title
       : state.artworks.find(x => x.id === c.parentId)?.title;
-
     const row = document.createElement("div");
     row.className = "row row-comment";
+    row.dataset.selectionKey = key;
+    if (state.selectingComments && state.selectedComments.has(key)) row.classList.add("is-selected");
     row.innerHTML = `
       <div class="row-main">
         <strong>${escapeHtml(c.name)}</strong>
-        <small>on ${escapeHtml(source || c.parentId)} · ${relativeTime(c.createdAt / 1000)}</small>
+        <small>on ${escapeHtml(source || c.parentId)} | ${relativeTime(c.createdAt / 1000)}</small>
         <span>${escapeHtml(c.text)}</span>
       </div>
       <div class="row-actions">
-        <button class="btn is-small is-danger" data-del>Delete</button>
-      </div>
-    `;
-
-    $("[data-del]", row).addEventListener("click", () => {
-      confirmDelete({
-        what: "comment",
-        name: `${c.name}: “${c.text.slice(0, 60)}${c.text.length > 60 ? "…" : ""}”`,
-        onConfirm: async () => {
-          await deleteComment(c.parentCollection, c.parentId, c.id);
-          toast("Comment deleted.", "ok");
-        }
-      });
+        ${state.selectingComments ? `<label class="bulk-select"><input type="checkbox" data-select-comment ${state.selectedComments.has(key) ? "checked" : ""}> Select</label>` : '<button class="btn is-small is-danger" data-del>Select to delete</button>'}
+      </div>`;
+    if (state.selectingComments) $("[data-select-comment]", row).addEventListener("click", (e) => {
+      e.target.checked ? state.selectedComments.add(key) : state.selectedComments.delete(key);
+      row.classList.toggle("is-selected", e.target.checked);
+      updateDeleteSelection("comments");
     });
-
+    else $("[data-del]", row).addEventListener("click", () => {
+      state.selectingComments = true;
+      state.selectedComments.clear();
+      state.selectedComments.add(key);
+      renderComments();
+      updateDeleteSelection("comments");
+    });
     host.appendChild(row);
   });
+  updateDeleteSelection("comments");
 }
-
-
 async function paintIdentity(user) {
   $("#admin-uid").textContent = user.uid || "unavailable";
   const stateEl = $("#admin-claim-state");

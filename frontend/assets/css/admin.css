@@ -11,14 +11,18 @@ body.admin { background: var(--bg); }
 
 .login-screen {
   min-height: 100vh;
+  width: 100%;
+  min-width: 0;
   display: grid;
+  grid-template-columns: minmax(0, 1fr);
   place-items: center;
   padding: 24px;
 }
 
 .login-box {
-  width: 100%;
-  max-width: 400px;
+  width: min(400px, calc(100vw - 48px));
+  min-width: 0;
+  max-width: 100%;
   background: var(--panel);
   border: 1px solid var(--edge);
   border-radius: 6px;
@@ -396,6 +400,7 @@ button.stat { width: 100%; text-align: left; font-family: inherit; cursor: point
 .btn {
   display: inline-flex;
   align-items: center;
+  min-height: 44px;
   gap: 8px;
   background: var(--control);
   border: 1px solid var(--edge-strong);
@@ -561,7 +566,7 @@ button.stat { width: 100%; text-align: left; font-family: inherit; cursor: point
 
 .m-card:hover { border-color: var(--gold-edge); box-shadow: var(--shadow-md); }
 .m-card.is-selectable { cursor: pointer; }
-.m-card.is-selectable .m-card-actions > button { display: none; }
+.m-card.is-selection-mode .m-card-actions > button { display: none; }
 .m-card.is-selected { border-color: var(--danger); box-shadow: 0 0 0 2px var(--danger); }
 .bulk-select { display: flex; align-items: center; gap: 10px; min-height: 42px; padding: 0 4px; font-size: 0.9rem; cursor: pointer; }
 .bulk-select input { width: 22px; height: 22px; accent-color: var(--danger); }
@@ -632,6 +637,7 @@ button.stat { width: 100%; text-align: left; font-family: inherit; cursor: point
 }
 
 .row:hover { border-color: var(--gold-edge); background: var(--bg-raised); }
+.row.is-selected { border-color: var(--danger); box-shadow: 0 0 0 1px var(--danger); }
 
 .row .handle {
   display: flex;
@@ -736,16 +742,8 @@ button.stat { width: 100%; text-align: left; font-family: inherit; cursor: point
   flex-wrap: wrap;
 }
 
-.confirm-guard {
-  border: 1px solid rgba(157, 51, 45, 0.38);
-  background: rgba(157, 51, 45, 0.08);
-  border-radius: 4px;
-  padding: 16px;
-  margin-top: 18px;
-}
-
-.confirm-guard p { margin: 0 0 10px; font-size: 0.82rem; color: var(--fg-dim); }
-.confirm-guard code { color: var(--danger); font-size: 0.86rem; }
+.modal-actions .btn { min-width: 132px; min-height: 48px; justify-content: center; }
+.bulk-select { user-select: none; -webkit-user-select: none; }
 
 .toast-host {
   position: fixed;
