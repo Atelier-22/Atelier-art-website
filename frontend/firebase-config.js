@@ -1,7 +1,7 @@
 import { initializeApp } from "https://www.gstatic.com/firebasejs/10.13.0/firebase-app.js";
 import {
   getAuth, onAuthStateChanged, signInAnonymously,
-  signInWithEmailAndPassword, signOut, setPersistence,
+  signInWithEmailAndPassword, sendPasswordResetEmail, signOut, setPersistence,
   indexedDBLocalPersistence, browserLocalPersistence, browserSessionPersistence
 } from "https://www.gstatic.com/firebasejs/10.13.0/firebase-auth.js";
 import {
@@ -86,6 +86,11 @@ export function watchAuth(callback) {
 export async function ownerLogin(email, password) {
   await authReady;
   return signInWithEmailAndPassword(auth, (email || "").trim().toLowerCase(), password);
+}
+
+export async function ownerPasswordReset(email) {
+  await authReady;
+  return sendPasswordResetEmail(auth, (email || "").trim().toLowerCase());
 }
 
 export function ownerLogout() {

@@ -38,6 +38,16 @@ body.admin { background: var(--bg); }
 }
 
 .login-box .sub { color: var(--fg-dim); font-size: 0.82rem; margin: 0 0 32px; letter-spacing: 0.06em; }
+.login-reset {
+  display: block; width: 100%; min-height: 44px; margin-top: 8px; padding: 8px;
+  border: 0; background: transparent; color: var(--fg-dim); font: inherit;
+  font-size: .82rem; text-decoration: underline; text-underline-offset: 3px; cursor: pointer;
+}
+.login-reset:hover { color: var(--fg); }
+.login-reset:focus-visible { outline: 2px solid var(--gold); outline-offset: 1px; }
+.login-reset:disabled { opacity: .6; cursor: wait; }
+.login-reset-status { margin: 8px 0 0; color: var(--fg-dim); font-size: .82rem; line-height: 1.5; }
+.login-reset-status.is-error { color: var(--danger); }
 
 .password-control { position: relative; }
 .login-box .password-control input { padding-right: 62px; }

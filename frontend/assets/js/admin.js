@@ -1,4 +1,4 @@
-import { watchAuth, isOwner, ownerLogin, ownerLogout, authReady } from "../../firebase-config.js?v=20260823a";
+import { watchAuth, isOwner, ownerLogin, ownerLogout, ownerPasswordReset, authReady } from "../../firebase-config.js?v=20260823a";
 import {
   watchCategories, seedDefaultCategories, createCategory, updateCategory,
   reorderCategories, deleteCategory,
@@ -142,6 +142,31 @@ $("#login-form").addEventListener("submit", async (e) => {
     console.error("Sign-in failed:", error);
   } finally {
     submit.disabled = false;
+  }
+});
+
+$("#login-reset").addEventListener("click", async () => {
+  const email = $("#login-email");
+  const button = $("#login-reset");
+  const status = $("#login-reset-status");
+  if (!email.value.trim() || !email.checkValidity()) {
+    email.reportValidity();
+    email.focus();
+    return;
+  }
+  button.disabled = true;
+  status.hidden = false;
+  status.classList.remove("is-error");
+  status.textContent = "Sending reset link…";
+  try {
+    await ownerPasswordReset(email.value);
+    status.textContent = "If an account exists for that email, Firebase has sent a password reset link.";
+  } catch (error) {
+    const code = error?.code || "";
+    status.textContent = LOGIN_ERRORS[code] || `Couldn't send a reset link (${code || error?.message || "unknown error"}).`;
+    status.classList.add("is-error");
+  } finally {
+    button.disabled = false;
   }
 });
 
