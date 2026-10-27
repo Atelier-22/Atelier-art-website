@@ -306,7 +306,7 @@ function wireHeroCanvas() {
 
 async function upgradeFromFirestore(sections) {
   try {
-    const { fetchUploadedArtworks } = await import("../../firebase-config.js?v=20260823a");
+    const { fetchUploadedArtworks } = await import("../../firebase-config.js?v=20261027h");
     const byCategory = await fetchUploadedArtworks();
     let changed = false;
 

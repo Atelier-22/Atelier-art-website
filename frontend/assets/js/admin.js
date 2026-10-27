@@ -1,4 +1,4 @@
-import { watchAuth, isOwner, ownerLogin, ownerLogout, ownerPasswordReset, authReady } from "../../firebase-config.js?v=20260823a";
+import { watchAuth, isOwner, ownerLogin, ownerLogout, ownerPasswordReset, authReady } from "../../firebase-config.js?v=20261027h";
 import {
   watchCategories, seedDefaultCategories, createCategory, updateCategory,
   reorderCategories, deleteCategory,

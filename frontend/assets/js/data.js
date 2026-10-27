@@ -1,4 +1,4 @@
-import { db, auth, getApp } from "../../firebase-config.js?v=20260823a";
+import { db, auth, getApp } from "../../firebase-config.js?v=20261027h";
 import { DEFAULT_ART_CATEGORIES, DEFAULT_COMIC_CATEGORIES } from "./site-data.js?v=20260823a";
 import { imageDeliveryUrl, VIDEO_TRIM_SECONDS } from "./cloudinary.js?v=20260823a";
 import { autoQualityEnabled } from "./site-config.js?v=20261017b";

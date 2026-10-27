@@ -1,4 +1,4 @@
-import { db } from "../../firebase-config.js?v=20260823a";
+import { db } from "../../firebase-config.js?v=20261027h";
 import {
   doc, getDoc, setDoc, onSnapshot, serverTimestamp
 } from "https://www.gstatic.com/firebasejs/10.13.0/firebase-firestore.js";

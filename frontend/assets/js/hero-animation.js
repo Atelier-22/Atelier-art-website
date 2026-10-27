@@ -173,7 +173,7 @@
   }
 
   function loadPieces(exclude) {
-    return import("./assets/js/site-data.js?v=" + VERSION).then(function (m) {
+    return import("./site-data.js?v=" + VERSION).then(function (m) {
       var out = [];
       m.DEFAULT_ART_CATEGORIES.forEach(function (c) {
         (c.seeds || []).forEach(function (src) {
@@ -186,8 +186,8 @@
 
   function loadUploads(labels) {
     return Promise.all([
-      import("./firebase-config.js?v=" + VERSION),
-      import("./assets/js/cloudinary.js?v=" + VERSION)
+      import("../../firebase-config.js?v=20261027h"),
+      import("./cloudinary.js?v=" + VERSION)
     ]).then(function (mods) {
       return mods[0].fetchUploadedArtworks().then(function (byCategory) {
         var out = [];

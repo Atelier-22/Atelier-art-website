@@ -1,4 +1,4 @@
-import { ensureGuestAuth, watchAuth, isOwner } from "../../firebase-config.js?v=20260823a";
+import { ensureGuestAuth, watchAuth, isOwner } from "../../firebase-config.js?v=20261027h";
 import {
   watchGalleryPieces, watchPieceMeta, toggleLike, hasLiked,
   watchComments, addComment, deleteComment, fetchCategories, archivePieceId
