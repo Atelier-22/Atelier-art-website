@@ -120,17 +120,6 @@ const LOGIN_ERRORS = {
   "auth/operation-not-allowed": "Email sign-in is switched off for this project."
 };
 
-$("#login-pass-toggle").addEventListener("click", () => {
-  const password = $("#login-pass");
-  const visible = password.type === "password";
-  password.type = visible ? "text" : "password";
-  const toggle = $("#login-pass-toggle");
-  toggle.setAttribute("aria-pressed", String(visible));
-  toggle.setAttribute("aria-label", visible ? "Hide password" : "Show password");
-  toggle.title = visible ? "Hide password" : "Show password";
-  toggle.classList.toggle("is-visible", visible);
-});
-
 $("#login-form").addEventListener("submit", async (e) => {
   e.preventDefault();
   const err = $("#login-error");
