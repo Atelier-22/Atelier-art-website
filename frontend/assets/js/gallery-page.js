@@ -2,7 +2,7 @@ import { ensureGuestAuth, watchAuth, isOwner } from "../../firebase-config.js?v=
 import {
   watchGalleryPieces, watchPieceMeta, toggleLike, hasLiked,
   watchComments, addComment, deleteComment, fetchCategories, archivePieceId
-} from "./data.js?v=20260823a";
+} from "./data.js?v=20261027g";
 import { isPreview, currentConfig } from "./site-config.js?v=20261017b";
 import { LOCAL_SEEDS, CATEGORY_BY_SLUG, currentCategorySlug } from "./site-data.js?v=20260823a";
 import { bindGallery } from "./lightbox.js?v=20260823a";

@@ -2,7 +2,7 @@ import { ensureGuestAuth, watchAuth, isOwner } from "../../firebase-config.js?v=
 import {
   watchCategories, watchComics, watchLikes, toggleLike, hasLiked,
   watchComments, addComment, deleteComment
-} from "./data.js?v=20260823a";
+} from "./data.js?v=20261027g";
 import { DEFAULT_COMIC_CATEGORIES } from "./site-data.js?v=20260823a";
 import { observeReveals, initNav } from "./reveal.js?v=20260823a";
 import { modal } from "./admin-ui.js?v=20261027d";

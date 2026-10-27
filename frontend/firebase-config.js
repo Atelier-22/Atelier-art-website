@@ -66,7 +66,9 @@ export function ensureGuestAuth() {
 }
 
 export function isOwner(user) {
-  return !!user && ADMIN_EMAILS.includes((user.email || "").trim().toLowerCase());
+  if (!user) return false;
+  const signedInEmail = (user.email || "").trim().toLowerCase();
+  return ADMIN_EMAILS.some(email => email.trim().toLowerCase() === signedInEmail);
 }
 
 export function watchAuth(callback) {

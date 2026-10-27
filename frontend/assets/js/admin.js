@@ -8,7 +8,7 @@ import {
   watchComics, createComic, updateComic, getComicDeletionPlan, deleteComic, reorderComics,
   watchAllComments, deleteComment, uploadAndRecord,
   grantAdminClaim, watchChangeLog, logChange
-} from "./data.js?v=20260823a";
+} from "./data.js?v=20261027g";
 import { categoryHref, LOCAL_SEEDS, CATEGORY_BY_SLUG } from "./site-data.js?v=20260823a";
 import {
   $, $$, escapeHtml, relativeTime, toast, modal
@@ -16,7 +16,7 @@ import {
 import {
   initSettings, setSettingsCategories, pickImage, setActiveView,
   hasUnpublishedChanges, publishSettingsChanges
-} from "./admin-settings.js?v=20261027d";
+} from "./admin-settings.js?v=20261027g";
 import { initPreview, setPreviewCategories, onPreviewShown } from "./admin-preview.js?v=20260823a";
 
 const state = {
@@ -111,7 +111,7 @@ const LOGIN_ERRORS = {
   "auth/wrong-password": "That password isn't right for this address.",
   "auth/invalid-credential": "That email and password combination wasn't accepted.",
   "auth/invalid-login-credentials": "That email and password combination wasn't accepted.",
-  "auth/owner-access-denied": "This account signed in, but it is not authorized to access the studio dashboard. Use an owner account.",
+  "auth/owner-access-denied": "This account is not on the dashboard owner list.",
   "auth/too-many-requests": "Too many attempts from this device. Wait a few minutes and try again.",
   "auth/network-request-failed": "No connection to the server. Check the network and try again.",
   "auth/user-disabled": "That account has been disabled.",
@@ -131,15 +131,19 @@ $("#login-form").addEventListener("submit", async (e) => {
     const credential = await ownerLogin($("#login-email").value, $("#login-pass").value);
     if (!isOwner(credential?.user)) {
       await ownerLogout();
-      const error = new Error("This account signed in, but it is not authorized to access the studio dashboard. Use an owner account.");
+      const email = credential?.user?.email || $("#login-email").value.trim();
+      const error = new Error(`Signed in as ${email || "this account"}, but this email is not on the owner list.`);
       error.code = "auth/owner-access-denied";
       throw error;
     }
   } catch (error) {
     const code = error?.code || "";
-    err.textContent = LOGIN_ERRORS[code] || `Sign-in failed (${code || error?.message || "unknown"}).`;
+    const friendly = LOGIN_ERRORS[code] || "Sign-in failed.";
+    err.textContent = code === "auth/owner-access-denied"
+      ? error.message
+      : `${friendly} (${code || "unknown"})`;
     err.hidden = false;
-    console.error("Sign-in failed:", error);
+    console.error(error?.code || "auth/unknown", error?.message || "Sign-in failed.");
   } finally {
     submit.disabled = false;
   }
@@ -160,7 +164,7 @@ $("#login-reset").addEventListener("click", async () => {
   status.textContent = "Sending reset link…";
   try {
     await ownerPasswordReset(email.value);
-    status.textContent = "If an account exists for that email, Firebase has sent a password reset link.";
+    status.textContent = "If that account exists, a reset email has been sent.";
   } catch (error) {
     const code = error?.code || "";
     status.textContent = LOGIN_ERRORS[code] || `Couldn't send a reset link (${code || error?.message || "unknown error"}).`;
@@ -209,7 +213,7 @@ watchAuth((user) => {
     shell.hidden = true;
     if (user) {
       const err = $("#login-error");
-      err.textContent = "This account is signed in, but it is not authorized to access the studio dashboard. Use an owner account.";
+      err.textContent = `Signed in as ${user.email || "this account"}, but this email is not on the owner list.`;
       err.hidden = false;
     }
   }
@@ -765,7 +769,7 @@ $("#archive-setup")?.addEventListener("click", async () => {
   btn.disabled = true;
   status.textContent = "Setting up…";
   try {
-    const { seedArchiveRecords } = await import("./migrate.js?v=20260823a");
+    const { seedArchiveRecords } = await import("./migrate.js?v=20261027g");
     const written = await seedArchiveRecords();
     status.textContent = "";
     toast(`${written} pieces are now fully manageable.`, "ok");
@@ -1425,7 +1429,7 @@ $("#migrate-dry").addEventListener("click", async () => {
   btn.disabled = true;
   $("#migrate-report").innerHTML = '<p class="empty-note">Scanning…</p>';
   try {
-    const { dryRun } = await import("./migrate.js?v=20260823a");
+    const { dryRun } = await import("./migrate.js?v=20261027g");
     const { plans, totalWrites } = await dryRun();
     renderMigrationReport(plans, false);
     $("#migrate-run").disabled = totalWrites === 0;
@@ -1447,7 +1451,7 @@ $("#migrate-run").addEventListener("click", () => {
     body: "This writes <b>status</b>, <b>featured</b>, and Cloudinary <b>public IDs</b> onto your existing documents, copies categories into artCategories, seeds comic genres, and backfills the media library.<br><br>It is additive and idempotent — nothing is deleted, and re-running it is harmless.",
     confirmLabel: "Run migration",
     onConfirm: async () => {
-      const { apply } = await import("./migrate.js?v=20260823a");
+      const { apply } = await import("./migrate.js?v=20261027g");
       const { results, totalWrites } = await apply((label) => {
         $("#migrate-report").innerHTML = `<p class="empty-note">Migrating: ${escapeHtml(label)}…</p>`;
       });
