@@ -1,4 +1,4 @@
-import { $, $$, escapeHtml, toast } from "./admin-ui.js?v=20261027d";
+import { $, $$, escapeHtml, toast } from "./admin-ui.js?v=20261027e";
 import { categoryHref } from "./site-data.js?v=20260823a";
 
 const DEVICES = {

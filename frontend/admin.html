@@ -15,7 +15,7 @@
   <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
   <link href="https://fonts.googleapis.com/css2?family=Cormorant+Garamond:ital,wght@0,300;0,400;0,500;0,600&family=Inter:wght@300;400;500&display=swap" rel="stylesheet">
   <link rel="stylesheet" href="assets/css/core.css?v=20261017b">
-  <link rel="stylesheet" href="assets/css/admin.css?v=20261027f">
+  <link rel="stylesheet" href="assets/css/admin.css?v=20261027g">
   <link rel="stylesheet" href="assets/css/settings.css?v=20260823a">
 </head>
 <body class="admin">
@@ -167,7 +167,7 @@
 
         <button class="btn is-primary" id="art-upload-btn" disabled>Publish artwork</button>
         <div class="progress" id="art-progress" hidden><span></span></div>
-        <p class="status-line" id="art-status"></p>
+        <p class="status-line" id="art-status" aria-live="polite"></p>
       </div>
 
       <div class="panel" id="collection-panel">
@@ -245,7 +245,7 @@
           <button class="btn" id="comic-cancel" hidden>Cancel edit</button>
         </div>
         <div class="progress" id="comic-progress" hidden><span></span></div>
-        <p class="status-line" id="comic-status"></p>
+        <p class="status-line" id="comic-status" aria-live="polite"></p>
       </div>
 
       <div class="panel">
@@ -402,6 +402,6 @@
     });
   })();
 </script>
-<script type="module" src="assets/js/admin.js?v=20261027i"></script>
+<script type="module" src="assets/js/admin.js?v=20261027l"></script>
 </body>
 </html>

@@ -6,18 +6,18 @@ import {
   archivePieceId, saveArchivePiece, setArchiveVisibility, replaceArchiveImage,
   reorderArchivePieces, moveArchiveToCloudinary, publicIdFromUrl,
   watchComics, createComic, updateComic, getComicDeletionPlan, deleteComic, reorderComics, BUILTIN_SAMPLE_STORY,
-  watchAllComments, deleteComment, uploadAndRecord,
+  watchAllComments, deleteComment, uploadAndRecord, deleteMedia,
   grantAdminClaim, watchChangeLog, logChange
-} from "./data.js?v=20261027i";
+} from "./data.js?v=20261027j";
 import { categoryHref, LOCAL_SEEDS, CATEGORY_BY_SLUG } from "./site-data.js?v=20260823a";
 import {
   $, $$, escapeHtml, relativeTime, toast, modal
-} from "./admin-ui.js?v=20261027d";
+} from "./admin-ui.js?v=20261027e";
 import {
   initSettings, setSettingsCategories, pickImage, setActiveView,
   hasUnpublishedChanges, publishSettingsChanges
-} from "./admin-settings.js?v=20261027g";
-import { initPreview, setPreviewCategories, onPreviewShown } from "./admin-preview.js?v=20260823a";
+} from "./admin-settings.js?v=20261027h";
+import { initPreview, setPreviewCategories, onPreviewShown } from "./admin-preview.js?v=20261027h";
 
 const state = {
   artCategories: [],
@@ -46,6 +46,7 @@ const state = {
   comicFilter: "all",
   ready: false
 };
+let bulkDeleteOpen = false;
 
 
 const loginScreen = $("#login-screen");
@@ -92,6 +93,7 @@ function restoreDashboardState() {
     renderCollectionChips(); renderCollection(); renderComics();
     const targetY = Number(saved.scrollY) || 0;
     let attempts = 0;
+    if (targetY) window.scrollTo(0, targetY);
     const restoreScroll = () => {
       if (document.documentElement.scrollHeight >= targetY + window.innerHeight || attempts++ >= 20) {
         window.scrollTo(0, targetY);
@@ -311,6 +313,7 @@ function renderOverview() {
 
 
 let artFiles = [];
+let artUploading = false;
 
 function renderArtFiles() {
   const strip = $("#art-thumbs");
@@ -318,14 +321,16 @@ function renderArtFiles() {
   artFiles.forEach((file, i) => {
     const el = document.createElement("div");
     el.className = "thumb";
-    el.innerHTML = `<img alt=""><button class="kill" type="button" data-i="${i}" aria-label="Remove">&times;</button>`;
+    el.innerHTML = `<img alt=""><button class="kill" type="button" data-i="${i}" aria-label="Remove" ${artUploading ? "disabled" : ""}>&times;</button>`;
     strip.appendChild(el);
     const reader = new FileReader();
     reader.onload = e => { el.querySelector("img").src = e.target.result; };
     reader.readAsDataURL(file);
   });
-  $("#art-upload-btn").disabled = !artFiles.length;
-  $("#art-status").textContent = artFiles.length
+  $("#art-upload-btn").disabled = artUploading || !artFiles.length;
+  $("#art-input").disabled = artUploading;
+  $("#art-category").disabled = artUploading;
+  $("#art-status").textContent = artUploading ? $("#art-status").textContent : artFiles.length
     ? `${artFiles.length} file${artFiles.length === 1 ? "" : "s"} ready`
     : "";
   $("#art-title-field").hidden = artFiles.length !== 1;
@@ -345,6 +350,7 @@ function wireDropzone(zone, input, onFiles) {
 }
 
 wireDropzone($("#art-drop"), $("#art-input"), (files) => {
+  if (artUploading) return;
   artFiles = artFiles.concat(files);
   renderArtFiles();
 });
@@ -357,47 +363,60 @@ $("#art-thumbs").addEventListener("click", (e) => {
 });
 
 $("#art-upload-btn").addEventListener("click", async () => {
+  if (!artFiles.length || artUploading) return;
   const categorySlug = $("#art-category").value;
   if (!categorySlug) { toast("Pick a category first.", "error"); return; }
 
   const bar = $("#art-progress span");
   const btn = $("#art-upload-btn");
+  if (artUploading) return;
+  artUploading = true;
+  renderArtFiles();
   btn.disabled = true;
+  $("#art-category").disabled = true;
+  $("#art-input").disabled = true;
   $("#art-progress").hidden = false;
 
-  const total = artFiles.length;
+  const batch = artFiles.slice();
+  const total = batch.length;
   let done = 0;
   const failures = [];
 
-  for (const file of artFiles) {
+  for (const file of batch) {
     const title = total === 1 ? ($("#art-title").value.trim() || file.name) : file.name;
+    $("#art-status").textContent = `Uploading ${done + 1} of ${total}: ${file.name}`;
     try {
       await createArtwork({
         categorySlug,
         file,
         title,
         description: total === 1 ? $("#art-desc").value.trim() : "",
+        onStatus: (message) => { $("#art-status").textContent = `${file.name}: ${message}`; },
         onProgress: (p) => { bar.style.width = `${((done + p) / total) * 100}%`; }
       });
     } catch (err) {
-      console.error(err);
-      failures.push(`${file.name}: ${err.message}`);
+      failures.push({ file, message: err.message || "Upload failed." });
     }
+    if (!failures.some(item => item.file === file)) artFiles = artFiles.filter(queued => queued !== file);
     done++;
-    $("#art-status").textContent = `Uploaded ${done} of ${total}…`;
+    renderArtFiles();
+    $("#art-status").textContent = done < total ? `Finished ${done} of ${total}. Next: ${batch[done].name}` : `Finished ${done} of ${total}.`;
   }
 
-  artFiles = [];
-  $("#art-title").value = "";
-  $("#art-desc").value = "";
+  artUploading = false;
+  $("#art-category").disabled = false;
+  $("#art-input").disabled = false;
+  if (!failures.length) { $("#art-title").value = ""; $("#art-desc").value = ""; }
   renderArtFiles();
   $("#art-progress").hidden = true;
   bar.style.width = "0%";
 
   if (failures.length) {
-    toast(`${failures.length} upload${failures.length === 1 ? "" : "s"} failed — see console.`, "error");
-    console.warn(failures);
+    $("#art-status").textContent = `${failures[0].file.name}: ${failures[0].message}. Still queued; retry after fixing the issue.`;
+    toast(`${done - failures.length} uploaded; ${failures.length} still queued.`, "error");
+    console.warn("Artwork upload failures:", failures.map(item => `${item.file.name}: ${item.message}`).join("; "));
   } else {
+    $("#art-status").textContent = `${done} artwork${done === 1 ? "" : "s"} published.`;
     toast(`${done} artwork${done === 1 ? "" : "s"} published.`, "ok");
   }
 });
@@ -677,14 +696,16 @@ async function deleteSelected(kind) {
   const pages = plans.reduce((sum, plan) => sum + plan.pages.length, 0);
   const existingCount = art ? ids.length : plans.filter(plan => plan.exists).length;
   if (!existingCount) { toast("Those items no longer exist.", "error"); return; }
-  confirmBulkDelete(existingCount, pages, async () => {
+  confirmBulkDelete(existingCount, pages, async (report) => {
     for (let i = 0; i < ids.length; i++) {
       const id = ids[i];
+      report(`Deleting ${i + 1} of ${ids.length}…`);
       if (art) await deleteArtwork(id);
       else {
         await deleteComic(id, plans[i]);
         if (editingComicId === id) resetComicForm();
       }
+      (art ? state.selectedArt : state.selectedComics).delete(id);
     }
     if (art) { state.selectedArt.clear(); state.selectingArt = false; }
     else { state.selectedComics.clear(); state.selectingComics = false; }
@@ -694,13 +715,19 @@ async function deleteSelected(kind) {
 }
 
 function confirmBulkDelete(count, pages, remove) {
-  if (!count) return;
-  modal({
+  if (!count || bulkDeleteOpen) return;
+  bulkDeleteOpen = true;
+  let dialog;
+  dialog = modal({
     title: `Delete ${count} ${count === 1 ? "item" : "items"} permanently?`,
-    body: `This cannot be undone.${pages ? ` This also removes all <b>${pages} page${pages === 1 ? "" : "s"}</b> in the selected stories.` : ""}`,
+    body: `This cannot be undone.${pages ? ` This also removes all <b>${pages} page${pages === 1 ? "" : "s"}</b> in the selected stories.` : ""}<p data-delete-progress class="delete-progress" aria-live="polite" hidden></p>`,
     confirmLabel: "Delete",
     danger: true,
-    onConfirm: remove
+    onClose: () => { bulkDeleteOpen = false; },
+    onConfirm: () => remove((message) => {
+      const progress = $("[data-delete-progress]", dialog.overlay);
+      if (progress) { progress.hidden = false; progress.textContent = message; }
+    })
   });
 }
 
@@ -786,7 +813,7 @@ $("#archive-setup")?.addEventListener("click", async () => {
   btn.disabled = true;
   status.textContent = "Setting up…";
   try {
-    const { seedArchiveRecords } = await import("./migrate.js?v=20261027g");
+    const { seedArchiveRecords } = await import("./migrate.js?v=20261027h");
     const written = await seedArchiveRecords();
     status.textContent = "";
     toast(`${written} pieces are now fully manageable.`, "ok");
@@ -942,6 +969,8 @@ $("#comic-save").addEventListener("click", async () => {
   const jobs = comicPages.filter(p => typeof p !== "string").length
     + (comicCover && typeof comicCover !== "string" ? 1 : 0);
   let doneJobs = 0;
+  const newAssets = [];
+  const previousComic = editingComicId ? state.comics.find(item => item.id === editingComicId) : null;
   const tick = (p) => { bar.style.width = `${((doneJobs + p) / Math.max(jobs, 1)) * 100}%`; };
 
   try {
@@ -950,6 +979,7 @@ $("#comic-save").addEventListener("click", async () => {
     for (const page of comicPages) {
       if (typeof page === "string") { pageUrls.push(page); continue; }
       const asset = await uploadAndRecord(page, { usedFor: "comic-page", onProgress: tick });
+      newAssets.push(asset);
       pageUrls.push(asset.url);
       doneJobs++;
     }
@@ -958,11 +988,13 @@ $("#comic-save").addEventListener("click", async () => {
     if (comicCover && typeof comicCover !== "string") {
       $("#comic-status").textContent = "Uploading cover…";
       const asset = await uploadAndRecord(comicCover, { usedFor: "comic-cover", onProgress: tick });
+      newAssets.push(asset);
       coverUrl = asset.url;
       doneJobs++;
     }
 
     if (editingComicId) {
+      $("#comic-status").textContent = "Saving story…";
       await updateComic(editingComicId, {
         title,
         categorySlug,
@@ -972,6 +1004,7 @@ $("#comic-save").addEventListener("click", async () => {
       });
       toast("Story updated.", "ok");
     } else {
+      $("#comic-status").textContent = "Publishing story…";
       await createComic({
         title,
         categorySlug,
@@ -981,10 +1014,24 @@ $("#comic-save").addEventListener("click", async () => {
       });
       toast("Story published.", "ok");
     }
+    if (previousComic) {
+      const nextUrls = new Set([...pageUrls, coverUrl || pageUrls[0]]);
+      const oldUrls = new Set([previousComic.coverUrl, ...previousComic.pages]);
+      for (const url of oldUrls) {
+        const publicId = publicIdFromUrl(url);
+        if (!url || nextUrls.has(url) || !publicId || !/^https?:\/\//i.test(url)) continue;
+        try { await deleteMedia(slugify(publicId, "asset"), publicId, "image"); }
+        catch (err) { console.warn("Story saved, but an old image could not be removed.", err); }
+      }
+    }
     resetComicForm();
   } catch (err) {
     console.error(err);
     toast(err.message || "Publishing failed.", "error");
+    for (const asset of newAssets) {
+      try { await deleteMedia(slugify(asset.publicId, "asset"), asset.publicId, asset.resourceType || "image"); }
+      catch (cleanupError) { console.error("Could not clean up a story upload after saving failed.", cleanupError); }
+    }
   } finally {
     btn.disabled = false;
     $("#comic-progress").hidden = true;
@@ -1256,8 +1303,10 @@ async function deleteSelectedRecords(type) {
   const [selected, items] = map;
   const chosen = items.filter(item => selected.has(selectionKey(type, item)));
   if (!chosen.length) return;
-  confirmBulkDelete(chosen.length, 0, async () => {
-    for (const item of chosen) {
+  confirmBulkDelete(chosen.length, 0, async (report) => {
+    for (let i = 0; i < chosen.length; i++) {
+      const item = chosen[i];
+      report(`Deleting ${i + 1} of ${chosen.length}…`);
       if (type === "comments") await deleteComment(item.parentCollection, item.parentId, item.id);
       else {
         const kind = type === "comicCats" ? "comics" : "art";
@@ -1448,7 +1497,7 @@ $("#migrate-dry").addEventListener("click", async () => {
   btn.disabled = true;
   $("#migrate-report").innerHTML = '<p class="empty-note">Scanning…</p>';
   try {
-    const { dryRun } = await import("./migrate.js?v=20261027g");
+    const { dryRun } = await import("./migrate.js?v=20261027h");
     const { plans, totalWrites } = await dryRun();
     renderMigrationReport(plans, false);
     $("#migrate-run").disabled = totalWrites === 0;
@@ -1470,7 +1519,7 @@ $("#migrate-run").addEventListener("click", () => {
     body: "This writes <b>status</b>, <b>featured</b>, and Cloudinary <b>public IDs</b> onto your existing documents, copies categories into artCategories, seeds comic genres, and backfills the media library.<br><br>It is additive and idempotent — nothing is deleted, and re-running it is harmless.",
     confirmLabel: "Run migration",
     onConfirm: async () => {
-      const { apply } = await import("./migrate.js?v=20261027g");
+      const { apply } = await import("./migrate.js?v=20261027h");
       const { results, totalWrites } = await apply((label) => {
         $("#migrate-report").innerHTML = `<p class="empty-note">Migrating: ${escapeHtml(label)}…</p>`;
       });

@@ -40,7 +40,7 @@ export function toast(message, kind = "") {
 
 export function modal({
   title, body, confirmLabel = "Confirm", danger = false, onConfirm,
-  wide = false, onMount, hideConfirm = false, cancelLabel = "Cancel", onCancel
+  wide = false, onMount, hideConfirm = false, cancelLabel = "Cancel", onCancel, onClose
 }) {
   const overlay = document.createElement("div");
   overlay.className = `modal${wide ? " is-wide" : ""}`;
@@ -61,15 +61,22 @@ export function modal({
   requestAnimationFrame(() => overlay.classList.add("is-open"));
 
   const confirmBtn = $("[data-confirm]", overlay);
+  const cancelBtn = $("[data-cancel]", overlay);
+  let busy = false;
+  let closed = false;
   confirmBtn?.focus();
 
   function close() {
+    if (busy || closed) return;
+    closed = true;
     overlay.classList.remove("is-open");
     document.removeEventListener("keydown", onKey);
+    onClose?.();
     setTimeout(() => overlay.remove(), 320);
   }
 
   function onKey(e) {
+    if (busy) { e.preventDefault(); e.stopImmediatePropagation(); return; }
     if (e.key === "Escape") { e.preventDefault(); e.stopImmediatePropagation(); close(); }
     else if (e.key === "Enter" && confirmBtn && !confirmBtn.disabled && !e.target.closest("textarea, button, select")) {
       e.preventDefault();
@@ -79,25 +86,43 @@ export function modal({
   }
   document.addEventListener("keydown", onKey);
 
-  $("[data-cancel]", overlay).addEventListener("click", async () => {
+  cancelBtn.addEventListener("click", async () => {
     if (onCancel) {
-      const cancel = $("[data-cancel]", overlay);
-      cancel.disabled = true;
-      try { await onCancel(); } catch (err) { toast(err.message || "That didn't work.", "error"); cancel.disabled = false; return; }
+      busy = true;
+      cancelBtn.disabled = true;
+      if (confirmBtn) confirmBtn.disabled = true;
+      try { await onCancel(); } catch (err) {
+        busy = false;
+        toast(err.message || "That didn't work.", "error");
+        cancelBtn.disabled = false;
+        if (confirmBtn) confirmBtn.disabled = false;
+        return;
+      }
+      busy = false;
     }
     close();
   });
-  overlay.addEventListener("click", (e) => { if (e.target === overlay) close(); });
+  overlay.addEventListener("click", (e) => { if (e.target === overlay && !busy) close(); });
 
   confirmBtn?.addEventListener("click", async () => {
+    busy = true;
     confirmBtn.disabled = true;
+    cancelBtn.disabled = true;
     try {
       await onConfirm();
+      busy = false;
       close();
     } catch (err) {
       console.error(err);
       toast(err.message || "That didn't work.", "error");
+      const progress = $("[data-delete-progress]", overlay);
+      if (progress) {
+        progress.hidden = false;
+        progress.textContent = `Stopped: ${err.message || "Delete failed."} You can retry or cancel.`;
+      }
+      busy = false;
       confirmBtn.disabled = false;
+      cancelBtn.disabled = false;
     }
   });
 

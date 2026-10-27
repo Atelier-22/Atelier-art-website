@@ -392,7 +392,7 @@ function sameOrder(a, b) {
 
 async function loadCategoryOrder() {
   try {
-    const { fetchCategories } = await import("./data.js?v=20261027i");
+    const { fetchCategories } = await import("./data.js?v=20261027j");
     return mergeCategories(await fetchCategories("art"));
   } catch (err) {
     console.warn("Category order unavailable, using defaults.", err);

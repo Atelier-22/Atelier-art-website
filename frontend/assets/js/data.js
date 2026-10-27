@@ -430,10 +430,17 @@ export function watchContentDeletions(callback, onError) {
 
 export async function createArtwork({
   categorySlug, file, title, description, imageUrl, publicId,
-  status = "published", onProgress
+  status = "published", onProgress, onStatus
 }) {
   let url = imageUrl;
   let assetId = publicId || null;
+  const name = (title || file?.name || "Untitled").trim();
+  const id = artworkId(categorySlug, name);
+
+  if (!imageUrl) {
+    const existing = await getDoc(doc(db, "artworks", id));
+    if (existing.exists()) throw new Error(`“${name}” already exists in this category. Rename the upload and try again.`);
+  }
 
   if (!url) {
     const asset = await uploadAndRecord(file, { usedFor: "artwork", onProgress });
@@ -441,24 +448,32 @@ export async function createArtwork({
     assetId = asset.publicId;
   }
 
-  const name = (title || file?.name || "Untitled").trim();
-  const id = artworkId(categorySlug, name);
+  onStatus?.("Saving to the site…");
 
-  await setDoc(doc(db, "artworks", id), {
-    category: categorySlug,
-    title: name,
-    description: description || "",
-    imageUrl: url,
-    publicId: assetId,
-    likes: 0,
-    status,
-    featured: false,
-    order: 0,
-    createdAt: serverTimestamp(),
-    uploaded: true
-  }, { merge: true });
+  try {
+    await setDoc(doc(db, "artworks", id), {
+      category: categorySlug,
+      title: name,
+      description: description || "",
+      imageUrl: url,
+      publicId: assetId,
+      likes: 0,
+      status,
+      featured: false,
+      order: 0,
+      createdAt: serverTimestamp(),
+      uploaded: true
+    }, { merge: true });
+  } catch (err) {
+    if (assetId && !imageUrl) {
+      try { await deleteMedia(slugify(assetId, "asset"), assetId, "image"); }
+      catch (cleanupError) { console.error("Could not clean up an artwork upload after its record failed.", cleanupError); }
+    }
+    throw err;
+  }
 
-  await logChange("artwork.create", id, name);
+  try { await logChange("artwork.create", id, name); }
+  catch (err) { console.warn("Artwork published, but its activity entry could not be saved.", err); }
   return { id, imageUrl: url, publicId: assetId };
 }
 

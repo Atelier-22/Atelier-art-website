@@ -2,12 +2,12 @@ import { ensureGuestAuth, watchAuth, isOwner } from "../../firebase-config.js?v=
 import {
   watchGalleryPieces, watchPieceMeta, toggleLike, hasLiked,
   watchComments, addComment, deleteComment, fetchCategories, archivePieceId
-} from "./data.js?v=20261027i";
+} from "./data.js?v=20261027j";
 import { isPreview, currentConfig } from "./site-config.js?v=20261017b";
 import { LOCAL_SEEDS, CATEGORY_BY_SLUG, currentCategorySlug } from "./site-data.js?v=20260823a";
 import { bindGallery } from "./lightbox.js?v=20260823a";
 import { observeReveals, initNav } from "./reveal.js?v=20260823a";
-import { modal } from "./admin-ui.js?v=20261027d";
+import { modal } from "./admin-ui.js?v=20261027e";
 
 let slug = "";
 let grid = null;
