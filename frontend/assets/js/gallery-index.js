@@ -1,4 +1,4 @@
-import { fetchCategories } from "./data.js?v=20261027g";
+import { fetchCategories } from "./data.js?v=20261027i";
 import { CATEGORY_BY_SLUG, categoryHref, LOCAL_SEEDS, mergeCategories } from "./site-data.js?v=20260823a";
 import { observeReveals, initNav } from "./reveal.js?v=20260823a";
 import { escapeHtml, previewHref } from "./site-config.js?v=20261017b";

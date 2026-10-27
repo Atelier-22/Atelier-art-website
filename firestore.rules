@@ -142,6 +142,11 @@ service cloud.firestore {
       allow write: if isAdmin();
     }
 
+    match /contentDeletions/{deletionId} {
+      allow read: if true;
+      allow write: if isAdmin();
+    }
+
 
     match /changeLog/{entryId} {
       allow read: if isAdmin();

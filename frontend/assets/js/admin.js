@@ -2,13 +2,13 @@ import { watchAuth, isOwner, ownerLogin, ownerLogout, ownerPasswordReset, authRe
 import {
   watchCategories, seedDefaultCategories, createCategory, updateCategory,
   reorderCategories, deleteCategory,
-  watchAllArtworks, createArtwork, updateArtwork, deleteArtwork,
+  watchAllArtworks, watchContentDeletions, createArtwork, updateArtwork, deleteArtwork,
   archivePieceId, saveArchivePiece, setArchiveVisibility, replaceArchiveImage,
   reorderArchivePieces, moveArchiveToCloudinary, publicIdFromUrl,
-  watchComics, createComic, updateComic, getComicDeletionPlan, deleteComic, reorderComics,
+  watchComics, createComic, updateComic, getComicDeletionPlan, deleteComic, reorderComics, BUILTIN_SAMPLE_STORY,
   watchAllComments, deleteComment, uploadAndRecord,
   grantAdminClaim, watchChangeLog, logChange
-} from "./data.js?v=20261027g";
+} from "./data.js?v=20261027i";
 import { categoryHref, LOCAL_SEEDS, CATEGORY_BY_SLUG } from "./site-data.js?v=20260823a";
 import {
   $, $$, escapeHtml, relativeTime, toast, modal
@@ -24,6 +24,7 @@ const state = {
   comicCategories: [],
   artworks: [],
   comics: [],
+  deletedContent: new Set(),
   comments: [],
   view: ["overview", "artworks", "comics", "categories", "settings", "preview", "maintenance", "engagement", "changelog"].includes(new URLSearchParams(location.search).get("section"))
     ? new URLSearchParams(location.search).get("section") : "overview",
@@ -421,9 +422,11 @@ function archiveSeeded(slug) {
 
 function archivePieces(slug) {
   if (archiveSeeded(slug)) {
-    return state.artworks
+    const records = state.artworks
       .filter(a => a.archive && a.category === slug && a.imageUrl)
+      .filter(a => !state.deletedContent.has(`art:${a.id}`))
       .sort((a, b) => a.order - b.order)
+      .filter(record => !state.deletedContent.has(`art:${record.id}`))
       .map((record, position) => {
         const index = Number(String(record.id).split("-").pop()) - 1;
         return {
@@ -438,13 +441,26 @@ function archivePieces(slug) {
           likes: record.likes,
           hidden: record.hidden,
           onCloudinary: /^https?:/i.test(record.imageUrl),
-          managed: true
+          managed: true,
+          deletable: true
         };
       });
+    const seen = new Set(records.map(item => item.id));
+    const missingSeeds = (LOCAL_SEEDS[slug] || []).map((src, i) => {
+      const id = archivePieceId(slug, i);
+      if (seen.has(id) || state.deletedContent.has(`art:${id}`)) return null;
+      return {
+        id, slug, kind: "archive", position: i, imageUrl: src, title: "",
+        placeholder: archivePlaceholder(slug, i), description: "", likes: 0,
+        hidden: false, onCloudinary: false, managed: false, deletable: true
+      };
+    }).filter(Boolean);
+    return [...records, ...missingSeeds];
   }
 
   return (LOCAL_SEEDS[slug] || []).map((src, i) => {
     const id = archivePieceId(slug, i);
+    if (state.deletedContent.has(`art:${id}`)) return null;
     const saved = state.artworks.find(a => a.id === id);
     return {
       id, slug, kind: "archive", position: i, imageUrl: src,
@@ -454,9 +470,10 @@ function archivePieces(slug) {
       likes: saved?.likes || 0,
       hidden: false,
       onCloudinary: false,
-      managed: false
+      managed: false,
+      deletable: true
     };
-  });
+  }).filter(Boolean);
 }
 
 function uploadedPieces(slug) {
@@ -542,7 +559,7 @@ function renderCollection() {
     el.className = `m-card${piece.hidden ? " is-hidden-piece" : ""}`;
     el.dataset.selectionKey = piece.id;
     if (state.selectingArt) el.classList.add("is-selection-mode");
-    if (state.selectingArt && piece.managed) el.classList.add("is-selectable", ...(state.selectedArt.has(piece.id) ? ["is-selected"] : []));
+    if (state.selectingArt && piece.deletable) el.classList.add("is-selectable", ...(state.selectedArt.has(piece.id) ? ["is-selected"] : []));
     const shown = piece.title || piece.placeholder;
 
     el.innerHTML = `
@@ -557,7 +574,7 @@ function renderCollection() {
         </p>
       </div>
       <div class="m-card-actions">
-        ${state.selectingArt && piece.managed ? `<label class="bulk-select"><input type="checkbox" data-select-piece ${state.selectedArt.has(piece.id) ? "checked" : ""}> Select</label>` : ""}
+        ${state.selectingArt && piece.deletable ? `<label class="bulk-select"><input type="checkbox" data-select-piece ${state.selectedArt.has(piece.id) ? "checked" : ""}> Select</label>` : ""}
         <button class="btn is-small" data-edit>${piece.kind === "upload" || piece.title ? "Edit" : "Add a title"}</button>
         ${piece.managed ? `
           <button class="btn is-small" data-replace>Replace</button>
@@ -569,9 +586,9 @@ function renderCollection() {
       </div>
     `;
 
-    if (state.selectingArt && piece.managed) {
+    if (state.selectingArt && piece.deletable) {
       $("[data-select-piece]", el).addEventListener("click", (e) => {
-        const selectable = list.filter(p => p.managed);
+        const selectable = list.filter(p => p.deletable);
         const index = selectable.findIndex(p => p.id === piece.id);
         if (e.shiftKey && state.artAnchor) {
           const anchorIndex = selectable.findIndex(p => p.id === state.artAnchor);
@@ -633,7 +650,7 @@ function updateBulkControls(kind) {
   const toggle = $(art ? "#art-select-toggle" : "#comic-select-toggle");
   const action = $(art ? "#art-delete-selected" : "#comic-delete-selected");
   const items = art
-    ? collectionPieces(activeCollection()).filter(p => p.managed && (!state.collectionSearch.trim() || p.title.toLowerCase().includes(state.collectionSearch.trim().toLowerCase()) || p.placeholder.toLowerCase().includes(state.collectionSearch.trim().toLowerCase())))
+    ? collectionPieces(activeCollection()).filter(p => p.deletable && (!state.collectionSearch.trim() || p.title.toLowerCase().includes(state.collectionSearch.trim().toLowerCase()) || p.placeholder.toLowerCase().includes(state.collectionSearch.trim().toLowerCase())))
     : state.comics.filter(c => state.comicFilter === "all" || c.categorySlug === state.comicFilter);
   const countHost = $(art ? "#art-selected-count" : "#comic-selected-count");
   const allButton = $(art ? "#art-select-all" : "#comic-select-all");
@@ -697,7 +714,7 @@ $("#art-delete-selected")?.addEventListener("click", () => deleteSelected("art")
 $("#art-select-all")?.addEventListener("click", () => {
   const set = state.selectedArt;
   const term = state.collectionSearch.trim().toLowerCase();
-  const items = collectionPieces(activeCollection()).filter(p => p.managed && (!term || p.title.toLowerCase().includes(term) || p.placeholder.toLowerCase().includes(term)));
+  const items = collectionPieces(activeCollection()).filter(p => p.deletable && (!term || p.title.toLowerCase().includes(term) || p.placeholder.toLowerCase().includes(term)));
   const allSelected = items.every(item => set.has(item.id));
   items.forEach(item => allSelected ? set.delete(item.id) : set.add(item.id));
   renderCollection();
@@ -993,7 +1010,9 @@ function loadComicIntoForm(comic) {
 
 function renderComics() {
   const host = $("#comic-grid");
-  const list = state.comics
+  const stories = state.comics.length || state.deletedContent.has(`story:${BUILTIN_SAMPLE_STORY.id}`)
+    ? state.comics : [BUILTIN_SAMPLE_STORY];
+  const list = stories
     .filter(c => state.comicFilter === "all" || c.categorySlug === state.comicFilter);
 
   $("#comic-count").textContent = `${list.length} shown`;
@@ -1507,6 +1526,14 @@ function boot() {
     renderCategoryList("art");
     renderOverview();
   });
+
+  watchContentDeletions((items) => {
+    state.deletedContent = new Set(items.map(item => `${item.kind}:${item.itemId}`));
+    renderCollectionChips();
+    renderCollection();
+    renderComics();
+    renderOverview();
+  }, (err) => toast(err.message || "Deleted items couldn't be loaded.", "error"));
 
   watchComics((items) => {
     state.comics = items;

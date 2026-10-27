@@ -11,10 +11,10 @@ function pageKind(doc = document) {
 }
 
 const MODULES = {
-  home: () => import("./home.js?v=20261027g"),
-  gallery: () => import("./gallery-index.js?v=20261027g"),
-  comics: () => import("./comics.js?v=20261027g"),
-  category: () => import("./gallery-page.js?v=20261027g"),
+  home: () => import("./home.js?v=20261027i"),
+  gallery: () => import("./gallery-index.js?v=20261027i"),
+  comics: () => import("./comics.js?v=20261027i"),
+  category: () => import("./gallery-page.js?v=20261027i"),
   prose: () => import("./page.js?v=20260823a")
 };
 

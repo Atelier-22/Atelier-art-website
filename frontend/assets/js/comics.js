@@ -1,8 +1,8 @@
 import { ensureGuestAuth, watchAuth, isOwner } from "../../firebase-config.js?v=20261027h";
 import {
-  watchCategories, watchComics, watchLikes, toggleLike, hasLiked,
+  watchCategories, watchComics, watchContentDeletions, watchLikes, toggleLike, hasLiked, BUILTIN_SAMPLE_STORY,
   watchComments, addComment, deleteComment
-} from "./data.js?v=20261027g";
+} from "./data.js?v=20261027i";
 import { DEFAULT_COMIC_CATEGORIES } from "./site-data.js?v=20260823a";
 import { observeReveals, initNav } from "./reveal.js?v=20260823a";
 import { modal } from "./admin-ui.js?v=20261027d";
@@ -13,25 +13,14 @@ let filterHost = null;
 
 let pageSubscriptions = [];
 
-const SAMPLE_STORY = {
-  id: "from-the-sketchbook",
-  title: "From the Sketchbook",
-  categorySlug: "drama",
-  description: "Three loose pages pulled straight from the working sketchbook — the sample that ships with the site.",
-  coverUrl: "artworks/comics/comic1.jpg",
-  pages: ["artworks/comics/comic1.jpg", "artworks/comics/comic2.jpg", "artworks/comics/comic3.jpg"],
-  likes: 0,
-  order: 0,
-  local: true
-};
-
 let categories = DEFAULT_COMIC_CATEGORIES.map((c, i) => ({ ...c, name: c.label, order: i }));
 let comics = [];
 
 let genresSeeded = false;
+let sampleDeleted = false;
 
 function shelvedStories() {
-  return (!genresSeeded && !comics.length) ? [SAMPLE_STORY] : comics;
+  return (!sampleDeleted && !genresSeeded && !comics.length) ? [BUILTIN_SAMPLE_STORY] : comics;
 }
 
 let activeFilter = "all";
@@ -460,6 +449,11 @@ export function mount() {
     comics = [];
     render();
   }, { publishedOnly: true }));
+
+  pageSubscriptions.push(watchContentDeletions((items) => {
+    sampleDeleted = items.some(item => item.kind === "story" && item.itemId === BUILTIN_SAMPLE_STORY.id);
+    render();
+  }));
 }
 
 export function unmount() {

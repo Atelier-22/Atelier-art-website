@@ -11,6 +11,16 @@ import {
 export const CLOUDINARY_CLOUD_NAME = "pmhpabd8";
 export const CLOUDINARY_UPLOAD_PRESET = "lpwbmgnq";
 
+export const BUILTIN_SAMPLE_STORY = {
+  id: "from-the-sketchbook",
+  title: "From the Sketchbook",
+  categorySlug: "drama",
+  description: "Three loose pages pulled straight from the working sketchbook — the sample that ships with the site.",
+  coverUrl: "artworks/comics/comic1.jpg",
+  pages: ["artworks/comics/comic1.jpg", "artworks/comics/comic2.jpg", "artworks/comics/comic3.jpg"],
+  likes: 0, order: 0, local: true
+};
+
 export function slugify(value, fallback = "item") {
   const slug = (value || "")
     .toString()
@@ -375,21 +385,29 @@ export function watchGalleryPieces(categorySlug, callback, onError, { includeDra
     ? query(...base)
     : query(...base, where("status", "==", "published"));
 
-  return onSnapshot(ref, (snap) => {
+  let artworkItems = { uploaded: [], archive: [] };
+  let deletions = [];
+  const emit = () => callback({ ...artworkItems, deletedIds: deletions.filter(d => d.kind === "art").map(d => d.itemId) });
+  const stopArt = onSnapshot(ref, (snap) => {
     const all = snap.docs.map(d => normaliseArtwork(d.id, d.data()));
-
-    callback({
+    artworkItems = {
       uploaded: all
         .filter(a => a.imageUrl && a.uploaded)
         .sort((a, b) => b.createdAt - a.createdAt),
       archive: all
         .filter(a => a.imageUrl && !a.uploaded && a.archive)
         .sort((a, b) => a.order - b.order)
-    });
+    };
+    emit();
   }, (err) => {
     console.error("watchGalleryPieces error:", err);
     onError?.(err);
   });
+  const stopDeletions = onSnapshot(collection(db, "contentDeletions"), (snap) => {
+    deletions = snap.docs.map(d => ({ id: d.id, ...d.data() }));
+    emit();
+  }, (err) => { console.error("watchGalleryPieces deletion error:", err); onError?.(err); });
+  return () => { stopArt(); stopDeletions(); };
 }
 
 export function watchAllArtworks(callback, onError) {
@@ -397,6 +415,15 @@ export function watchAllArtworks(callback, onError) {
     callback(snap.docs.map(d => normaliseArtwork(d.id, d.data())));
   }, (err) => {
     console.error("watchAllArtworks error:", err);
+    onError?.(err);
+  });
+}
+
+export function watchContentDeletions(callback, onError) {
+  return onSnapshot(collection(db, "contentDeletions"), (snap) => {
+    callback(snap.docs.map(d => ({ id: d.id, ...d.data() })));
+  }, (err) => {
+    console.error("watchContentDeletions error:", err);
     onError?.(err);
   });
 }
@@ -456,7 +483,22 @@ export async function saveArchivePiece(id, { categorySlug, title, description })
 }
 
 export async function deleteArtwork(id) {
-  await deleteDoc(doc(db, "artworks", id));
+  const ref = doc(db, "artworks", id);
+  const snap = await getDoc(ref);
+  if (snap.exists()) {
+    const item = snap.data();
+    const imageUrl = item.imageUrl || "";
+    const publicId = item.publicId || publicIdFromUrl(imageUrl);
+    if (publicId && /(^|\.)cloudinary\.com\//i.test(imageUrl)) {
+      await deleteMedia(slugify(publicId, "asset"), publicId, "image");
+    }
+    const comments = await getDocs(collection(db, "artworks", id, "comments"));
+    for (const comment of comments.docs) await deleteDoc(comment.ref);
+  }
+  await setDoc(doc(db, "contentDeletions", `art-${id}`), {
+    kind: "art", itemId: id, createdAt: serverTimestamp()
+  });
+  await deleteDoc(ref);
 }
 
 
@@ -585,7 +627,9 @@ export async function updateComic(id, patch) {
 
 export async function getComicDeletionPlan(id) {
   const comicSnap = await getDoc(doc(db, "comics", id));
-  if (!comicSnap.exists()) return { id, exists: false, pages: [], coverUrl: "" };
+  if (!comicSnap.exists()) return id === BUILTIN_SAMPLE_STORY.id
+    ? { ...BUILTIN_SAMPLE_STORY, exists: true }
+    : { id, exists: false, pages: [], coverUrl: "" };
   const comic = comicSnap.data();
   return {
     id,
@@ -598,6 +642,12 @@ export async function getComicDeletionPlan(id) {
 export async function deleteComic(id, plan = null) {
   const comicRef = doc(db, "comics", id);
   const deletion = plan || await getComicDeletionPlan(id);
+  if (!deletion.exists && id === BUILTIN_SAMPLE_STORY.id) {
+    await setDoc(doc(db, "contentDeletions", `story-${id}`), {
+      kind: "story", itemId: id, createdAt: serverTimestamp()
+    });
+    return { pages: BUILTIN_SAMPLE_STORY.pages.length, assets: 0 };
+  }
   if (!deletion.exists) return { pages: 0 };
   const pageUrls = deletion.pages;
 
@@ -623,6 +673,9 @@ export async function deleteComic(id, plan = null) {
     for (const page of pageSnaps.docs) await deleteDoc(page.ref);
     await deleteDoc(chapter.ref);
   }
+  await setDoc(doc(db, "contentDeletions", `story-${id}`), {
+    kind: "story", itemId: id, createdAt: serverTimestamp()
+  });
   await deleteDoc(comicRef);
   return { pages: pageUrls.length, assets: cloudAssets.size };
 }

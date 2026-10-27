@@ -1,5 +1,5 @@
 import { db } from "../../firebase-config.js?v=20261027h";
-import { publicIdFromUrl, slugify, logChange, archivePieceId } from "./data.js?v=20261027g";
+import { publicIdFromUrl, slugify, logChange, archivePieceId } from "./data.js?v=20261027i";
 import { LOCAL_SEEDS, CATEGORY_BY_SLUG } from "./site-data.js?v=20260823a";
 import {
   collection, doc, getDocs, writeBatch, serverTimestamp
