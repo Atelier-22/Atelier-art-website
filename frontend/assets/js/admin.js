@@ -8,7 +8,7 @@ import {
   watchComics, createComic, updateComic, getComicDeletionPlan, deleteComic, reorderComics, BUILTIN_SAMPLE_STORY,
   watchAllComments, deleteComment, uploadAndRecord, deleteMedia,
   grantAdminClaim, watchChangeLog, logChange
-} from "./data.js?v=20261027k";
+} from "./data.js?v=20261027p";
 import { categoryHref, LOCAL_SEEDS, CATEGORY_BY_SLUG } from "./site-data.js?v=20260823a";
 import {
   $, $$, escapeHtml, relativeTime, toast, modal
@@ -16,7 +16,7 @@ import {
 import {
   initSettings, setSettingsCategories, pickImage, setActiveView,
   hasUnpublishedChanges, publishSettingsChanges
-} from "./admin-settings.js?v=20261027i";
+} from "./admin-settings.js?v=20261027j";
 import { initPreview, setPreviewCategories, onPreviewShown } from "./admin-preview.js?v=20261027h";
 
 const state = {
