@@ -111,6 +111,7 @@ const LOGIN_ERRORS = {
   "auth/wrong-password": "That password isn't right for this address.",
   "auth/invalid-credential": "That email and password combination wasn't accepted.",
   "auth/invalid-login-credentials": "That email and password combination wasn't accepted.",
+  "auth/owner-access-denied": "This account signed in, but it is not authorized to access the studio dashboard. Use an owner account.",
   "auth/too-many-requests": "Too many attempts from this device. Wait a few minutes and try again.",
   "auth/network-request-failed": "No connection to the server. Check the network and try again.",
   "auth/user-disabled": "That account has been disabled.",
@@ -127,7 +128,13 @@ $("#login-form").addEventListener("submit", async (e) => {
   err.hidden = true;
   submit.disabled = true;
   try {
-    await ownerLogin($("#login-email").value, $("#login-pass").value);
+    const credential = await ownerLogin($("#login-email").value, $("#login-pass").value);
+    if (!isOwner(credential?.user)) {
+      await ownerLogout();
+      const error = new Error("This account signed in, but it is not authorized to access the studio dashboard. Use an owner account.");
+      error.code = "auth/owner-access-denied";
+      throw error;
+    }
   } catch (error) {
     const code = error?.code || "";
     err.textContent = LOGIN_ERRORS[code] || `Sign-in failed (${code || error?.message || "unknown"}).`;
@@ -175,6 +182,11 @@ watchAuth((user) => {
   } else {
     loginScreen.hidden = false;
     shell.hidden = true;
+    if (user) {
+      const err = $("#login-error");
+      err.textContent = "This account is signed in, but it is not authorized to access the studio dashboard. Use an owner account.";
+      err.hidden = false;
+    }
   }
 });
 
