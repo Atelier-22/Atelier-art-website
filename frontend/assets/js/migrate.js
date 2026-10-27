@@ -1,5 +1,5 @@
 import { db } from "../../firebase-config.js?v=20261027h";
-import { publicIdFromUrl, slugify, logChange, archivePieceId } from "./data.js?v=20261027j";
+import { publicIdFromUrl, slugify, logChange, archivePieceId } from "./data.js?v=20261027k";
 import { LOCAL_SEEDS, CATEGORY_BY_SLUG } from "./site-data.js?v=20260823a";
 import {
   collection, doc, getDocs, writeBatch, serverTimestamp
@@ -171,14 +171,21 @@ async function planComicCategorySeed() {
 async function planArchiveSeed() {
   const snap = await getDocs(collection(db, "artworks"));
   const existing = new Map(snap.docs.map(d => [d.id, d.data()]));
+  const deletionSnap = await getDocs(collection(db, "contentDeletions"));
+  const deletedIds = new Set(deletionSnap.docs
+    .map(d => d.data())
+    .filter(item => item.kind === "art")
+    .map(item => item.itemId));
 
   const writes = [];
   const notes = [];
   let alreadyDone = 0;
+  let intentionallyDeleted = 0;
 
   Object.keys(LOCAL_SEEDS).forEach((slug) => {
     (LOCAL_SEEDS[slug] || []).forEach((src, i) => {
       const id = archivePieceId(slug, i);
+      if (deletedIds.has(id)) { intentionallyDeleted++; return; }
       const current = existing.get(id) || {};
       const patch = {};
 
@@ -197,6 +204,7 @@ async function planArchiveSeed() {
   const total = Object.values(LOCAL_SEEDS).reduce((n, list) => n + list.length, 0);
   notes.push(`${total} bundled images across ${Object.keys(LOCAL_SEEDS).length} collections`);
   if (alreadyDone) notes.push(`${alreadyDone} already have a record`);
+  if (intentionallyDeleted) notes.push(`${intentionallyDeleted} previously deleted bundled images left deleted`);
   if (writes.length) notes.push("after this they can be hidden, replaced, and reordered from Artworks");
 
   return { label: "Bundled images -> managed records", writes, notes };
@@ -210,6 +218,11 @@ async function planSampleComic() {
       writes: [],
       notes: [`${snap.size} ${snap.size === 1 ? "story" : "stories"} already published, leaving untouched`]
     };
+  }
+
+  const deletionSnap = await getDocs(collection(db, "contentDeletions"));
+  if (deletionSnap.docs.some(d => d.data().kind === "story" && d.data().itemId === "from-the-sketchbook")) {
+    return { label: "Sample story", writes: [], notes: ["the bundled sample story was deleted, leaving it deleted"] };
   }
 
   const pages = (LOCAL_SEEDS.comics || []).slice();

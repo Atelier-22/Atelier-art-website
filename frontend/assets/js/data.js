@@ -387,7 +387,16 @@ export function watchGalleryPieces(categorySlug, callback, onError, { includeDra
 
   let artworkItems = { uploaded: [], archive: [] };
   let deletions = [];
-  const emit = () => callback({ ...artworkItems, deletedIds: deletions.filter(d => d.kind === "art").map(d => d.itemId) });
+  let artReady = false;
+  let deletionsReady = false;
+  const emit = () => {
+    if (!artReady || !deletionsReady) return;
+    callback({
+      ...artworkItems,
+      deletedIds: deletions.filter(d => d.kind === "art").map(d => d.itemId),
+      deletedUrls: deletions.filter(d => d.kind === "art" && d.imageUrl).map(d => d.imageUrl)
+    });
+  };
   const stopArt = onSnapshot(ref, (snap) => {
     const all = snap.docs.map(d => normaliseArtwork(d.id, d.data()));
     artworkItems = {
@@ -398,6 +407,7 @@ export function watchGalleryPieces(categorySlug, callback, onError, { includeDra
         .filter(a => a.imageUrl && !a.uploaded && a.archive)
         .sort((a, b) => a.order - b.order)
     };
+    artReady = true;
     emit();
   }, (err) => {
     console.error("watchGalleryPieces error:", err);
@@ -405,6 +415,7 @@ export function watchGalleryPieces(categorySlug, callback, onError, { includeDra
   });
   const stopDeletions = onSnapshot(collection(db, "contentDeletions"), (snap) => {
     deletions = snap.docs.map(d => ({ id: d.id, ...d.data() }));
+    deletionsReady = true;
     emit();
   }, (err) => { console.error("watchGalleryPieces deletion error:", err); onError?.(err); });
   return () => { stopArt(); stopDeletions(); };
@@ -500,20 +511,34 @@ export async function saveArchivePiece(id, { categorySlug, title, description })
 export async function deleteArtwork(id) {
   const ref = doc(db, "artworks", id);
   const snap = await getDoc(ref);
+  const item = snap.exists() ? snap.data() : {};
+  const imageUrl = item.imageUrl || "";
+  const tombstone = doc(db, "contentDeletions", `art-${id}`);
+  await setDoc(tombstone, {
+    kind: "art", itemId: id, imageUrl, createdAt: serverTimestamp()
+  });
+  try { await deleteDoc(ref); }
+  catch (err) {
+    try { await deleteDoc(tombstone); } catch { }
+    throw err;
+  }
+
+  const warnings = [];
+  let cloudinaryCleanup = null;
   if (snap.exists()) {
-    const item = snap.data();
-    const imageUrl = item.imageUrl || "";
     const publicId = item.publicId || publicIdFromUrl(imageUrl);
     if (publicId && /(^|\.)cloudinary\.com\//i.test(imageUrl)) {
-      await deleteMedia(slugify(publicId, "asset"), publicId, "image");
+      cloudinaryCleanup = deleteMedia(slugify(publicId, "asset"), publicId, item.resourceType || "image")
+        .then(() => ({ deleted: true }))
+        .catch(err => ({ deleted: false, message: err.message || "Cloudinary could not delete the image." }));
     }
-    const comments = await getDocs(collection(db, "artworks", id, "comments"));
-    for (const comment of comments.docs) await deleteDoc(comment.ref);
+    try {
+      const comments = await getDocs(collection(db, "artworks", id, "comments"));
+      const results = await Promise.allSettled(comments.docs.map(comment => deleteDoc(comment.ref)));
+      if (results.some(result => result.status === "rejected")) warnings.push("Some artwork comments could not be removed.");
+    } catch { warnings.push("Artwork comments could not be checked for cleanup."); }
   }
-  await setDoc(doc(db, "contentDeletions", `art-${id}`), {
-    kind: "art", itemId: id, createdAt: serverTimestamp()
-  });
-  await deleteDoc(ref);
+  return { removed: true, cloudinaryCleanup, warnings };
 }
 
 
@@ -661,7 +686,7 @@ export async function deleteComic(id, plan = null) {
     await setDoc(doc(db, "contentDeletions", `story-${id}`), {
       kind: "story", itemId: id, createdAt: serverTimestamp()
     });
-    return { pages: BUILTIN_SAMPLE_STORY.pages.length, assets: 0 };
+    return { pages: BUILTIN_SAMPLE_STORY.pages.length, assets: 0, cloudinaryFailures: [] };
   }
   if (!deletion.exists) return { pages: 0 };
   const pageUrls = deletion.pages;
@@ -675,24 +700,39 @@ export async function deleteComic(id, plan = null) {
       cloudAssets.set(publicId, { publicId, resourceType: "image" });
     }
   }
-  for (const asset of cloudAssets.values()) {
-    await deleteMedia(slugify(asset.publicId, "asset"), asset.publicId, asset.resourceType);
-  }
-
-  // Firestore does not cascade deletes to subcollections.
-  const commentSnaps = await getDocs(collection(db, "comics", id, "comments"));
-  for (const comment of commentSnaps.docs) await deleteDoc(comment.ref);
-  const chapterSnaps = await getDocs(collection(db, "comics", id, "chapters"));
-  for (const chapter of chapterSnaps.docs) {
-    const pageSnaps = await getDocs(collection(db, "comics", id, "chapters", chapter.id, "pages"));
-    for (const page of pageSnaps.docs) await deleteDoc(page.ref);
-    await deleteDoc(chapter.ref);
-  }
-  await setDoc(doc(db, "contentDeletions", `story-${id}`), {
+  // Remove the visible record and persist a seed tombstone before secondary cleanup.
+  const tombstone = doc(db, "contentDeletions", `story-${id}`);
+  await setDoc(tombstone, {
     kind: "story", itemId: id, createdAt: serverTimestamp()
   });
-  await deleteDoc(comicRef);
-  return { pages: pageUrls.length, assets: cloudAssets.size };
+  try { await deleteDoc(comicRef); }
+  catch (err) {
+    try { await deleteDoc(tombstone); } catch { }
+    throw err;
+  }
+
+  const warnings = [];
+  try {
+    const commentSnaps = await getDocs(collection(db, "comics", id, "comments"));
+    const chapterSnaps = await getDocs(collection(db, "comics", id, "chapters"));
+    const childRefs = commentSnaps.docs.map(comment => comment.ref);
+    for (const chapter of chapterSnaps.docs) {
+      const pageSnaps = await getDocs(collection(db, "comics", id, "chapters", chapter.id, "pages"));
+      childRefs.push(...pageSnaps.docs.map(page => page.ref), chapter.ref);
+    }
+    const results = await Promise.allSettled(childRefs.map(ref => deleteDoc(ref)));
+    if (results.some(result => result.status === "rejected")) warnings.push("Some story comments or chapter pages could not be removed.");
+  } catch { warnings.push("Story comments or chapter pages could not be checked for cleanup."); }
+
+  const cloudinaryCleanup = Promise.all([...cloudAssets.values()].map(async asset => {
+    try {
+      await deleteMedia(slugify(asset.publicId, "asset"), asset.publicId, asset.resourceType);
+      return { deleted: true, publicId: asset.publicId };
+    } catch (err) {
+      return { deleted: false, publicId: asset.publicId, message: err.message || "Cloudinary could not delete the image." };
+    }
+  }));
+  return { pages: pageUrls.length, assets: cloudAssets.size, cloudinaryCleanup, warnings };
 }
 
 export async function reorderComics(orderedIds) {

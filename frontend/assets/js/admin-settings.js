@@ -7,7 +7,7 @@ import {
   uploadAndRecord, watchMedia, inspectVideo, videoRejectionReason,
   videoTrimNotice, resourceTypeFor, isAudio, MAX_VIDEO_BYTES,
   MAX_AUDIO_BYTES, MAX_AUDIO_SECONDS
-} from "./data.js?v=20261027j";
+} from "./data.js?v=20261027k";
 import { posterFromVideo, VIDEO_TRIM_SECONDS } from "./cloudinary.js?v=20260823a";
 import { readTrackName, titleFromFilename } from "./id3.js?v=20260823a";
 import { LOCAL_SEEDS, CATEGORY_BY_SLUG } from "./site-data.js?v=20260823a";

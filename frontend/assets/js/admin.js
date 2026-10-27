@@ -8,7 +8,7 @@ import {
   watchComics, createComic, updateComic, getComicDeletionPlan, deleteComic, reorderComics, BUILTIN_SAMPLE_STORY,
   watchAllComments, deleteComment, uploadAndRecord, deleteMedia,
   grantAdminClaim, watchChangeLog, logChange
-} from "./data.js?v=20261027j";
+} from "./data.js?v=20261027k";
 import { categoryHref, LOCAL_SEEDS, CATEGORY_BY_SLUG } from "./site-data.js?v=20260823a";
 import {
   $, $$, escapeHtml, relativeTime, toast, modal
@@ -16,7 +16,7 @@ import {
 import {
   initSettings, setSettingsCategories, pickImage, setActiveView,
   hasUnpublishedChanges, publishSettingsChanges
-} from "./admin-settings.js?v=20261027h";
+} from "./admin-settings.js?v=20261027i";
 import { initPreview, setPreviewCategories, onPreviewShown } from "./admin-preview.js?v=20261027h";
 
 const state = {
@@ -25,6 +25,7 @@ const state = {
   artworks: [],
   comics: [],
   deletedContent: new Set(),
+  deletionSnapshotReady: false,
   comments: [],
   view: ["overview", "artworks", "comics", "categories", "settings", "preview", "maintenance", "engagement", "changelog"].includes(new URLSearchParams(location.search).get("section"))
     ? new URLSearchParams(location.search).get("section") : "overview",
@@ -56,6 +57,28 @@ function restoreSelectionFocus(container, selector, key) {
   const input = $$(selector, container).find(node => node.closest("[data-selection-key]")?.dataset.selectionKey === key);
   input?.focus({ preventScroll: true });
 }
+
+function reportDeleteCleanup(results) {
+  Promise.all(results.map(async result => {
+    let cloud = [];
+    if (result?.cloudinaryCleanup) {
+      const outcome = await Promise.resolve(result.cloudinaryCleanup).catch(err => ({ deleted: false, message: err?.message || "Cloudinary cleanup failed." }));
+      cloud = Array.isArray(outcome) ? outcome : [outcome];
+    }
+    return {
+      cloudFailures: cloud.filter(item => item?.deleted === false).length,
+      warnings: result?.warnings || []
+    };
+  })).then(summaries => {
+    const cloudFailures = summaries.reduce((sum, item) => sum + item.cloudFailures, 0);
+    const warnings = summaries.flatMap(item => item.warnings);
+    if (cloudFailures) {
+      toast(`Removed from your website. ${cloudFailures} image file${cloudFailures === 1 ? " is" : "s are"} still stored in Cloudinary and can be deleted there.`, "error");
+    }
+    if (warnings.length) toast(`Website items were removed. ${warnings[0]}`, "error");
+  });
+}
+
 const DASHBOARD_STATE_KEY = "alafi-admin-dashboard-state-v2";
 
 function saveDashboardState() {
@@ -440,6 +463,7 @@ function archiveSeeded(slug) {
 }
 
 function archivePieces(slug) {
+  if (!state.deletionSnapshotReady) return [];
   if (archiveSeeded(slug)) {
     const records = state.artworks
       .filter(a => a.archive && a.category === slug && a.imageUrl)
@@ -699,16 +723,21 @@ async function deleteSelected(kind) {
   confirmBulkDelete(existingCount, pages, async (report) => {
     const selected = art ? state.selectedArt : state.selectedComics;
     const errors = [];
+    const cleanupResults = [];
     let deleted = 0;
-    const pending = ids.filter(id => selected.has(id));
+    const pending = ids.filter((id, index) => selected.has(id) && (art || plans[index]?.exists));
     for (let i = 0; i < pending.length; i++) {
       const id = pending[i];
       report(`Deleting ${i + 1} of ${pending.length}…`);
       try {
-        if (art) await deleteArtwork(id);
+        if (art) {
+          const result = await deleteArtwork(id);
+          cleanupResults.push(result);
+        }
         else {
           const index = ids.indexOf(id);
-          await deleteComic(id, plans[index]);
+          const result = await deleteComic(id, plans[index]);
+          cleanupResults.push(result);
           if (editingComicId === id) resetComicForm();
         }
         selected.delete(id);
@@ -722,11 +751,13 @@ async function deleteSelected(kind) {
       if (art) state.selectingArt = false; else state.selectingComics = false;
     }
     art ? renderCollection() : renderComics();
+    reportDeleteCleanup(cleanupResults);
+    const message = `${deleted} item${deleted === 1 ? "" : "s"} removed from your website.`;
     if (errors.length) {
       const first = errors[0];
-      toast(`${deleted} deleted; ${errors.length} failed. ${first.id}: ${first.message}`, "error");
+      toast(`${message} ${errors.length} item${errors.length === 1 ? "" : "s"} could not be removed: ${first.id}: ${first.message}`, "error");
       report(`${deleted} deleted. ${errors.length} still selected; close and retry after fixing the error.`);
-    } else toast(`${deleted} item${deleted === 1 ? "" : "s"} permanently deleted.`, "ok");
+    } else toast(message, "ok");
   });
 }
 
@@ -829,7 +860,7 @@ $("#archive-setup")?.addEventListener("click", async () => {
   btn.disabled = true;
   status.textContent = "Setting up…";
   try {
-    const { seedArchiveRecords } = await import("./migrate.js?v=20261027h");
+    const { seedArchiveRecords } = await import("./migrate.js?v=20261027j");
     const written = await seedArchiveRecords();
     status.textContent = "";
     toast(`${written} pieces are now fully manageable.`, "ok");
@@ -1073,7 +1104,7 @@ function loadComicIntoForm(comic) {
 
 function renderComics() {
   const host = $("#comic-grid");
-  const stories = state.comics.length || state.deletedContent.has(`story:${BUILTIN_SAMPLE_STORY.id}`)
+  const stories = state.comics.length || !state.deletionSnapshotReady || state.deletedContent.has(`story:${BUILTIN_SAMPLE_STORY.id}`)
     ? state.comics : [BUILTIN_SAMPLE_STORY];
   const list = stories
     .filter(c => state.comicFilter === "all" || c.categorySlug === state.comicFilter);
@@ -1513,7 +1544,7 @@ $("#migrate-dry").addEventListener("click", async () => {
   btn.disabled = true;
   $("#migrate-report").innerHTML = '<p class="empty-note">Scanning…</p>';
   try {
-    const { dryRun } = await import("./migrate.js?v=20261027h");
+    const { dryRun } = await import("./migrate.js?v=20261027j");
     const { plans, totalWrites } = await dryRun();
     renderMigrationReport(plans, false);
     $("#migrate-run").disabled = totalWrites === 0;
@@ -1535,7 +1566,7 @@ $("#migrate-run").addEventListener("click", () => {
     body: "This writes <b>status</b>, <b>featured</b>, and Cloudinary <b>public IDs</b> onto your existing documents, copies categories into artCategories, seeds comic genres, and backfills the media library.<br><br>It is additive and idempotent — nothing is deleted, and re-running it is harmless.",
     confirmLabel: "Run migration",
     onConfirm: async () => {
-      const { apply } = await import("./migrate.js?v=20261027h");
+      const { apply } = await import("./migrate.js?v=20261027j");
       const { results, totalWrites } = await apply((label) => {
         $("#migrate-report").innerHTML = `<p class="empty-note">Migrating: ${escapeHtml(label)}…</p>`;
       });
@@ -1594,6 +1625,7 @@ function boot() {
 
   watchContentDeletions((items) => {
     state.deletedContent = new Set(items.map(item => `${item.kind}:${item.itemId}`));
+    state.deletionSnapshotReady = true;
     renderCollectionChips();
     renderCollection();
     renderComics();

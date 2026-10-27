@@ -2,6 +2,7 @@ import { DEFAULT_ART_CATEGORIES, LOCAL_SEEDS, mergeCategories, categoryHref } fr
 import { observeReveals, onScrollFrame, sectionProgress, initNav, prefersReducedMotion } from "./reveal.js?v=20260823a";
 import { renderHeroCanvas } from "./site-content.js?v=20261017b";
 import { previewHref, currentConfig } from "./site-config.js?v=20261017b";
+import { watchContentDeletions, archivePieceId } from "./data.js?v=20261027k";
 
 const TILE_LAYOUT = ["t-hero", "t-tall", "t-strip", "t-strip", "t-strip"];
 const FRAMES_PER_TILE = 3;
@@ -24,7 +25,12 @@ function preload(src) {
 }
 
 const pools = new Map();
+const uploadedPools = new Map();
 let categories = DEFAULT_ART_CATEGORIES;
+let deletionSubscription = null;
+let deletionSnapshotReady = false;
+let deletedArtIds = new Set();
+let deletedArtUrls = new Set();
 
 function spread(list, count) {
   if (list.length <= count) return list.slice();
@@ -32,14 +38,22 @@ function spread(list, count) {
   return Array.from({ length: count }, (_, i) => list[Math.floor(i * step)]);
 }
 
-function toItem(src, category, title) {
-  return { src, category, title: title || "Untitled" };
+function toItem(src, category, title, id = "") {
+  return { src, category, title: title || "Untitled", id };
 }
 
 function seedPool(category) {
-  return (category.seeds || LOCAL_SEEDS[category.slug] || []).map((src, i) =>
-    toItem(src, category.label, `${category.label.replace(/s$/, "")} Study ${i + 1}`)
-  );
+  if (!deletionSnapshotReady) return [];
+  return (category.seeds || LOCAL_SEEDS[category.slug] || []).map((src, i) => ({
+    src, i, id: archivePieceId(category.slug, i)
+  })).filter(item => !deletedArtIds.has(`art:${item.id}`) && !deletedArtUrls.has(item.src))
+    .map(item => toItem(item.src, category.label, `${category.label.replace(/s$/, "")} Study ${item.i + 1}`, item.id));
+}
+
+function refreshPool(category) {
+  const uploaded = (uploadedPools.get(category.slug) || []).filter(item =>
+    !deletedArtIds.has(`art:${item.id}`) && !deletedArtUrls.has(item.src));
+  pools.set(category.slug, [...uploaded, ...seedPool(category)]);
 }
 
 function buildTile(category, layoutClass, tileIndex) {
@@ -308,24 +322,43 @@ async function upgradeFromFirestore(sections) {
   try {
     const { fetchUploadedArtworks } = await import("../../firebase-config.js?v=20261027h");
     const byCategory = await fetchUploadedArtworks();
-    let changed = false;
-
     sections.forEach((section) => {
-      const uploaded = byCategory[section.dataset.slug];
-      if (!uploaded?.length) return;
-      const items = uploaded.map(a => toItem(a.imageUrl, section._category.label, a.title));
-      pools.set(section.dataset.slug, [...items, ...(pools.get(section.dataset.slug) || [])]);
+      const uploaded = byCategory[section.dataset.slug] || [];
+      uploadedPools.set(section.dataset.slug, uploaded.map(a => toItem(a.imageUrl, section._category.label, a.title, a.id)));
+      refreshPool(section._category);
       refreshSection(section);
-      changed = true;
     });
-
-    if (changed) observeReveals(document);
+    observeReveals(document);
   } catch (err) {
     console.warn("Live collection data unavailable, showing local archive.", err);
   }
 }
 
 let live = { host: null, sections: [], detachScroll: null };
+
+function applyDeletions(items) {
+  deletedArtIds = new Set(items.filter(item => item.kind === "art").map(item => `art:${item.itemId}`));
+  deletedArtUrls = new Set(items.filter(item => item.kind === "art" && item.imageUrl).map(item => item.imageUrl));
+  Object.entries(LOCAL_SEEDS).forEach(([slug, seeds]) => seeds.forEach((src, i) => {
+    if (deletedArtIds.has(`art:${archivePieceId(slug, i)}`)) deletedArtUrls.add(src);
+  }));
+  deletionSnapshotReady = true;
+  categories.forEach(refreshPool);
+  live.sections.forEach(refreshSection);
+  filterDeletedHeroImages();
+}
+
+function filterDeletedHeroImages() {
+  const canvas = document.querySelector(".hero-canvas");
+  if (!canvas || !deletionSnapshotReady) return;
+  let changed = false;
+  canvas.querySelectorAll("img").forEach(img => {
+    const src = img.getAttribute("src") || "";
+    if (deletedArtUrls.has(src)) { img.remove(); changed = true; }
+  });
+  canvas.hidden = !canvas.querySelector("img");
+  if (changed) wireHeroCanvas();
+}
 
 export function mount() {
   initNav();
@@ -334,6 +367,10 @@ export function mount() {
   if (!host) return;
 
   pools.clear();
+  uploadedPools.clear();
+  deletionSnapshotReady = false;
+  deletedArtIds = new Set();
+  deletedArtUrls = new Set();
   categories = DEFAULT_ART_CATEGORIES;
 
   const sections = buildSections(host);
@@ -343,6 +380,9 @@ export function mount() {
   renderHeroCanvas(currentConfig());
   wireHeroCanvas();
   upgradeFromFirestore(sections);
+  deletionSubscription = watchContentDeletions(applyDeletions, err => {
+    console.warn("Deleted artwork could not be loaded; hiding bundled collection images.", err);
+  });
 
   loadCategoryOrder().then((remote) => {
     if (live.host !== host) return;
@@ -359,6 +399,8 @@ export function mount() {
 }
 
 export function unmount() {
+  deletionSubscription?.();
+  deletionSubscription = null;
   live.detachScroll?.();
   live.sections.forEach((section) => {
     section._tiles?.forEach((tile) => {
@@ -373,6 +415,7 @@ export function unmount() {
 
 export function onConfig(config) {
   if (renderHeroCanvas(config)) wireHeroCanvas();
+  filterDeletedHeroImages();
   observeReveals(document);
 }
 
@@ -392,7 +435,7 @@ function sameOrder(a, b) {
 
 async function loadCategoryOrder() {
   try {
-    const { fetchCategories } = await import("./data.js?v=20261027j");
+    const { fetchCategories } = await import("./data.js?v=20261027k");
     return mergeCategories(await fetchCategories("art"));
   } catch (err) {
     console.warn("Category order unavailable, using defaults.", err);

@@ -2,7 +2,7 @@ import { ensureGuestAuth, watchAuth, isOwner } from "../../firebase-config.js?v=
 import {
   watchCategories, watchComics, watchContentDeletions, watchLikes, toggleLike, hasLiked, BUILTIN_SAMPLE_STORY,
   watchComments, addComment, deleteComment
-} from "./data.js?v=20261027j";
+} from "./data.js?v=20261027k";
 import { DEFAULT_COMIC_CATEGORIES } from "./site-data.js?v=20260823a";
 import { observeReveals, initNav } from "./reveal.js?v=20260823a";
 import { modal } from "./admin-ui.js?v=20261027e";
@@ -18,9 +18,10 @@ let comics = [];
 
 let genresSeeded = false;
 let sampleDeleted = false;
+let deletionSnapshotReady = false;
 
 function shelvedStories() {
-  return (!sampleDeleted && !genresSeeded && !comics.length) ? [BUILTIN_SAMPLE_STORY] : comics;
+  return (deletionSnapshotReady && !sampleDeleted && !genresSeeded && !comics.length) ? [BUILTIN_SAMPLE_STORY] : comics;
 }
 
 let activeFilter = "all";
@@ -411,6 +412,8 @@ function openFromHash() {
 }
 
 export function mount() {
+  deletionSnapshotReady = false;
+  sampleDeleted = false;
   shelvesHost = document.getElementById("comic-shelves");
   emptyHost = document.getElementById("comics-empty");
   filterHost = document.getElementById("comic-filters");
@@ -452,8 +455,9 @@ export function mount() {
 
   pageSubscriptions.push(watchContentDeletions((items) => {
     sampleDeleted = items.some(item => item.kind === "story" && item.itemId === BUILTIN_SAMPLE_STORY.id);
+    deletionSnapshotReady = true;
     render();
-  }));
+  }, () => { sampleDeleted = true; deletionSnapshotReady = true; render(); }));
 }
 
 export function unmount() {

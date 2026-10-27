@@ -1,4 +1,4 @@
-import { fetchCategories } from "./data.js?v=20261027j";
+import { fetchCategories, watchContentDeletions, archivePieceId } from "./data.js?v=20261027k";
 import { CATEGORY_BY_SLUG, categoryHref, LOCAL_SEEDS, mergeCategories } from "./site-data.js?v=20260823a";
 import { observeReveals, initNav } from "./reveal.js?v=20260823a";
 import { escapeHtml, previewHref } from "./site-config.js?v=20261017b";
@@ -8,11 +8,26 @@ let grid = null;
 
 let latestConfig = null;
 let latestCategories = null;
+let deletionSubscription = null;
+let deletionSnapshotReady = false;
+let deletedArtIds = new Set();
+let deletedArtUrls = new Set();
+
+function deletedUrl(url) {
+  if (!url) return true;
+  if (deletedArtUrls.has(url)) return true;
+  for (const [slug, seeds] of Object.entries(LOCAL_SEEDS)) {
+    const index = seeds.indexOf(url);
+    if (index >= 0 && deletedArtIds.has(`art:${archivePieceId(slug, index)}`)) return true;
+  }
+  return false;
+}
 
 function coverFor(slug, config) {
   const chosen = config?.gallery?.covers?.[slug];
-  if (chosen) return chosen;
-  return (LOCAL_SEEDS[slug] || [])[0] || "";
+  if (!deletionSnapshotReady) return "";
+  if (chosen && !deletedUrl(chosen)) return chosen;
+  return (LOCAL_SEEDS[slug] || []).find(src => !deletedUrl(src)) || "";
 }
 
 function card(category, config, index) {
@@ -50,13 +65,24 @@ async function loadCategories() {
 
 export function mount() {
   grid = document.querySelector(".index-grid");
+  deletionSnapshotReady = false;
+  deletedArtIds = new Set();
+  deletedArtUrls = new Set();
   initNav();
   observeReveals(document);
   render();
   loadCategories().catch(err => console.warn("Gallery index falling back to static cards.", err));
+  deletionSubscription = watchContentDeletions((items) => {
+    deletedArtIds = new Set(items.filter(item => item.kind === "art").map(item => `art:${item.itemId}`));
+    deletedArtUrls = new Set(items.filter(item => item.kind === "art" && item.imageUrl).map(item => item.imageUrl));
+    deletionSnapshotReady = true;
+    render();
+  }, err => console.warn("Deleted artwork could not be loaded; hiding bundled covers.", err));
 }
 
 export function unmount() {
+  deletionSubscription?.();
+  deletionSubscription = null;
   grid = null;
 }
 
