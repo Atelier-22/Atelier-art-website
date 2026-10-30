@@ -7,10 +7,10 @@ import {
   uploadAndRecord, watchMedia, inspectVideo, videoRejectionReason,
   videoTrimNotice, resourceTypeFor, isAudio, MAX_VIDEO_BYTES,
   MAX_AUDIO_BYTES, MAX_AUDIO_SECONDS
-} from "./data.js?v=20261027p";
+} from "./data.js?v=20261030a";
 import { posterFromVideo, VIDEO_TRIM_SECONDS } from "./cloudinary.js?v=20260823a";
 import { readTrackName, titleFromFilename } from "./id3.js?v=20260823a";
-import { LOCAL_SEEDS, CATEGORY_BY_SLUG } from "./site-data.js?v=20260823a";
+import { LOCAL_SEEDS, CATEGORY_BY_SLUG } from "./site-data.js?v=20261030a";
 import { $, $$, escapeHtml, toast, modal } from "./admin-ui.js?v=20261027e";
 
 const ROOT_IMAGES = ["1.jpg", "2.jpg", "AJ.jpeg", "AJ1.jpg", "AJ2.JPG", "tt.JPG"];
@@ -1560,15 +1560,20 @@ function renderBody() {
 
   host.innerHTML = tab.note ? `<p class="settings-intro">${escapeHtml(tab.note)}</p>` : "";
 
-  tab.groups.forEach((group) => {
+  tab.groups.forEach((group, groupIndex) => {
     const panel = document.createElement("div");
     panel.className = "panel settings-group";
+    panel.dataset.group = groupIndex;
     panel.innerHTML = `
       <h2>${escapeHtml(group.title)}</h2>
       ${group.note ? `<p class="panel-sub">${escapeHtml(group.note)}</p>` : ""}
       <div class="settings-fields"></div>`;
     const fields = $(".settings-fields", panel);
-    group.fields.forEach(field => fields.appendChild(renderField(field)));
+    group.fields.forEach((field, fieldIndex) => {
+      const el = renderField(field);
+      el.dataset.fieldIndex = fieldIndex;
+      fields.appendChild(el);
+    });
     host.appendChild(panel);
   });
 
@@ -1666,6 +1671,80 @@ export async function publishSettingsChanges() {
     if (button) button.textContent = "Publish changes";
     renderStatus();
   }
+}
+
+const TAB_KEYWORDS = {
+  theme: "appearance look style design make up makeup colour color colours colors palette font fonts typeface type text size width layout dark light quality",
+  branding: "logo name brand title wordmark footer copyright identity",
+  home: "homepage front page landing hero slideshow headline intro artist portrait quote closing",
+  update: "news announcement notice banner post",
+  story: "story section narrative",
+  about: "about biography bio portrait page",
+  gallery: "gallery collections covers index header",
+  sound: "music audio playlist songs tracks volume",
+  backgrounds: "background wallpaper wallpapers images pages"
+};
+
+const FIELD_LABELS = {
+  contrast: "Readability check",
+  swatches: "Colour preview",
+  typepreview: "Type preview",
+  covers: "Collection covers",
+  blocks: "Page sections",
+  tracks: "Playlist",
+  post: "Post the update"
+};
+
+export function settingsSearchIndex() {
+  const entries = [];
+  TABS.forEach((tab) => {
+    entries.push({
+      title: tab.label,
+      context: "Settings",
+      keywords: `${TAB_KEYWORDS[tab.id] || ""} ${tab.note || ""}`,
+      tab: tab.id
+    });
+    tab.groups.forEach((group, groupIndex) => {
+      entries.push({
+        title: group.title,
+        context: `Settings › ${tab.label}`,
+        keywords: `${TAB_KEYWORDS[tab.id] || ""} ${group.note || ""}`,
+        tab: tab.id,
+        group: groupIndex
+      });
+      group.fields.forEach((field, fieldIndex) => {
+        const label = field.label || FIELD_LABELS[field.type];
+        if (!label || label === group.title) return;
+        entries.push({
+          title: label,
+          context: `Settings › ${tab.label} › ${group.title}`,
+          keywords: `${field.note || ""} ${field.path || ""} ${TAB_KEYWORDS[tab.id] || ""}`,
+          tab: tab.id,
+          group: groupIndex,
+          field: fieldIndex
+        });
+      });
+    });
+  });
+  return entries;
+}
+
+export async function openSetting(tabId, groupIndex, fieldIndex) {
+  if (!state.mounted) await initSettings();
+  else await state.readyPromise;
+  if (!TABS.some(tab => tab.id === tabId)) return null;
+  if (state.tab !== tabId) {
+    state.tab = tabId;
+    const url = new URL(location.href);
+    url.searchParams.set("tab", tabId);
+    history.replaceState({ admin: true }, "", url.href);
+    $$("[data-tab]", $("#settings-tabs")).forEach(button => button.classList.toggle("is-active", button.dataset.tab === tabId));
+    renderBody();
+  }
+  if (groupIndex === undefined) return $("#settings-tabs");
+  const panel = $(`#settings-body .settings-group[data-group="${groupIndex}"]`);
+  if (!panel || fieldIndex === undefined) return panel;
+  return $(`[data-field-index="${fieldIndex}"]`, panel) || panel;
 }
 
 export function setSettingsCategories(categories) {

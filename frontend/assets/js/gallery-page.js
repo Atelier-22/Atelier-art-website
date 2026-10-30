@@ -2,9 +2,9 @@ import { ensureGuestAuth, watchAuth, isOwner } from "../../firebase-config.js?v=
 import {
   watchGalleryPieces, watchPieceMeta, toggleLike, hasLiked,
   watchComments, addComment, deleteComment, fetchCategories, archivePieceId
-} from "./data.js?v=20261027k";
-import { isPreview, currentConfig } from "./site-config.js?v=20261017b";
-import { LOCAL_SEEDS, CATEGORY_BY_SLUG, currentCategorySlug } from "./site-data.js?v=20260823a";
+} from "./data.js?v=20261030a";
+import { isPreview, currentConfig, previewHref } from "./site-config.js?v=20261017b";
+import { LOCAL_SEEDS, CATEGORY_BY_SLUG, currentCategorySlug } from "./site-data.js?v=20261030a";
 import { bindGallery } from "./lightbox.js?v=20260823a";
 import { observeReveals, initNav } from "./reveal.js?v=20260823a";
 import { modal } from "./admin-ui.js?v=20261027e";
@@ -12,6 +12,7 @@ import { modal } from "./admin-ui.js?v=20261027e";
 let slug = "";
 let grid = null;
 let emptyEl = null;
+let removed = false;
 
 let cards = new Map();
 let owner = false;
@@ -251,6 +252,7 @@ function removeCard(id) {
 }
 
 function sync({ uploaded, archive, deletedIds = [], deletedUrls = [] }) {
+  if (removed) return;
   deletedSeedIds = new Set(deletedIds);
   deletedSeedUrls = new Set(deletedUrls);
   const archiveItems = archive.length
@@ -289,40 +291,54 @@ function sync({ uploaded, archive, deletedIds = [], deletedUrls = [] }) {
 }
 
 function updateEmptyState() {
-  if (!emptyEl) return;
+  if (!emptyEl || removed) return;
   emptyEl.hidden = cards.size > 0;
 }
 
 async function paintHeader() {
-  const known = CATEGORY_BY_SLUG[slug];
   const titleEl = document.getElementById("category-title");
   const taglineEl = document.getElementById("category-tagline");
   const blurbEl = document.getElementById("category-blurb");
   if (!titleEl) return;
 
-  let meta = known;
-  if (!known) {
-    const remote = await fetchCategories("art");
-    meta = remote.find(c => c.slug === slug);
+  const pageSlug = slug;
+  const remote = await fetchCategories("art");
+  if (pageSlug !== slug) return;
+  const live = remote.find(c => c.slug === slug);
+  const known = CATEGORY_BY_SLUG[slug];
+  const label = live?.name || known?.label || slug.replace(/-/g, " ");
+
+  if (!live) {
+    removed = true;
+    titleEl.textContent = label;
+    if (taglineEl) taglineEl.textContent = "";
+    if (blurbEl) blurbEl.textContent = "";
+    cards.forEach((_, id) => removeCard(id));
+    if (grid) grid.hidden = true;
+    if (emptyEl) {
+      emptyEl.hidden = false;
+      emptyEl.innerHTML = `<h3>This collection has been taken down</h3><p>The work has moved on. <a href="${previewHref("gallery.html")}">See the collections on view now</a>.</p>`;
+    }
+    return;
   }
-  const label = meta?.label || meta?.name || slug.replace(/-/g, " ");
 
   const config = currentConfig();
   const artist = (config.home?.artistName || "Alafi Jonathan").trim();
   const brand = (config.branding?.siteTitle || "Alafi Art Work").trim();
-  if (!CATEGORY_BY_SLUG[slug]) {
-    document.title = `${label} by ${artist} | ${brand}`;
-  }
+  document.title = `${label} by ${artist} | ${brand}`;
+  const crumb = document.getElementById("crumb-current");
+  if (crumb) crumb.textContent = label;
 
   titleEl.textContent = label;
-  if (taglineEl) taglineEl.textContent = meta?.tagline || "";
-  if (blurbEl) blurbEl.textContent = meta?.blurb || "";
+  if (taglineEl) taglineEl.textContent = live.tagline || known?.tagline || "";
+  if (blurbEl) blurbEl.textContent = live.blurb || known?.blurb || "";
 }
 
 export function mount() {
   slug = currentCategorySlug();
   grid = document.getElementById("gallery-grid");
   emptyEl = document.getElementById("gallery-empty");
+  removed = false;
   cards = new Map();
   pageSubscriptions = [];
 
@@ -349,7 +365,7 @@ export function mount() {
   });
 
   pageSubscriptions.push(watchGalleryPieces(slug, sync, () => {
-    if (emptyEl) emptyEl.hidden = cards.size > 0;
+    if (emptyEl && !removed) emptyEl.hidden = cards.size > 0;
   }, { includeDrafts: isPreview() }));
 }
 

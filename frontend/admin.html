@@ -15,7 +15,7 @@
   <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
   <link href="https://fonts.googleapis.com/css2?family=Cormorant+Garamond:ital,wght@0,300;0,400;0,500;0,600&family=Inter:wght@300;400;500&display=swap" rel="stylesheet">
   <link rel="stylesheet" href="assets/css/core.css?v=20261017b">
-  <link rel="stylesheet" href="assets/css/admin.css?v=20261027g">
+  <link rel="stylesheet" href="assets/css/admin.css?v=20261030a">
   <link rel="stylesheet" href="assets/css/settings.css?v=20260823a">
 </head>
 <body class="admin">
@@ -111,6 +111,13 @@
       <div>
         <h1 id="view-title">Overview</h1>
         <p id="view-sub">Everything on the site at a glance.</p>
+      </div>
+      <div class="admin-search">
+        <input type="search" id="admin-search" placeholder="Search settings, pages, collections&hellip;"
+               autocomplete="off" spellcheck="false" aria-label="Search the dashboard"
+               role="combobox" aria-expanded="false" aria-controls="admin-search-results">
+        <kbd>Ctrl K</kbd>
+        <div class="admin-search-results" id="admin-search-results" role="listbox" hidden></div>
       </div>
     </div>
 
@@ -267,13 +274,13 @@
     <section class="admin-view" id="view-categories">
       <div class="panel">
         <h2>Gallery collections</h2>
-        <p class="panel-sub">Categories for artworks. Reorder them to change the order on the homepage and gallery index.</p>
+        <p class="panel-sub">Categories for artworks. Edit a name, tagline, description or cover and the homepage, gallery, collection pages and footer follow at once. Reorder to change the order everywhere. Delete freely &mdash; &ldquo;Restore built-in&rdquo; rebuilds the originals.</p>
 
         <form class="toolbar" id="art-cat-form">
           <div class="grow"><input type="search" id="art-cat-name" placeholder="New collection name"></div>
           <button class="btn is-primary" type="submit">Add collection</button>
         </form>
-        <div class="toolbar"><button class="btn is-small is-danger" type="button" id="art-cat-select-toggle">Delete</button><span id="art-cat-selected-count" hidden>0 selected</span><button class="btn is-small" type="button" id="art-cat-select-all" hidden>Select all</button><button class="btn is-small is-danger" type="button" id="art-cat-delete-selected" hidden disabled>Delete selected</button></div>
+        <div class="toolbar"><button class="btn is-small is-danger" type="button" id="art-cat-select-toggle">Delete</button><span id="art-cat-selected-count" hidden>0 selected</span><button class="btn is-small" type="button" id="art-cat-select-all" hidden>Select all</button><button class="btn is-small is-danger" type="button" id="art-cat-delete-selected" hidden disabled>Delete selected</button><button class="btn is-small" type="button" id="art-cat-restore" title="Bring back any of the original collections you deleted">Restore built-in</button></div>
 
         <div class="rows" id="art-cat-rows"></div>
       </div>
@@ -286,7 +293,7 @@
           <div class="grow"><input type="search" id="comic-cat-name" placeholder="New genre name"></div>
           <button class="btn is-primary" type="submit">Add genre</button>
         </form>
-        <div class="toolbar"><button class="btn is-small is-danger" type="button" id="comic-cat-select-toggle">Delete</button><span id="comic-cat-selected-count" hidden>0 selected</span><button class="btn is-small" type="button" id="comic-cat-select-all" hidden>Select all</button><button class="btn is-small is-danger" type="button" id="comic-cat-delete-selected" hidden disabled>Delete selected</button></div>
+        <div class="toolbar"><button class="btn is-small is-danger" type="button" id="comic-cat-select-toggle">Delete</button><span id="comic-cat-selected-count" hidden>0 selected</span><button class="btn is-small" type="button" id="comic-cat-select-all" hidden>Select all</button><button class="btn is-small is-danger" type="button" id="comic-cat-delete-selected" hidden disabled>Delete selected</button><button class="btn is-small" type="button" id="comic-cat-restore" title="Bring back any of the original genres you deleted">Restore built-in</button></div>
 
         <div class="rows" id="comic-cat-rows"></div>
       </div>
@@ -402,6 +409,6 @@
     });
   })();
 </script>
-<script type="module" src="assets/js/admin.js?v=20261027p"></script>
+<script type="module" src="assets/js/admin.js?v=20261030a"></script>
 </body>
 </html>

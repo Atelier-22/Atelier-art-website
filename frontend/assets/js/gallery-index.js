@@ -1,13 +1,14 @@
-import { fetchCategories, watchContentDeletions, archivePieceId } from "./data.js?v=20261027k";
-import { CATEGORY_BY_SLUG, categoryHref, LOCAL_SEEDS, mergeCategories } from "./site-data.js?v=20260823a";
+import { fetchCategories, fetchCategoryCovers, watchContentDeletions, archivePieceId } from "./data.js?v=20261030a";
+import { CATEGORY_BY_SLUG, categoryHref, LOCAL_SEEDS, mergeCategories } from "./site-data.js?v=20261030a";
 import { observeReveals, initNav } from "./reveal.js?v=20260823a";
-import { escapeHtml, previewHref } from "./site-config.js?v=20261017b";
+import { escapeHtml, previewHref, currentConfig } from "./site-config.js?v=20261017b";
 
 let grid = null;
 
 
 let latestConfig = null;
 let latestCategories = null;
+let uploadCovers = {};
 let deletionSubscription = null;
 let deletionSnapshotReady = false;
 let deletedArtIds = new Set();
@@ -23,15 +24,18 @@ function deletedUrl(url) {
   return false;
 }
 
-function coverFor(slug, config) {
-  const chosen = config?.gallery?.covers?.[slug];
+function coverFor(category, config) {
   if (!deletionSnapshotReady) return "";
+  const own = category.cover;
+  if (own && !deletedUrl(own)) return own;
+  const chosen = config?.gallery?.covers?.[category.slug];
   if (chosen && !deletedUrl(chosen)) return chosen;
-  return (LOCAL_SEEDS[slug] || []).find(src => !deletedUrl(src)) || "";
+  return (LOCAL_SEEDS[category.slug] || []).find(src => !deletedUrl(src))
+    || (uploadCovers[category.slug] && !deletedUrl(uploadCovers[category.slug]) ? uploadCovers[category.slug] : "");
 }
 
 function card(category, config, index) {
-  const cover = coverFor(category.slug, config);
+  const cover = coverFor(category, config);
   const isComics = category.slug === "comics";
   const label = category.label || category.name || category.slug;
 
@@ -49,12 +53,15 @@ function card(category, config, index) {
 
 function render() {
   if (!grid || !latestCategories || !latestConfig) return;
-  grid.innerHTML = latestCategories.map((c, i) => card(c, latestConfig, i)).join("");
+  grid.innerHTML = latestCategories.length
+    ? latestCategories.map((c, i) => card(c, latestConfig, i)).join("")
+    : '<p class="index-empty">New collections are being prepared. Check back soon.</p>';
   observeReveals(grid);
 }
 
 async function loadCategories() {
-  const remote = await fetchCategories("art");
+  const [remote, covers] = await Promise.all([fetchCategories("art"), fetchCategoryCovers()]);
+  uploadCovers = covers;
   latestCategories = mergeCategories(remote).map(c => ({
     ...c,
     label: c.label || c.name,
@@ -65,6 +72,7 @@ async function loadCategories() {
 
 export function mount() {
   grid = document.querySelector(".index-grid");
+  latestConfig ||= currentConfig();
   deletionSnapshotReady = false;
   deletedArtIds = new Set();
   deletedArtUrls = new Set();

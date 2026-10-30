@@ -1,5 +1,5 @@
 import { $, $$, escapeHtml, toast } from "./admin-ui.js?v=20261027e";
-import { categoryHref } from "./site-data.js?v=20260823a";
+import { categoryHref } from "./site-data.js?v=20261030a";
 
 const DEVICES = {
   phone: { label: "Phone", width: 390, height: 844 },

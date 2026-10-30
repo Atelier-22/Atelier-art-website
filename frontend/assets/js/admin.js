@@ -1,23 +1,24 @@
 import { watchAuth, isOwner, ownerLogin, ownerLogout, ownerPasswordReset, authReady } from "../../firebase-config.js?v=20261027h";
 import {
   watchCategories, seedDefaultCategories, createCategory, updateCategory,
-  reorderCategories, deleteCategory,
+  reorderCategories, deleteCategory, restoreDefaultCategories, moveCategoryItems,
   watchAllArtworks, watchContentDeletions, createArtwork, updateArtwork, deleteArtwork,
   archivePieceId, saveArchivePiece, setArchiveVisibility, replaceArchiveImage,
   reorderArchivePieces, moveArchiveToCloudinary, publicIdFromUrl,
   watchComics, createComic, updateComic, getComicDeletionPlan, deleteComic, reorderComics, BUILTIN_SAMPLE_STORY,
   watchAllComments, deleteComment, uploadAndRecord, deleteMedia,
   grantAdminClaim, watchChangeLog, logChange
-} from "./data.js?v=20261027p";
-import { categoryHref, LOCAL_SEEDS, CATEGORY_BY_SLUG } from "./site-data.js?v=20260823a";
+} from "./data.js?v=20261030a";
+import { categoryHref, LOCAL_SEEDS, CATEGORY_BY_SLUG } from "./site-data.js?v=20261030a";
 import {
   $, $$, escapeHtml, relativeTime, toast, modal
 } from "./admin-ui.js?v=20261027e";
 import {
   initSettings, setSettingsCategories, pickImage, setActiveView,
   hasUnpublishedChanges, publishSettingsChanges
-} from "./admin-settings.js?v=20261027j";
+} from "./admin-settings.js?v=20261030a";
 import { initPreview, setPreviewCategories, onPreviewShown } from "./admin-preview.js?v=20261027h";
+import { initAdminSearch } from "./admin-search.js?v=20261030a";
 
 const state = {
   artCategories: [],
@@ -448,9 +449,10 @@ function collectionSlugs() {
   const fromCategories = state.artCategories
     .filter(c => c.slug !== "comics")
     .map(c => c.slug);
-  const fromFolders = Object.keys(LOCAL_SEEDS)
-    .filter(slug => (LOCAL_SEEDS[slug] || []).length && !CATEGORY_BY_SLUG[slug]?.isComics);
-  return Array.from(new Set([...fromCategories, ...fromFolders]));
+  const orphaned = state.artworks
+    .filter(a => a.uploaded && a.category && a.category !== "comics")
+    .map(a => a.category);
+  return Array.from(new Set([...fromCategories, ...orphaned]));
 }
 
 function archivePlaceholder(slug, i) {
@@ -835,6 +837,24 @@ function editPiece(piece) {
   });
 }
 
+function openCollection(slug) {
+  showView("artworks");
+  state.collection = slug;
+  state.collectionSearch = "";
+  state.selectedArt.clear();
+  state.artAnchor = null;
+  $("#collection-search").value = "";
+  renderCollectionChips();
+  renderCollection();
+  saveDashboardState();
+}
+
+initAdminSearch({
+  showView: (view) => { if (state.view !== view) showView(view); },
+  openCollection,
+  getData: () => ({ artCategories: state.artCategories, comicCategories: state.comicCategories, comics: state.comics })
+});
+
 $("#collection-chips")?.addEventListener("click", (e) => {
   const chip = e.target.closest("[data-collection]");
   if (!chip) return;
@@ -1212,13 +1232,23 @@ function categoryList(kind) {
 }
 
 function categoryName(kind, slug) {
-  return categoryList(kind).find(c => c.slug === slug)?.name || slug || "Uncategorised";
+  const found = categoryList(kind).find(c => c.slug === slug)?.name;
+  if (found) return found;
+  if (!slug) return "Uncategorised";
+  return `${CATEGORY_BY_SLUG[slug]?.label || slug} (deleted)`;
 }
 
 function categoryOptions(kind, selected) {
   return categoryList(kind)
     .map(c => `<option value="${escapeHtml(c.slug)}"${c.slug === selected ? " selected" : ""}>${escapeHtml(c.name)}</option>`)
     .join("");
+}
+
+function coverPreview(cat) {
+  return cat.cover
+    || state.artworks.find(a => a.uploaded && a.imageUrl && a.category === cat.slug)?.imageUrl
+    || (LOCAL_SEEDS[cat.slug] || [])[0]
+    || "";
 }
 
 function usageCount(kind, slug) {
@@ -1238,7 +1268,7 @@ function renderCategoryList(kind) {
   list.forEach((cat, i) => {
     const used = usageCount(kind, cat.slug);
     const row = document.createElement("div");
-    row.className = "row";
+    row.className = kind === "art" ? "row has-cover" : "row";
     row.dataset.selectionKey = cat.id;
     if (selecting && selected.has(cat.id)) row.classList.add("is-selected");
     row.innerHTML = `
@@ -1246,15 +1276,17 @@ function renderCategoryList(kind) {
         <button type="button" data-up ${i === 0 ? "disabled" : ""} aria-label="Move up">&#9650;</button>
         <button type="button" data-down ${i === list.length - 1 ? "disabled" : ""} aria-label="Move down">&#9660;</button>
       </div>
+      ${kind === "art" ? `<div class="cat-cover${cat.cover ? "" : " is-fallback"}">${coverPreview(cat) ? `<img src="${escapeHtml(coverPreview(cat))}" alt="" loading="lazy">` : ""}</div>` : ""}
       <div class="row-main">
         <strong>${escapeHtml(cat.name)}</strong>
-        <small>/${escapeHtml(cat.slug)} · ${used} item${used === 1 ? "" : "s"}</small>
+        <small>/${escapeHtml(cat.slug)} · ${used} item${used === 1 ? "" : "s"}${cat.tagline ? ` · ${escapeHtml(cat.tagline)}` : ""}</small>
       </div>
       <div class="row-actions">
         ${selecting ? `<label class="bulk-select"><input type="checkbox" data-select-category ${selected.has(cat.id) ? "checked" : ""}> Select</label>` : ""}
         ${selecting ? "" : `
         ${kind === "art" ? `<a class="btn is-small" href="${escapeHtml(categoryHref({ slug: cat.slug }))}" target="_blank" rel="noopener">View</a>` : ""}
-        <button class="btn is-small" data-rename>Rename</button>
+        <button class="btn is-small" data-edit-category>Edit</button>
+        ${kind === "art" ? `<button class="btn is-small" data-cover>${cat.cover ? "Change cover" : "Set cover"}</button>` : ""}
         <button class="btn is-small is-danger" data-del>Select to delete</button>`}
       </div>
     `;
@@ -1279,32 +1311,18 @@ function renderCategoryList(kind) {
       await reorderCategories(kind, ids);
     });
 
-    if (!selecting) $("[data-rename]", row).addEventListener("click", () => {
-      const main = $(".row-main", row);
-      const original = main.innerHTML;
-      main.innerHTML = `<input type="text" value="${escapeHtml(cat.name)}">`;
-      const input = $("input", main);
-      input.focus();
-      input.select();
+    if (!selecting) $("[data-edit-category]", row).addEventListener("click", () => editCategory(kind, cat));
 
-      const commit = async () => {
-        const name = input.value.trim();
-        if (!name || name === cat.name) { main.innerHTML = original; return; }
-        try {
-          await ensureSeeded(kind);
-          await updateCategory(kind, cat.id, { name });
-          toast("Category renamed.", "ok");
-        } catch (err) {
-          toast(err.message, "error");
-          main.innerHTML = original;
-        }
-      };
-
-      input.addEventListener("blur", commit, { once: true });
-      input.addEventListener("keydown", (e) => {
-        if (e.key === "Enter") input.blur();
-        if (e.key === "Escape") { input.removeEventListener("blur", commit); main.innerHTML = original; }
-      });
+    if (!selecting && kind === "art") $("[data-cover]", row).addEventListener("click", async () => {
+      const next = await pickImage(cat.cover || "");
+      if (next === null) return;
+      try {
+        await ensureSeeded(kind);
+        await updateCategory(kind, cat.id, { cover: next });
+        toast(next ? "Cover updated — the gallery index shows it now." : "Cover removed.", "ok");
+      } catch (err) {
+        toast(err.message, "error");
+      }
     });
 
     if (!selecting) $("[data-del]", row).addEventListener("click", () => {
@@ -1320,6 +1338,104 @@ function renderCategoryList(kind) {
   });
   updateDeleteSelection(kind === "comics" ? "comicCats" : "artCats");
 }
+
+function editCategory(kind, cat) {
+  const noun = kind === "comics" ? "genre" : "collection";
+  modal({
+    title: `Edit ${noun}`,
+    body: `
+      <div class="field">
+        <label for="ec-name">Name</label>
+        <input type="text" id="ec-name" maxlength="80" value="${escapeHtml(cat.name)}">
+      </div>
+      <div class="field">
+        <label for="ec-tagline">Tagline</label>
+        <input type="text" id="ec-tagline" maxlength="200" value="${escapeHtml(cat.tagline)}" placeholder="A short line under the name">
+      </div>
+      <div class="field">
+        <label for="ec-blurb">Description</label>
+        <textarea id="ec-blurb" maxlength="1000" placeholder="A sentence or two introducing the ${noun}">${escapeHtml(cat.blurb)}</textarea>
+      </div>
+      <p class="field-note">The web address stays <b>/${escapeHtml(cat.slug)}</b> so existing links keep working.</p>`,
+    confirmLabel: "Save",
+    onMount: (overlay) => $("#ec-name", overlay).focus(),
+    onConfirm: async () => {
+      const name = $("#ec-name").value.trim();
+      if (!name) throw new Error("Give it a name.");
+      await ensureSeeded(kind);
+      await updateCategory(kind, cat.id, {
+        name,
+        tagline: $("#ec-tagline").value.trim(),
+        blurb: $("#ec-blurb").value.trim()
+      });
+      await logChange("category.update", `${kind}/${cat.slug}`, name);
+      toast(`${name} saved — the site has it now.`, "ok");
+    }
+  });
+}
+
+function confirmCategoryDelete(kind, chosen, onDone) {
+  if (bulkDeleteOpen) return;
+  const noun = kind === "comics" ? "genre" : "collection";
+  const items = (n) => kind === "comics" ? (n === 1 ? "story" : "stories") : (n === 1 ? "piece" : "pieces");
+  const chosenSlugs = new Set(chosen.map(c => c.slug));
+  const remaining = categoryList(kind).filter(c => !chosenSlugs.has(c.slug));
+  const holding = chosen.filter(c => usageCount(kind, c.slug));
+  const total = holding.reduce((n, c) => n + usageCount(kind, c.slug), 0);
+  const moveChoice = total ? `
+      <div class="field" style="margin-top:16px">
+        <label for="cd-move">The ${total} uploaded ${items(total)} inside</label>
+        <select id="cd-move">
+          ${remaining.map(c => `<option value="${escapeHtml(c.slug)}">Move to ${escapeHtml(c.name)}</option>`).join("")}
+          <option value="">Keep aside &mdash; off the site, still listed under Artworks</option>
+        </select>
+      </div>` : "";
+  bulkDeleteOpen = true;
+  const dialog = modal({
+    title: `Delete ${chosen.length === 1 ? `“${chosen[0].name}”` : `${chosen.length} ${noun}s`}?`,
+    body: `It comes off the homepage, the gallery and the footer straight away.${moveChoice}<p data-delete-progress class="delete-progress" aria-live="polite" hidden></p>`,
+    confirmLabel: "Delete",
+    danger: true,
+    onClose: () => { bulkDeleteOpen = false; },
+    onConfirm: async () => {
+      const progress = $("[data-delete-progress]", dialog.overlay);
+      const report = (text) => { progress.hidden = false; progress.textContent = text; };
+      const target = $("#cd-move", dialog.overlay)?.value || "";
+      const targetName = categoryName(kind, target);
+      await ensureSeeded(kind);
+      let moved = 0;
+      if (target) {
+        for (const cat of holding) {
+          report(`Moving ${items(2)} out of ${cat.name}…`);
+          moved += await moveCategoryItems(kind, cat.slug, target);
+        }
+      }
+      for (let i = 0; i < chosen.length; i++) {
+        report(`Deleting ${i + 1} of ${chosen.length}…`);
+        await deleteCategory(kind, chosen[i].id);
+        await logChange("category.delete", `${kind}/${chosen[i].slug}`, chosen[i].name);
+      }
+      onDone();
+      toast(`${chosen.length} ${noun}${chosen.length === 1 ? "" : "s"} deleted${moved ? `; ${moved} ${items(moved)} moved to ${targetName}` : ""}.`, "ok");
+    }
+  });
+}
+
+function restoreBuiltIns(kind) {
+  const noun = kind === "comics" ? "genres" : "collections";
+  modal({
+    title: `Restore the built-in ${noun}?`,
+    body: `Any of the original ${noun} you deleted come back with their original names and text, at the end of the list. Nothing you made yourself is touched.`,
+    confirmLabel: "Restore",
+    onConfirm: async () => {
+      const added = await restoreDefaultCategories(kind);
+      toast(added ? `${added} ${noun} restored.` : `All the built-in ${noun} are already there.`, "ok");
+    }
+  });
+}
+
+$("#art-cat-restore")?.addEventListener("click", () => restoreBuiltIns("art"));
+$("#comic-cat-restore")?.addEventListener("click", () => restoreBuiltIns("comics"));
 
 function updateDeleteSelection(type) {
   const config = {
@@ -1350,6 +1466,15 @@ async function deleteSelectedRecords(type) {
   const [selected, items] = map;
   const chosen = items.filter(item => selected.has(selectionKey(type, item)));
   if (!chosen.length) return;
+  if (type !== "comments") {
+    const kind = type === "comicCats" ? "comics" : "art";
+    confirmCategoryDelete(kind, chosen, () => {
+      selected.clear();
+      if (kind === "comics") state.selectingComicCats = false; else state.selectingArtCats = false;
+      renderCategoryList(kind);
+    });
+    return;
+  }
   confirmBulkDelete(chosen.length, 0, async (report) => {
     for (let i = 0; i < chosen.length; i++) {
       const item = chosen[i];

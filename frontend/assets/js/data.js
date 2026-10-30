@@ -1,5 +1,5 @@
 import { db, auth, getApp } from "../../firebase-config.js?v=20261027h";
-import { DEFAULT_ART_CATEGORIES, DEFAULT_COMIC_CATEGORIES } from "./site-data.js?v=20260823a";
+import { DEFAULT_ART_CATEGORIES, DEFAULT_COMIC_CATEGORIES } from "./site-data.js?v=20261030a";
 import { imageDeliveryUrl, VIDEO_TRIM_SECONDS } from "./cloudinary.js?v=20260823a";
 import { autoQualityEnabled } from "./site-config.js?v=20261017b";
 import {
@@ -240,6 +240,8 @@ function categoryPath(kind) {
   return kind === "comics" ? "comicCategories" : "artCategories";
 }
 
+const CATEGORY_STATE_ID = "_state";
+
 function defaultsFor(kind) {
   return kind === "comics" ? DEFAULT_COMIC_CATEGORIES : DEFAULT_ART_CATEGORIES;
 }
@@ -251,22 +253,42 @@ function normaliseCategory(id, data, index) {
     name: data.name || data.label || id,
     tagline: data.tagline || "",
     blurb: data.blurb || "",
+    cover: data.cover || "",
     order: typeof data.order === "number" ? data.order : index,
     page: data.page || null
   };
 }
 
+function categoriesFromSnap(kind, snap) {
+  if (snap.empty) return { items: defaultsFor(kind).map((c, i) => normaliseCategory(c.slug, c, i)), seeded: false };
+  const items = snap.docs
+    .filter(d => d.id !== CATEGORY_STATE_ID)
+    .map((d, i) => normaliseCategory(d.id, d.data(), i))
+    .sort((a, b) => a.order - b.order || a.name.localeCompare(b.name));
+  return { items, seeded: true };
+}
+
+function defaultCategoryDoc(c, order) {
+  return {
+    slug: c.slug,
+    name: c.label || c.name,
+    tagline: c.tagline || "",
+    blurb: c.blurb || "",
+    page: c.page || null,
+    order,
+    createdAt: serverTimestamp()
+  };
+}
+
+function markCustomised(batch, kind) {
+  batch.set(doc(db, categoryPath(kind), CATEGORY_STATE_ID), { customised: true, updatedAt: serverTimestamp() }, { merge: true });
+}
+
 export function watchCategories(kind, callback, onError) {
   const ref = collection(db, categoryPath(kind));
   return onSnapshot(ref, (snap) => {
-    if (snap.empty) {
-      callback(defaultsFor(kind).map((c, i) => normaliseCategory(c.slug, c, i)), { seeded: false });
-      return;
-    }
-    const items = snap.docs
-      .map((d, i) => normaliseCategory(d.id, d.data(), i))
-      .sort((a, b) => a.order - b.order || a.name.localeCompare(b.name));
-    callback(items, { seeded: true });
+    const { items, seeded } = categoriesFromSnap(kind, snap);
+    callback(items, { seeded });
   }, (err) => {
     console.warn(`watchCategories(${kind}) failed, falling back to defaults.`, err);
     callback(defaultsFor(kind).map((c, i) => normaliseCategory(c.slug, c, i)), { seeded: false });
@@ -276,11 +298,7 @@ export function watchCategories(kind, callback, onError) {
 
 export async function fetchCategories(kind) {
   try {
-    const snap = await getDocs(collection(db, categoryPath(kind)));
-    if (snap.empty) return defaultsFor(kind).map((c, i) => normaliseCategory(c.slug, c, i));
-    return snap.docs
-      .map((d, i) => normaliseCategory(d.id, d.data(), i))
-      .sort((a, b) => a.order - b.order || a.name.localeCompare(b.name));
+    return categoriesFromSnap(kind, await getDocs(collection(db, categoryPath(kind)))).items;
   } catch (err) {
     console.warn(`fetchCategories(${kind}) failed, falling back to defaults.`, err);
     return defaultsFor(kind).map((c, i) => normaliseCategory(c.slug, c, i));
@@ -293,18 +311,25 @@ export async function seedDefaultCategories(kind) {
   if (!snap.empty) return false;
   const batch = writeBatch(db);
   defaultsFor(kind).forEach((c, i) => {
-    batch.set(doc(db, categoryPath(kind), c.slug), {
-      slug: c.slug,
-      name: c.label || c.name,
-      tagline: c.tagline || "",
-      blurb: c.blurb || "",
-      page: c.page || null,
-      order: i,
-      createdAt: serverTimestamp()
-    });
+    batch.set(doc(db, categoryPath(kind), c.slug), defaultCategoryDoc(c, i));
   });
+  markCustomised(batch, kind);
   await batch.commit();
   return true;
+}
+
+export async function restoreDefaultCategories(kind) {
+  const snap = await getDocs(collection(db, categoryPath(kind)));
+  const existing = new Set(snap.docs.map(d => d.id));
+  const missing = defaultsFor(kind).filter(c => !existing.has(c.slug));
+  if (!missing.length) return 0;
+  let order = snap.docs.filter(d => d.id !== CATEGORY_STATE_ID).length;
+  const batch = writeBatch(db);
+  missing.forEach(c => batch.set(doc(db, categoryPath(kind), c.slug), defaultCategoryDoc(c, order++)));
+  markCustomised(batch, kind);
+  await batch.commit();
+  await logChange("category.restore", kind, missing.map(c => c.slug).join(", "));
+  return missing.length;
 }
 
 export async function createCategory(kind, name) {
@@ -319,7 +344,7 @@ export async function createCategory(kind, name) {
     name: name.trim(),
     tagline: "",
     blurb: "",
-    order: existing.size,
+    order: existing.docs.filter(d => d.id !== CATEGORY_STATE_ID).length,
     createdAt: serverTimestamp()
   });
   return slug;
@@ -335,8 +360,39 @@ export async function reorderCategories(kind, orderedIds) {
   await batch.commit();
 }
 
+export async function moveCategoryItems(kind, fromSlug, toSlug) {
+  const isComics = kind === "comics";
+  const field = isComics ? "categorySlug" : "category";
+  const snap = await getDocs(query(collection(db, isComics ? "comics" : "artworks"), where(field, "==", fromSlug)));
+  const docs = snap.docs.filter(d => isComics || d.data().uploaded === true);
+  for (let i = 0; i < docs.length; i += 400) {
+    const batch = writeBatch(db);
+    docs.slice(i, i + 400).forEach(d => batch.update(d.ref, { [field]: toSlug }));
+    await batch.commit();
+  }
+  return docs.length;
+}
+
 export async function deleteCategory(kind, id) {
-  await deleteDoc(doc(db, categoryPath(kind), id));
+  const batch = writeBatch(db);
+  batch.delete(doc(db, categoryPath(kind), id));
+  markCustomised(batch, kind);
+  await batch.commit();
+}
+
+export async function fetchCategoryCovers() {
+  const covers = {};
+  try {
+    const snap = await getDocs(query(collection(db, "artworks"), where("status", "==", "published")));
+    snap.docs
+      .map(d => normaliseArtwork(d.id, d.data()))
+      .filter(a => a.uploaded && a.imageUrl)
+      .sort((a, b) => b.createdAt - a.createdAt)
+      .forEach(a => { covers[a.category] ||= a.imageUrl; });
+  } catch (err) {
+    console.warn("Collection covers from uploads unavailable.", err);
+  }
+  return covers;
 }
 
 

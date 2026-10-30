@@ -1,5 +1,6 @@
 import { initContent, repaintContent } from "./site-content.js?v=20261017b";
 import { initRouter } from "./router.js?v=20260823a";
+import { paintFooterCollections } from "./footer-collections.js?v=20261030a";
 
 function pageKind(doc = document) {
   const body = doc.body;
@@ -11,10 +12,10 @@ function pageKind(doc = document) {
 }
 
 const MODULES = {
-  home: () => import("./home.js?v=20261027l"),
-  gallery: () => import("./gallery-index.js?v=20261027l"),
+  home: () => import("./home.js?v=20261030a"),
+  gallery: () => import("./gallery-index.js?v=20261030a"),
   comics: () => import("./comics.js?v=20261027l"),
-  category: () => import("./gallery-page.js?v=20261027l"),
+  category: () => import("./gallery-page.js?v=20261030a"),
   prose: () => import("./page.js?v=20260823a")
 };
 
@@ -40,6 +41,8 @@ initContent((config, meta) => {
   mounted = await resolvePage(document);
   try { mounted?.mount?.(); }
   catch (err) { console.error("Initial mount failed:", err); }
+  paintFooterCollections();
+  document.addEventListener("alafi:navigated", () => paintFooterCollections());
 
   initRouter({
     initial: mounted,

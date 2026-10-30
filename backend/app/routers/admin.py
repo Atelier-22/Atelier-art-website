@@ -9,7 +9,7 @@ from ..schemas import (
     ArtworkCreate, ArtworkPatch, CategoryCreate, CategoryPatch, ComicCreate, ComicPatch, ConfigDocument, OrderIn,
 )
 from ..settings import settings
-from .public import CATEGORY_KINDS, normalise_artwork, normalise_category, normalise_comic, piece_collection, slugify
+from .public import CATEGORY_KINDS, CATEGORY_STATE_ID, normalise_artwork, normalise_category, normalise_comic, piece_collection, slugify
 
 router = APIRouter(prefix="/api", tags=["admin"])
 
@@ -96,7 +96,7 @@ def create_category(kind: str, body: CategoryCreate, user: dict[str, Any] = Depe
     ref = client.collection(path).document(slug)
     if ref.get().exists:
         raise HTTPException(status.HTTP_409_CONFLICT, detail=f'A category with the slug "{slug}" already exists.')
-    existing = len(list(client.collection(path).stream()))
+    existing = len([s for s in client.collection(path).stream() if s.id != CATEGORY_STATE_ID])
     ref.set({"slug": slug, "name": body.name.strip(), "tagline": "", "blurb": "", "order": existing,
              "createdAt": firestore.SERVER_TIMESTAMP})
     log_change(client, user, "category.create", f"{path}/{slug}", body.name.strip())
@@ -107,7 +107,7 @@ def create_category(kind: str, body: CategoryCreate, user: dict[str, Any] = Depe
 def update_category(kind: str, category_id: str, body: CategoryPatch, user: dict[str, Any] = Depends(current_admin)) -> dict[str, Any]:
     path = _kind(kind)
     ref = db().collection(path).document(category_id)
-    if not ref.get().exists:
+    if category_id == CATEGORY_STATE_ID or not ref.get().exists:
         raise HTTPException(status.HTTP_404_NOT_FOUND, detail="Not found")
     ref.update(_patch(body))
     snap = ref.get()
@@ -118,7 +118,13 @@ def update_category(kind: str, category_id: str, body: CategoryPatch, user: dict
 def delete_category(kind: str, category_id: str, user: dict[str, Any] = Depends(current_admin)) -> dict[str, Any]:
     path = _kind(kind)
     client = db()
-    client.collection(path).document(category_id).delete()
+    if category_id == CATEGORY_STATE_ID:
+        raise HTTPException(status.HTTP_404_NOT_FOUND, detail="Not found")
+    batch = client.batch()
+    batch.delete(client.collection(path).document(category_id))
+    batch.set(client.collection(path).document(CATEGORY_STATE_ID),
+              {"customised": True, "updatedAt": firestore.SERVER_TIMESTAMP}, merge=True)
+    batch.commit()
     log_change(client, user, "category.delete", f"{path}/{category_id}")
     return {"ok": True}
 

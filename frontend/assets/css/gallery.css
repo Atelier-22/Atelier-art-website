@@ -437,3 +437,10 @@
   .lb-close { top: 12px; width: 42px; height: 42px; }
   .lb-counter { top: 22px; font-size: 0.62rem; }
 }
+
+.index-empty {
+  grid-column: 1 / -1;
+  text-align: center;
+  color: var(--fg-dim);
+  padding: 60px 0;
+}

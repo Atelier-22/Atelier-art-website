@@ -1,6 +1,6 @@
 import { db } from "../../firebase-config.js?v=20261027h";
-import { publicIdFromUrl, slugify, logChange, archivePieceId } from "./data.js?v=20261027k";
-import { LOCAL_SEEDS, CATEGORY_BY_SLUG } from "./site-data.js?v=20260823a";
+import { publicIdFromUrl, slugify, logChange, archivePieceId } from "./data.js?v=20261030a";
+import { LOCAL_SEEDS, CATEGORY_BY_SLUG } from "./site-data.js?v=20261030a";
 import {
   collection, doc, getDocs, writeBatch, serverTimestamp
 } from "https://www.gstatic.com/firebasejs/10.13.0/firebase-firestore.js";

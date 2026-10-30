@@ -1,8 +1,8 @@
-import { DEFAULT_ART_CATEGORIES, LOCAL_SEEDS, mergeCategories, categoryHref } from "./site-data.js?v=20260823a";
+import { DEFAULT_ART_CATEGORIES, LOCAL_SEEDS, mergeCategories, categoryHref } from "./site-data.js?v=20261030a";
 import { observeReveals, onScrollFrame, sectionProgress, initNav, prefersReducedMotion } from "./reveal.js?v=20260823a";
 import { renderHeroCanvas } from "./site-content.js?v=20261017b";
-import { previewHref, currentConfig } from "./site-config.js?v=20261017b";
-import { watchContentDeletions, archivePieceId } from "./data.js?v=20261027k";
+import { previewHref, currentConfig, escapeHtml } from "./site-config.js?v=20261017b";
+import { watchContentDeletions, archivePieceId } from "./data.js?v=20261030a";
 
 const TILE_LAYOUT = ["t-hero", "t-tall", "t-strip", "t-strip", "t-strip"];
 const FRAMES_PER_TILE = 3;
@@ -216,10 +216,10 @@ function buildSection(category, index) {
   intro.setAttribute("data-reveal", index % 2 ? "right" : "left");
   intro.innerHTML = `
     <span class="collection-index">${String(index + 1).padStart(2, "0")} / ${String(categories.length).padStart(2, "0")}</span>
-    <h2>${category.label}</h2>
-    <p class="collection-tagline">${category.tagline}</p>
-    <p class="blurb">${category.blurb}</p>
-    <a class="link-btn" href="${previewHref(categoryHref(category))}">Explore ${category.label} <span class="arrow">&#8594;</span></a>
+    <h2>${escapeHtml(category.label)}</h2>
+    <p class="collection-tagline">${escapeHtml(category.tagline || "")}</p>
+    <p class="blurb">${escapeHtml(category.blurb || "")}</p>
+    <a class="link-btn" href="${escapeHtml(previewHref(categoryHref(category)))}">Explore ${escapeHtml(category.label)} <span class="arrow">&#8594;</span></a>
     <span class="collection-count" data-count></span>
   `;
 
@@ -371,30 +371,24 @@ export function mount() {
   deletionSnapshotReady = false;
   deletedArtIds = new Set();
   deletedArtUrls = new Set();
-  categories = DEFAULT_ART_CATEGORIES;
-
-  const sections = buildSections(host);
-  live = { host, sections, detachScroll: wireScrollMotion(sections) };
+  categories = [];
+  live = { host, sections: [], detachScroll: null };
 
   observeReveals(document);
   renderHeroCanvas(currentConfig());
   wireHeroCanvas();
-  upgradeFromFirestore(sections);
   deletionSubscription = watchContentDeletions(applyDeletions, err => {
     console.warn("Deleted artwork could not be loaded; hiding bundled collection images.", err);
   });
 
   loadCategoryOrder().then((remote) => {
     if (live.host !== host) return;
-    if (!remote || sameOrder(remote, categories)) return;
-    categories = remote;
-    live.detachScroll?.();
-    host.innerHTML = "";
-    const rebuilt = buildSections(host);
-    live.sections = rebuilt;
-    live.detachScroll = wireScrollMotion(rebuilt);
+    categories = remote || DEFAULT_ART_CATEGORIES;
+    const sections = buildSections(host);
+    live.sections = sections;
+    live.detachScroll = wireScrollMotion(sections);
     observeReveals(document);
-    upgradeFromFirestore(rebuilt);
+    upgradeFromFirestore(sections);
   });
 }
 
@@ -429,13 +423,9 @@ function buildSections(host) {
   });
 }
 
-function sameOrder(a, b) {
-  return a.length === b.length && a.every((c, i) => c.slug === b[i].slug && c.label === b[i].label);
-}
-
 async function loadCategoryOrder() {
   try {
-    const { fetchCategories } = await import("./data.js?v=20261027k");
+    const { fetchCategories } = await import("./data.js?v=20261030a");
     return mergeCategories(await fetchCategories("art"));
   } catch (err) {
     console.warn("Category order unavailable, using defaults.", err);

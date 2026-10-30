@@ -92,19 +92,17 @@ export function currentCategorySlug() {
 }
 
 export function mergeCategories(remote) {
-  const bySlug = new Map(DEFAULT_ART_CATEGORIES.map(c => [c.slug, { ...c }]));
-  remote.forEach((cat, i) => {
-    const base = bySlug.get(cat.slug) || { slug: cat.slug, seeds: [] };
-    bySlug.set(cat.slug, {
+  return remote.map((cat, i) => {
+    const base = CATEGORY_BY_SLUG[cat.slug] || { slug: cat.slug, seeds: [] };
+    return {
       ...base,
-      label: cat.name || base.label,
+      slug: cat.slug,
+      label: cat.name || base.label || cat.slug,
       tagline: cat.tagline || base.tagline || "",
       blurb: cat.blurb || base.blurb || "",
+      cover: cat.cover || "",
       order: cat.order ?? i,
       page: base.page || `category.html?c=${encodeURIComponent(cat.slug)}`
-    });
-  });
-  return Array.from(bySlug.values())
-    .filter(c => remote.length === 0 || remote.some(r => r.slug === c.slug))
-    .sort((a, b) => (a.order ?? 0) - (b.order ?? 0));
+    };
+  }).sort((a, b) => (a.order ?? 0) - (b.order ?? 0));
 }

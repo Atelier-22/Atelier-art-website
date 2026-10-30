@@ -12,6 +12,7 @@ router = APIRouter(prefix="/api", tags=["public"])
 
 PIECE_COLLECTIONS = ("artworks", "comics")
 CATEGORY_KINDS = {"art": "artCategories", "comics": "comicCategories"}
+CATEGORY_STATE_ID = "_state"
 
 
 def piece_collection(name: str) -> str:
@@ -33,6 +34,7 @@ def normalise_category(doc_id: str, d: dict[str, Any], index: int) -> dict[str, 
         "name": d.get("name") or d.get("label") or doc_id,
         "tagline": d.get("tagline") or "",
         "blurb": d.get("blurb") or "",
+        "cover": d.get("cover") or "",
         "order": d["order"] if isinstance(d.get("order"), (int, float)) else index,
         "page": d.get("page") or None,
     }
@@ -105,9 +107,11 @@ def categories(kind: str) -> dict[str, Any]:
     if kind not in CATEGORY_KINDS:
         raise HTTPException(status.HTTP_404_NOT_FOUND, detail="kind must be 'art' or 'comics'")
     docs = list(db().collection(CATEGORY_KINDS[kind]).stream())
+    seeded = bool(docs)
+    docs = [s for s in docs if s.id != CATEGORY_STATE_ID]
     items = [normalise_category(s.id, s.to_dict() or {}, i) for i, s in enumerate(docs)]
     items.sort(key=lambda c: (c["order"], c["name"]))
-    return {"items": items, "seeded": bool(items)}
+    return {"items": items, "seeded": seeded}
 
 
 @router.get("/artworks")

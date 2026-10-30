@@ -23,6 +23,7 @@ class CategoryPatch(BaseModel):
     name: str | None = Field(default=None, max_length=80)
     tagline: str | None = Field(default=None, max_length=200)
     blurb: str | None = Field(default=None, max_length=1000)
+    cover: str | None = Field(default=None, max_length=1000)
     page: str | None = Field(default=None, max_length=200)
     order: int | None = None
 
