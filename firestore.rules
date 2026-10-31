@@ -57,8 +57,9 @@ service cloud.firestore {
       allow write: if isAdmin();
     }
 
-    match /siteConfig/{other} {
-      allow read, write: if isAdmin();
+    match /siteConfig/draft {
+      allow read: if isAdmin();
+      allow write: if false;
     }
 
     match /artCategories/{categoryId} {
