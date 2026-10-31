@@ -732,7 +732,8 @@ export function flushSave() {
     state.saving = true;
     renderStatus();
     try {
-      await saveConfig(snapshot);
+      await saveConfig(snapshot, state.saved);
+      state.saved = snapshot;
       state.dirty = JSON.stringify(mergeConfig(state.config)) !== JSON.stringify(snapshot);
       state.saveError = "";
       state.savedAt = Date.now();
@@ -1736,12 +1737,14 @@ function loadConfig() {
       if (first) {
         first = false;
         state.config = config;
+        state.saved = config;
         resolve();
         return;
       }
       if (state.dirty || state.saving) return;
       if (JSON.stringify(config) === JSON.stringify(mergeConfig(state.config))) return;
       state.config = config;
+      state.saved = config;
       if (state.mounted && $("#settings-body") && !document.activeElement?.closest?.("#settings-body")) renderBody();
     }, (err) => {
       if (first) reject(err);

@@ -1,6 +1,6 @@
 import { db } from "../../firebase-config.js?v=20261031a";
 import {
-  doc, setDoc, onSnapshot, serverTimestamp
+  doc, setDoc, updateDoc, onSnapshot, serverTimestamp
 } from "https://www.gstatic.com/firebasejs/10.13.0/firebase-firestore.js";
 import { mix, alpha, lighten, contrast, readableOn, isHex } from "./color.js?v=20261031a";
 
@@ -323,8 +323,26 @@ export function watchConfig(callback, onError) {
   });
 }
 
-export async function saveConfig(config) {
-  await setDoc(configRef(), { ...mergeConfig(config), updatedAt: serverTimestamp() });
+function changedPaths(before, after, prefix = "", out = {}) {
+  Object.keys(after).forEach((key) => {
+    const path = prefix ? `${prefix}.${key}` : key;
+    const next = after[key];
+    const prev = before ? before[key] : undefined;
+    if (isPlainObject(next) && isPlainObject(prev)) changedPaths(prev, next, path, out);
+    else if (JSON.stringify(next) !== JSON.stringify(prev)) out[path] = next;
+  });
+  return out;
+}
+
+export async function saveConfig(config, previous) {
+  const next = mergeConfig(config);
+  if (!previous) {
+    await setDoc(configRef(), { ...next, updatedAt: serverTimestamp() });
+    return;
+  }
+  const changes = changedPaths(mergeConfig(previous), next);
+  if (!Object.keys(changes).length) return;
+  await updateDoc(configRef(), { ...changes, updatedAt: serverTimestamp() });
 }
 
 
