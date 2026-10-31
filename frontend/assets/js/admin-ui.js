@@ -92,6 +92,7 @@ export function modal({
       cancelBtn.disabled = true;
       if (confirmBtn) confirmBtn.disabled = true;
       try { await onCancel(); } catch (err) {
+        console.error(err);
         busy = false;
         toast(err.message || "That didn't work.", "error");
         cancelBtn.disabled = false;

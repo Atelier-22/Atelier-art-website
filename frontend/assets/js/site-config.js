@@ -1,10 +1,9 @@
-import { db } from "../../firebase-config.js?v=20261027h";
+import { db } from "../../firebase-config.js?v=20261031a";
 import {
-  doc, getDoc, setDoc, onSnapshot, serverTimestamp
+  doc, setDoc, onSnapshot, serverTimestamp
 } from "https://www.gstatic.com/firebasejs/10.13.0/firebase-firestore.js";
-import { mix, alpha, lighten, contrast, readableOn, isHex } from "./color.js?v=20260823a";
+import { mix, alpha, lighten, contrast, readableOn, isHex } from "./color.js?v=20261031a";
 
-export const CONFIG_CACHE_KEY = "alafi_site_config";
 export const THEME_CACHE_KEY = "alafi_theme_css";
 
 
@@ -33,189 +32,90 @@ export function googleFontHref(displayKey, bodyKey) {
 }
 
 
-export const DEFAULT_CONFIG = {
-  version: 1,
+export const THEME_DEFAULTS = {
+  bg: "#e6dfd1",
+  bgRaised: "#faf7f1",
+  fg: "#14120e",
+  gold: "#7d6018",
+  goldFill: "#c8a349",
+  danger: "#9d332d",
+  ok: "#2c6647",
+  displayFont: "cormorant",
+  bodyFont: "inter",
+  gutter: 80,
+  measure: 1440
+};
 
-  theme: {
-    bg: "#e6dfd1",
-    bgRaised: "#faf7f1",
-    fg: "#14120e",
-    gold: "#7d6018",
-    goldFill: "#c8a349",
-    danger: "#9d332d",
-    ok: "#2c6647",
-    displayFont: "cormorant",
-    bodyFont: "inter",
-    gutter: 80,
-    measure: 1440
-  },
+const media = () => ({ mediaUrl: "", mediaType: "", mediaPoster: "", mediaDuration: null });
 
+export const CONFIG_SHAPE = {
+  theme: THEME_DEFAULTS,
   branding: {
-    wordmark: "Alafi",
-    wordmarkDot: ".",
-    logoUrl: "",
-    logoMark: "assets/images/logo-mark.svg",
-    logoMarkOnDark: "assets/images/logo-mark-white.svg",
-    logoFull: "assets/images/logo-full.svg",
-    logoFullOnDark: "assets/images/logo-full-white.svg",
-    siteTitle: "Alafi Art Work",
-    footerBlurb: "A digital gallery of original work — built to be wandered through slowly.",
-    copyright: "© 2026 Alafi Art Work",
-    rights: "All rights reserved"
+    wordmark: "", wordmarkDot: "", logoUrl: "", siteTitle: "",
+    footerBlurb: "", copyright: "", rights: ""
   },
-
   home: {
-    heroEyebrow: "A Digital Exhibition — Est. 2026",
-    heroLine1: "Every piece",
-    heroLine2: "is a <em>room</em>",
-    heroLine3: "you walk into.",
-    heroBlurb: "Seven collections by Alafi Jonathan — paint, graphite, pixel, and stone. Take your time. The gallery reveals itself as you go.",
-    heroStats: [
-      { value: "07", label: "Collections" },
-      { value: "120+", label: "Works" },
-      { value: "∞", label: "Looking" }
-    ],
-    heroImages: ["1.jpg", "artworks/paintings/painting7.jpg", "artworks/portraits/portrait4.jpg", "2.jpg"],
-    manifesto: "Art holds what words <b>can't</b> — it slows you down until you notice.",
-    manifestoAttrib: "The Curator's Note",
-    artistEyebrow: "The Person Behind the Work",
-    artistName: "Alafi Jonathan",
-    artistPortrait: "AJ1.jpg",
-    artistCopy: "An artist working across painting, sketching, digital art, and sculpture — driven by curiosity and a love of storytelling through colour and form.\n\nEvery collection here reflects a continuing exploration of craftsmanship and expression, made in public, one piece at a time.",
-    finaleEyebrow: "Your Journey Starts Here",
-    finaleTitle: "Step Into the Gallery",
-    finaleBlurb: "Every collection is waiting. Explore freely, and see the work up close."
+    heroEyebrow: "", heroLine1: "", heroLine2: "", heroLine3: "",
+    heroStory: [], heroCtaLabel: "", heroBlurb: "", heroStats: [], heroImages: [],
+    manifesto: "", manifestoAttrib: "",
+    artistEyebrow: "", artistName: "", artistPortrait: "", artistCopy: "", artistCtaLabel: "",
+    finaleEyebrow: "", finaleTitle: "", finaleBlurb: "", finaleCtaLabel: ""
   },
-
   update: {
-    enabled: false,
-    text: "",
-    linkLabel: "",
-    linkHref: "",
-    mediaUrl: "",
-    mediaType: "",
-    mediaPoster: "",
-    mediaDuration: null,
-    postedAt: null,
-    durationHours: 24
+    enabled: false, text: "", linkLabel: "", linkHref: "", ...media(),
+    postedAt: null, durationHours: 24
   },
-
   story: {
-    enabled: true,
-    position: "artist",
-    eyebrow: "In his own words",
-    heading: "The Story So Far",
-    body: "It started small — a pencil, a blank page, and a curiosity about what could be made from nothing. Over time, that curiosity turned into discipline, and discipline turned into a voice.\n\nEvery collection since has been another chapter in that same, ongoing story: learning to see the world a little more closely, and finding a way to hand that vision to someone else.",
-    mediaUrl: "",
-    mediaType: "",
-    mediaPoster: "",
-    mediaDuration: null,
-    ctaLabel: "Read the full story",
-    ctaHref: "about.html"
+    enabled: false, position: "artist", eyebrow: "", heading: "", body: "", ...media(),
+    ctaLabel: "", ctaHref: ""
   },
-
-  about: {
-    title: "About the Artist",
-    tagline: "The person behind the work",
-    blurb: "Hi, I’m Alafi Jonathan — an artist passionate about expressing stories through colour, pattern, and imagination. My work blends traditional and digital forms, exploring culture, creativity, and emotion.",
-    portrait: "AJ1.jpg",
-    quote: "Every artwork is a piece of a larger story I’m still telling.",
-    blocks: [
-      {
-        type: "prose", eyebrow: "Where it began", heading: "The Story",
-        body: "It started small — a pencil, a blank page, and a curiosity about what could be made from nothing. Over time, that curiosity turned into discipline, and discipline turned into a voice. Every collection since has been another chapter in that same, ongoing story: learning to see the world a little more closely, and finding a way to hand that vision to someone else."
-      },
-      {
-        type: "prose", eyebrow: "Philosophy", heading: "Artistic Philosophy",
-        body: "Art, at its best, doesn’t explain — it reveals. Every piece here is an attempt to hold a feeling still long enough for someone else to recognise it. Creating isn’t about perfection; it’s about honesty, and letting each work carry a little bit of truth that words alone couldn’t say."
-      },
-      {
-        type: "steps", eyebrow: "Behind the work", heading: "Creative Process", body: "",
-        items: [
-          { title: "Inspiration", text: "An idea catches hold, often somewhere unexpected." },
-          { title: "Sketching", text: "Rough lines find the shape of the idea before anything else does." },
-          { title: "Creation", text: "Colour, texture, and detail slowly bring the piece to life." },
-          { title: "Final artwork", text: "A finished piece, ready to become part of someone else’s story." }
-        ]
-      },
-      {
-        type: "tags", eyebrow: "Where it comes from", heading: "Sources of Inspiration",
-        body: "Inspiration rarely announces itself — it’s found, then followed.",
-        items: [
-          { title: "Nature" }, { title: "Culture" }, { title: "People" }, { title: "Dreams" },
-          { title: "Emotion" }, { title: "Daily life" }, { title: "Imagination" }
-        ]
-      },
-      {
-        type: "timeline", eyebrow: "The path so far", heading: "Artistic Journey", body: "",
-        items: [
-          { title: "Beginning", text: "The first sketches — simple, curious, unpolished." },
-          { title: "Learning", text: "Studying technique, form, and the fundamentals of craft." },
-          { title: "Growth", text: "Finding a distinct voice across painting, sketching, and digital work." },
-          { title: "Exploration", text: "Branching into sculpture, comics, and graphic design." },
-          { title: "Present day", text: "Continuing to create, share, and grow with every new piece." }
-        ]
-      },
-      {
-        type: "figures", eyebrow: "In numbers", heading: "Where Things Stand", body: "",
-        items: [
-          { title: "5+", text: "Years creating" },
-          { title: "7", text: "Art categories" },
-          { title: "100+", text: "Completed works" },
-          { title: "3", text: "Current projects" }
-        ]
-      }
-    ]
+  about: { title: "", tagline: "", blurb: "", portrait: "", quote: "", blocks: [] },
+  gallery: { title: "", tagline: "", blurb: "" },
+  comics: { title: "", tagline: "", blurb: "" },
+  contact: {
+    title: "", tagline: "", blurb: "", eyebrow: "", heading: "", items: [],
+    topicsEyebrow: "", topicsHeading: "", topics: [], blocks: []
   },
-
-  gallery: {
-    title: "The Collections",
-    tagline: "Seven rooms, one gallery",
-    blurb: "Each collection has its own temperament. Take whichever door looks most interesting — there's no wrong order.",
-    covers: {
-      paintings: "artworks/paintings/painting3.jpg",
-      sketches: "artworks/sketches/sketch5.jpg",
-      digital: "artworks/digital/digital8.jpg",
-      sculptures: "artworks/sculptures/sculpture2.jpg",
-      portraits: "artworks/portraits/portrait6.jpg",
-      graphics: "artworks/graphics/graphic4.jpg",
-      comics: "artworks/comics/comic1.jpg"
-    }
-  },
-
-  delivery: {
-    autoQuality: false
-  },
-
-  sound: {
-    enabled: false,
-    tracks: [],
-    shuffle: true,
-    crossfade: 6,
-    volume: 30,
-    autoplay: false
-  },
-
-  backgrounds: {
-    home: "2.jpg",
-    gallery: "1.jpg",
-    category: "2.jpg",
-    comics: "2.jpg",
-    about: "AJ2.JPG",
-    contact: "1.jpg"
-  }
+  legal: { privacyTitle: "", privacyHtml: "", termsTitle: "", termsHtml: "" },
+  notFound: { title: "", tagline: "", blurb: "" },
+  seo: { description: "", shareImage: "" },
+  delivery: { autoQuality: false },
+  sound: { enabled: false, tracks: [], shuffle: true, crossfade: 6, volume: 30, autoplay: false },
+  backgrounds: { home: "", gallery: "", category: "", comics: "", about: "", contact: "", notFound: "" }
 };
 
 
+function isPlainObject(v) {
+  return !!v && typeof v === "object" && !Array.isArray(v);
+}
+
+function conform(shape, remote) {
+  const out = {};
+  Object.keys(shape).forEach((key) => {
+    const base = shape[key];
+    const value = isPlainObject(remote) ? remote[key] : undefined;
+    if (isPlainObject(base)) { out[key] = conform(base, value); return; }
+    if (Array.isArray(base)) { out[key] = Array.isArray(value) ? value : []; return; }
+    if (base === null) { out[key] = value === undefined ? null : value; return; }
+    out[key] = typeof value === typeof base ? value : base;
+  });
+  return out;
+}
+
+export function mergeConfig(remote) {
+  return conform(CONFIG_SHAPE, remote || {});
+}
+
+
 export function derivePalette(theme) {
-  const t = { ...DEFAULT_CONFIG.theme, ...(theme || {}) };
+  const t = { ...THEME_DEFAULTS, ...(theme || {}) };
   const safe = (v, fallback) => (isHex(v) ? v : fallback);
 
-  const bg = safe(t.bg, DEFAULT_CONFIG.theme.bg);
-  const raised = safe(t.bgRaised, DEFAULT_CONFIG.theme.bgRaised);
-  const fg = safe(t.fg, DEFAULT_CONFIG.theme.fg);
-  const gold = safe(t.gold, DEFAULT_CONFIG.theme.gold);
-  const goldFill = safe(t.goldFill, DEFAULT_CONFIG.theme.goldFill);
+  const bg = safe(t.bg, THEME_DEFAULTS.bg);
+  const raised = safe(t.bgRaised, THEME_DEFAULTS.bgRaised);
+  const fg = safe(t.fg, THEME_DEFAULTS.fg);
+  const gold = safe(t.gold, THEME_DEFAULTS.gold);
+  const goldFill = safe(t.goldFill, THEME_DEFAULTS.goldFill);
 
   const field = mix(raised, "#ffffff", 0.55);
   const display = (DISPLAY_FONTS[t.displayFont] || DISPLAY_FONTS.cormorant).stack;
@@ -258,14 +158,14 @@ export function derivePalette(theme) {
     "--gold-edge": alpha(gold, 0.5),
     "--on-gold": readableOn(goldFill, mix(fg, goldFill, 0.1), lighten(raised, 0.4)),
 
-    "--danger": safe(t.danger, DEFAULT_CONFIG.theme.danger),
-    "--ok": safe(t.ok, DEFAULT_CONFIG.theme.ok),
+    "--danger": safe(t.danger, THEME_DEFAULTS.danger),
+    "--ok": safe(t.ok, THEME_DEFAULTS.ok),
 
     "--display": display,
     "--body": body,
 
-    "--gutter": `clamp(20px, 5vw, ${Number(t.gutter) || 80}px)`,
-    "--measure": `${Number(t.measure) || 1440}px`
+    "--gutter": `clamp(20px, 5vw, ${Number(t.gutter) || THEME_DEFAULTS.gutter}px)`,
+    "--measure": `${Number(t.measure) || THEME_DEFAULTS.measure}px`
   };
 }
 
@@ -298,37 +198,6 @@ export function contrastReport(theme) {
 
 export function hasBlockingContrastFailure(theme) {
   return contrastReport(theme).some(r => r.level === "fail");
-}
-
-
-function isPlainObject(v) {
-  return v && typeof v === "object" && !Array.isArray(v);
-}
-
-export function mergeConfig(remote) {
-  const walk = (base, patch) => {
-    if (!isPlainObject(patch)) return base;
-    const out = Array.isArray(base) ? base.slice() : { ...base };
-    Object.keys(patch).forEach((key) => {
-      const value = patch[key];
-      if (value === undefined || value === null) return;
-      out[key] = isPlainObject(value) && isPlainObject(base?.[key]) ? walk(base[key], value) : value;
-    });
-    return out;
-  };
-  return upgrade(walk(DEFAULT_CONFIG, remote || {}));
-}
-
-function upgrade(config) {
-  const sound = config.sound || {};
-  if (!Array.isArray(sound.tracks) || (!sound.tracks.length && sound.trackUrl)) {
-    const tracks = sound.trackUrl
-      ? [{ url: sound.trackUrl, title: sound.title || "" }]
-      : (Array.isArray(sound.tracks) ? sound.tracks : []);
-    const { trackUrl, title, ...rest } = sound;
-    return { ...config, sound: { ...DEFAULT_CONFIG.sound, ...rest, tracks } };
-  }
-  return config;
 }
 
 
@@ -425,104 +294,37 @@ export function parseEmbed(url) {
 }
 
 
-export function isPreview() {
-  try {
-    return new URLSearchParams(location.search).get("preview") === "1";
-  } catch {
-    return false;
-  }
-}
-
-export function previewSuffix() {
-  return isPreview() ? "?preview=1" : "";
-}
-
-export function previewHref(href) {
-  if (!isPreview() || !href || /^(https?:|mailto:|tel:|#)/i.test(href)) return href;
-  return href.includes("?") ? `${href}&preview=1` : `${href}?preview=1`;
-}
-
-
-function configRef(which) {
-  return doc(db, "siteConfig", which === "draft" ? "draft" : "published");
-}
-
-export function cachedConfig() {
-  try {
-    const raw = localStorage.getItem(CONFIG_CACHE_KEY);
-    return raw ? mergeConfig(JSON.parse(raw)) : DEFAULT_CONFIG;
-  } catch {
-    return DEFAULT_CONFIG;
-  }
-}
-
-function cacheConfig(config) {
-  try {
-    localStorage.setItem(CONFIG_CACHE_KEY, JSON.stringify(config));
-    localStorage.setItem(THEME_CACHE_KEY, themeCss(config.theme));
-  } catch { }
-}
+const configRef = () => doc(db, "siteConfig", "published");
 
 let activeConfig = null;
+let readyResolve = null;
+export const configReady = new Promise((resolve) => { readyResolve = resolve; });
 
 export function currentConfig() {
-  if (!activeConfig) activeConfig = cachedConfig();
-  return activeConfig;
+  return activeConfig || mergeConfig(null);
 }
 
 export function autoQualityEnabled() {
-  return currentConfig().delivery?.autoQuality === true;
+  return activeConfig?.delivery?.autoQuality === true;
 }
 
-export async function fetchConfig(which = "published") {
-  try {
-    const snap = await getDoc(configRef(which));
-    return mergeConfig(snap.exists() ? snap.data() : null);
-  } catch (err) {
-    console.warn(`fetchConfig(${which}) failed, using defaults.`, err);
-    return DEFAULT_CONFIG;
-  }
+function cacheTheme(theme) {
+  try { localStorage.setItem(THEME_CACHE_KEY, themeCss(theme)); }
+  catch (err) { console.error("Could not store the theme for the next first paint.", err); }
 }
 
-export function watchConfig(callback, { which = null } = {}) {
-  const target = which || (isPreview() ? "draft" : "published");
-
-  const stop = onSnapshot(configRef(target), (snap) => {
+export function watchConfig(callback, onError) {
+  return onSnapshot(configRef(), (snap) => {
     const config = mergeConfig(snap.exists() ? snap.data() : null);
-    if (target === "published") cacheConfig(config);
-    callback(config, { source: target });
+    callback(config);
   }, (err) => {
-    console.warn(`watchConfig(${target}) failed.`, err);
-    if (target === "draft") {
-      onSnapshot(configRef("published"), (snap) => {
-        const config = mergeConfig(snap.exists() ? snap.data() : null);
-        cacheConfig(config);
-        callback(config, { source: "published", deniedDraft: true });
-      });
-    } else {
-      callback(cachedConfig(), { source: "cache" });
-    }
+    console.error("watchConfig error:", err);
+    onError?.(err);
   });
-
-  return stop;
 }
 
-export async function saveDraft(config) {
-  await setDoc(configRef("draft"), { ...config, updatedAt: serverTimestamp() }, { merge: true });
-}
-
-export async function publishDraft() {
-  const draft = await getDoc(configRef("draft"));
-  const payload = draft.exists() ? draft.data() : DEFAULT_CONFIG;
-  await setDoc(configRef("published"), { ...payload, publishedAt: serverTimestamp() });
-  return mergeConfig(payload);
-}
-
-export async function discardDraft() {
-  const live = await getDoc(configRef("published"));
-  const payload = live.exists() ? live.data() : DEFAULT_CONFIG;
-  await setDoc(configRef("draft"), { ...payload, updatedAt: serverTimestamp() });
-  return mergeConfig(payload);
+export async function saveConfig(config) {
+  await setDoc(configRef(), { ...mergeConfig(config), updatedAt: serverTimestamp() });
 }
 
 
@@ -543,7 +345,7 @@ export function applyTheme(theme) {
 
   const href = googleFontHref(theme?.displayFont, theme?.bodyFont);
   if (!fontLink) {
-    fontLink = document.createElement("link");
+    fontLink = document.getElementById("theme-fonts") || document.createElement("link");
     fontLink.rel = "stylesheet";
     fontLink.id = "theme-fonts";
     document.head.appendChild(fontLink);
@@ -551,36 +353,64 @@ export function applyTheme(theme) {
   if (fontLink.getAttribute("href") !== href) fontLink.href = href;
 }
 
+const asText = (value) => (typeof value === "string" ? value : "");
+
 export function applyBindings(config, root = document) {
   root.querySelectorAll("[data-cfg-text]").forEach((el) => {
-    const value = readPath(config, el.dataset.cfgText);
-    if (typeof value === "string") el.textContent = value;
+    const value = asText(readPath(config, el.dataset.cfgText));
+    el.textContent = value;
+    el.hidden = !value.trim();
   });
 
   root.querySelectorAll("[data-cfg-html]").forEach((el) => {
-    const value = readPath(config, el.dataset.cfgHtml);
-    if (typeof value === "string") el.innerHTML = value;
+    const value = asText(readPath(config, el.dataset.cfgHtml));
+    if (el.dataset.cfgSource !== value) {
+      el.innerHTML = value;
+      el.dataset.cfgSource = value;
+    }
+    el.hidden = !value.trim();
   });
 
   root.querySelectorAll("[data-cfg-prose]").forEach((el) => {
-    const value = readPath(config, el.dataset.cfgProse);
-    if (typeof value === "string") el.innerHTML = paragraphs(value);
+    const value = asText(readPath(config, el.dataset.cfgProse));
+    el.innerHTML = paragraphs(value);
+    el.hidden = !value.trim();
+  });
+
+  root.querySelectorAll("[data-cfg-legal]").forEach((el) => {
+    const value = asText(readPath(config, el.dataset.cfgLegal));
+    if (el.dataset.cfgSource !== value) {
+      el.innerHTML = sanitiseHtml(value);
+      el.dataset.cfgSource = value;
+    }
   });
 
   root.querySelectorAll("[data-cfg-src]").forEach((el) => {
-    const value = readPath(config, el.dataset.cfgSrc);
-    if (typeof value === "string" && value && el.getAttribute("src") !== value) el.src = value;
+    const value = asText(readPath(config, el.dataset.cfgSrc)).trim();
+    const holder = el.closest("[data-cfg-holder]");
+    if (value) {
+      if (el.getAttribute("src") !== value) el.src = value;
+      el.hidden = false;
+    } else {
+      el.removeAttribute("src");
+      el.hidden = true;
+    }
+    if (holder) holder.hidden = !value;
   });
 
   root.querySelectorAll("[data-cfg-bg]").forEach((el) => {
-    const value = readPath(config, el.dataset.cfgBg);
-    if (typeof value === "string" && value) el.style.setProperty("--page-bg", `url("${value}")`);
+    const value = asText(readPath(config, el.dataset.cfgBg)).trim();
+    if (value) el.style.setProperty("--page-bg", `url("${value.replace(/"/g, "%22")}")`);
+    else el.style.removeProperty("--page-bg");
   });
+}
 
-  root.querySelectorAll("[data-cfg-title]").forEach((el) => {
-    const value = readPath(config, el.dataset.cfgTitle);
-    if (typeof value === "string" && value) document.title = value;
-  });
+export function sanitiseHtml(value) {
+  return String(value || "")
+    .replace(/<\s*(script|style|iframe|object|embed)\b[^>]*>[\s\S]*?<\s*\/\s*\1\s*>/gi, "")
+    .replace(/<\s*\/?\s*(script|style|iframe|object|embed|link|meta)\b[^>]*>/gi, "")
+    .replace(/\son\w+\s*=\s*("[^"]*"|'[^']*'|[^\s>]+)/gi, "")
+    .replace(/javascript:/gi, "");
 }
 
 export function paragraphs(text) {
@@ -598,22 +428,17 @@ export function escapeHtml(str) {
   return d.innerHTML;
 }
 
-export function rewriteLinksForPreview(root = document) {
-  if (!isPreview()) return;
-  root.querySelectorAll('a[href$=".html"], a[href^="category.html"]').forEach((a) => {
-    a.href = previewHref(a.getAttribute("href"));
-  });
-}
-
 export function initSiteConfig(onConfig) {
-  const paint = (config, meta) => {
+  return watchConfig((config) => {
+    const qualityChanged = activeConfig && activeConfig.delivery.autoQuality !== config.delivery.autoQuality;
     activeConfig = config;
     applyTheme(config.theme);
+    cacheTheme(config.theme);
     applyBindings(config);
-    rewriteLinksForPreview();
-    onConfig?.(config, meta);
-  };
-
-  paint(cachedConfig(), { source: "cache" });
-  return watchConfig(paint);
+    readyResolve?.(config);
+    readyResolve = null;
+    onConfig?.(config, { qualityChanged });
+  }, (err) => {
+    console.error("The live site settings could not be read.", err);
+  });
 }

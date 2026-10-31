@@ -1,22 +1,23 @@
-import { initContent, repaintContent } from "./site-content.js?v=20261017b";
-import { initRouter } from "./router.js?v=20260823a";
-import { paintFooterCollections } from "./footer-collections.js?v=20261030a";
+import { initContent, repaintContent } from "./site-content.js?v=20261031a";
+import { configReady } from "./site-config.js?v=20261031a";
+import { initRouter } from "./router.js?v=20261031a";
+import { startFooterCollections } from "./footer-collections.js?v=20261031a";
 
 function pageKind(doc = document) {
   const body = doc.body;
   if (body.dataset.page === "home") return "home";
   if (body.dataset.page === "gallery") return "gallery";
   if (body.dataset.page === "comics") return "comics";
-  if (body.dataset.category || doc.getElementById("gallery-grid")) return "category";
+  if (body.dataset.page === "category") return "category";
   return "prose";
 }
 
 const MODULES = {
-  home: () => import("./home.js?v=20261030a"),
-  gallery: () => import("./gallery-index.js?v=20261030a"),
-  comics: () => import("./comics.js?v=20261027l"),
-  category: () => import("./gallery-page.js?v=20261030a"),
-  prose: () => import("./page.js?v=20260823a")
+  home: () => import("./home.js?v=20261031a"),
+  gallery: () => import("./gallery-index.js?v=20261031a"),
+  comics: () => import("./comics.js?v=20261031a"),
+  category: () => import("./gallery-page.js?v=20261031a"),
+  prose: () => import("./page.js?v=20261031a")
 };
 
 async function resolvePage(doc) {
@@ -32,17 +33,27 @@ async function resolvePage(doc) {
 
 let mounted = null;
 
+function remount() {
+  try { mounted?.unmount?.(); }
+  catch (err) { console.error("unmount failed:", err); }
+  try { mounted?.mount?.(); }
+  catch (err) { console.error("remount failed:", err); }
+}
+
 initContent((config, meta) => {
+  if (meta?.qualityChanged) { remount(); return; }
   try { mounted?.onConfig?.(config, meta); }
-  catch (err) { console.warn("page onConfig failed:", err); }
+  catch (err) { console.error("page onConfig failed:", err); }
 });
 
+startFooterCollections();
+
 (async () => {
+  await configReady;
   mounted = await resolvePage(document);
   try { mounted?.mount?.(); }
   catch (err) { console.error("Initial mount failed:", err); }
-  paintFooterCollections();
-  document.addEventListener("alafi:navigated", () => paintFooterCollections());
+  document.dispatchEvent(new CustomEvent("alafi:mounted"));
 
   initRouter({
     initial: mounted,

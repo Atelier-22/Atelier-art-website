@@ -1,7 +1,6 @@
-import { db, auth, getApp } from "../../firebase-config.js?v=20261027h";
-import { DEFAULT_ART_CATEGORIES, DEFAULT_COMIC_CATEGORIES } from "./site-data.js?v=20261030a";
-import { imageDeliveryUrl, VIDEO_TRIM_SECONDS } from "./cloudinary.js?v=20260823a";
-import { autoQualityEnabled } from "./site-config.js?v=20261017b";
+import { db, auth } from "../../firebase-config.js?v=20261031a";
+import { imageDeliveryUrl, VIDEO_TRIM_SECONDS } from "./cloudinary.js?v=20261031a";
+import { autoQualityEnabled } from "./site-config.js?v=20261031a";
 import {
   doc, getDoc, getDocs, setDoc, addDoc, deleteDoc, updateDoc, writeBatch,
   collection, collectionGroup, onSnapshot, query, orderBy, where, limit,
@@ -11,15 +10,11 @@ import {
 export const CLOUDINARY_CLOUD_NAME = "pmhpabd8";
 export const CLOUDINARY_UPLOAD_PRESET = "lpwbmgnq";
 
-export const BUILTIN_SAMPLE_STORY = {
-  id: "from-the-sketchbook",
-  title: "From the Sketchbook",
-  categorySlug: "drama",
-  description: "Three loose pages pulled straight from the working sketchbook — the sample that ships with the site.",
-  coverUrl: "artworks/comics/comic1.jpg",
-  pages: ["artworks/comics/comic1.jpg", "artworks/comics/comic2.jpg", "artworks/comics/comic3.jpg"],
-  likes: 0, order: 0, local: true
-};
+let uploadNamespace = null;
+
+export function setUploadNamespace(prefix) {
+  uploadNamespace = prefix ? String(prefix) : null;
+}
 
 export function slugify(value, fallback = "item") {
   const slug = (value || "")
@@ -32,9 +27,8 @@ export function slugify(value, fallback = "item") {
 }
 
 export function artworkId(categorySlug, titleOrFilename) {
-  return `${categorySlug}-${slugify(titleOrFilename, "artwork")}`;
+  return `${categorySlug}-${slugify(titleOrFilename, "artwork")}-${Date.now().toString(36)}`;
 }
-
 
 export const MAX_VIDEO_BYTES = 100 * 1024 * 1024;
 export const MAX_VIDEO_SECONDS = VIDEO_TRIM_SECONDS;
@@ -51,6 +45,11 @@ export function isAudio(file) {
   return (file?.type || "").startsWith("audio/");
 }
 
+function freshPublicId() {
+  const random = Math.random().toString(36).slice(2, 10);
+  return `${uploadNamespace || ""}${Date.now().toString(36)}${random}`;
+}
+
 export function uploadAsset(file, { resourceType, onProgress } = {}) {
   const kind = resourceType || resourceTypeFor(file);
 
@@ -58,6 +57,8 @@ export function uploadAsset(file, { resourceType, onProgress } = {}) {
     const form = new FormData();
     form.append("file", file);
     form.append("upload_preset", CLOUDINARY_UPLOAD_PRESET);
+    form.append("public_id", freshPublicId());
+    if (uploadNamespace) form.append("asset_folder", uploadNamespace.replace(/-+$/, "") + "-folder");
 
     const xhr = new XMLHttpRequest();
     xhr.open("POST", `https://api.cloudinary.com/v1_1/${CLOUDINARY_CLOUD_NAME}/${kind}/upload`);
@@ -69,7 +70,8 @@ export function uploadAsset(file, { resourceType, onProgress } = {}) {
     xhr.addEventListener("load", () => {
       if (xhr.status < 200 || xhr.status >= 300) {
         let detail = "";
-        try { detail = JSON.parse(xhr.responseText)?.error?.message || ""; } catch { }
+        try { detail = JSON.parse(xhr.responseText)?.error?.message || ""; }
+        catch (err) { console.error("Cloudinary error body was not JSON.", err); }
         reject(new Error(
           detail
             ? `Cloudinary rejected "${file.name}": ${detail}`
@@ -90,7 +92,8 @@ export function uploadAsset(file, { resourceType, onProgress } = {}) {
           resourceType: d.resource_type || kind,
           filename: file.name || ""
         });
-      } catch {
+      } catch (err) {
+        console.error("Cloudinary returned an unreadable response.", err);
         reject(new Error("Cloudinary returned an unreadable response."));
       }
     });
@@ -103,14 +106,24 @@ export function uploadAsset(file, { resourceType, onProgress } = {}) {
 
 export async function uploadAndRecord(file, { usedFor = "artwork", onProgress } = {}) {
   const asset = await uploadAsset(file, { onProgress });
-  await setDoc(doc(db, "media", slugify(asset.publicId, "asset")), {
-    ...asset,
-    filename: file.name,
-    usedFor,
-    type: asset.resourceType,
-    createdAt: serverTimestamp()
-  });
+  try {
+    await setDoc(doc(db, "media", mediaIdFor(asset.publicId)), {
+      ...asset,
+      filename: file.name,
+      usedFor,
+      type: asset.resourceType,
+      createdAt: serverTimestamp()
+    });
+  } catch (err) {
+    console.error("The upload worked but its media record could not be saved; removing the upload.", err);
+    await destroyAsset(asset.publicId, asset.resourceType);
+    throw err;
+  }
   return asset;
+}
+
+export function mediaIdFor(publicId) {
+  return slugify(publicId, "asset");
 }
 
 export function inspectVideo(file) {
@@ -163,11 +176,94 @@ export function videoTrimNotice(duration) {
 
 
 export function publicIdFromUrl(url) {
-  if (typeof url !== "string" || !url.includes("/upload/")) return null;
+  if (typeof url !== "string" || !url.includes("res.cloudinary.com") || !url.includes("/upload/")) return null;
   let tail = url.split("/upload/")[1];
   if (!tail) return null;
-  tail = tail.replace(/^(?:[^/]+\/)*?v\d+\//, "");
+  const versioned = tail.match(/(?:^|\/)v\d+\/(.+)$/);
+  if (versioned) tail = versioned[1];
+  else tail = tail.replace(/^(?:[a-z]{1,3}_[^/]*\/)+/i, "");
   return decodeURIComponent(tail.replace(/\.[a-z0-9]+$/i, "")) || null;
+}
+
+export function assetFromUrl(url) {
+  const publicId = publicIdFromUrl(url);
+  if (!publicId) return null;
+  const resourceType = /\/video\/upload\//.test(url) ? "video" : /\/raw\/upload\//.test(url) ? "raw" : "image";
+  return { publicId, resourceType };
+}
+
+async function adminRequest(path, body) {
+  const user = auth.currentUser;
+  if (!user) throw new Error("Sign in again — the session has ended.");
+  const token = await user.getIdToken();
+  let response;
+  try {
+    response = await fetch(path, {
+      method: "POST",
+      headers: { "Content-Type": "application/json", Authorization: `Bearer ${token}` },
+      body: JSON.stringify(body)
+    });
+  } catch (err) {
+    console.error(`Request to ${path} failed.`, err);
+    throw new Error("The server could not be reached, so nothing was changed.");
+  }
+  let payload = {};
+  try { payload = await response.json(); }
+  catch (err) { console.error(`${path} returned a non-JSON body.`, err); }
+  if (!response.ok) {
+    const detail = typeof payload.detail === "string" ? payload.detail : `HTTP ${response.status}`;
+    throw new Error(`The server refused: ${detail}`);
+  }
+  return payload;
+}
+
+export async function destroyAsset(publicId, resourceType = "image") {
+  if (!publicId) throw new Error("No Cloudinary public ID to delete.");
+  return adminRequest("/api/admin/assets/destroy", { publicId, resourceType });
+}
+
+function collectStrings(value, out) {
+  if (typeof value === "string") out.push(value);
+  else if (Array.isArray(value)) value.forEach(v => collectStrings(v, out));
+  else if (value && typeof value === "object") Object.values(value).forEach(v => collectStrings(v, out));
+  return out;
+}
+
+export async function assetReferenceCount(publicId, { skip = () => false } = {}) {
+  if (!publicId) return 0;
+  const [artworks, comics, categories, config] = await Promise.all([
+    getDocs(collection(db, "artworks")),
+    getDocs(collection(db, "comics")),
+    getDocs(collection(db, "artCategories")),
+    getDoc(doc(db, "siteConfig", "published"))
+  ]);
+  let count = 0;
+  const scan = (where, data) => {
+    collectStrings(data, []).forEach((value, index) => {
+      if (publicIdFromUrl(value) === publicId && !skip(where, value, index)) count++;
+    });
+  };
+  artworks.docs.forEach(d => scan(`artworks/${d.id}`, d.data()));
+  comics.docs.forEach(d => scan(`comics/${d.id}`, d.data()));
+  categories.docs.forEach(d => scan(`artCategories/${d.id}`, d.data()));
+  if (config.exists()) scan("siteConfig/published", config.data());
+  return count;
+}
+
+export async function releaseAsset(url, { ownerPath, expectedInOwner = 1 } = {}) {
+  const asset = assetFromUrl(url);
+  if (!asset) return { destroyed: false, reason: "not-cloudinary" };
+  let seenInOwner = 0;
+  const others = await assetReferenceCount(asset.publicId, {
+    skip: (where) => {
+      if (where !== ownerPath || seenInOwner >= expectedInOwner) return false;
+      seenInOwner++;
+      return true;
+    }
+  });
+  if (others > 0) return { destroyed: false, reason: "in-use", ...asset };
+  await destroyAsset(asset.publicId, asset.resourceType);
+  return { destroyed: true, ...asset };
 }
 
 export function watchMedia(callback, onError) {
@@ -182,28 +278,8 @@ export function watchMedia(callback, onError) {
   });
 }
 
-export async function recordMedia(asset, usedFor) {
-  if (!asset?.publicId) return;
-  await setDoc(doc(db, "media", slugify(asset.publicId, "asset")), {
-    ...asset,
-    usedFor: usedFor || "unknown",
-    type: asset.resourceType || "image",
-    createdAt: serverTimestamp()
-  }, { merge: true });
-}
-
-export async function deleteMedia(mediaId, publicId, resourceType = "image") {
-  const { getFunctions, httpsCallable } = await import("https://www.gstatic.com/firebasejs/10.13.0/firebase-functions.js");
-  const call = httpsCallable(getFunctions(getApp()), "deleteCloudinaryAsset");
-  await call({ publicId, resourceType });
-  await deleteDoc(doc(db, "media", mediaId));
-}
-
 export async function grantAdminClaim() {
-  const { getFunctions, httpsCallable } = await import("https://www.gstatic.com/firebasejs/10.13.0/firebase-functions.js");
-  const call = httpsCallable(getFunctions(getApp()), "grantAdminClaim");
-  const res = await call({});
-  return res.data;
+  return adminRequest("/api/admin/claim", {});
 }
 
 
@@ -217,7 +293,7 @@ export async function logChange(action, resource, detail) {
       createdAt: serverTimestamp()
     });
   } catch (err) {
-    console.warn("changeLog write failed:", err);
+    console.error("changeLog write failed:", err);
   }
 }
 
@@ -240,100 +316,35 @@ function categoryPath(kind) {
   return kind === "comics" ? "comicCategories" : "artCategories";
 }
 
-const CATEGORY_STATE_ID = "_state";
-
-function defaultsFor(kind) {
-  return kind === "comics" ? DEFAULT_COMIC_CATEGORIES : DEFAULT_ART_CATEGORIES;
-}
-
 function normaliseCategory(id, data, index) {
   return {
     id,
     slug: data.slug || id,
-    name: data.name || data.label || id,
-    tagline: data.tagline || "",
-    blurb: data.blurb || "",
-    cover: data.cover || "",
-    order: typeof data.order === "number" ? data.order : index,
-    page: data.page || null
+    name: typeof data.name === "string" ? data.name : id,
+    tagline: typeof data.tagline === "string" ? data.tagline : "",
+    blurb: typeof data.blurb === "string" ? data.blurb : "",
+    cover: typeof data.cover === "string" ? data.cover : "",
+    order: typeof data.order === "number" ? data.order : index
   };
-}
-
-function categoriesFromSnap(kind, snap) {
-  if (snap.empty) return { items: defaultsFor(kind).map((c, i) => normaliseCategory(c.slug, c, i)), seeded: false };
-  const items = snap.docs
-    .filter(d => d.id !== CATEGORY_STATE_ID)
-    .map((d, i) => normaliseCategory(d.id, d.data(), i))
-    .sort((a, b) => a.order - b.order || a.name.localeCompare(b.name));
-  return { items, seeded: true };
-}
-
-function defaultCategoryDoc(c, order) {
-  return {
-    slug: c.slug,
-    name: c.label || c.name,
-    tagline: c.tagline || "",
-    blurb: c.blurb || "",
-    page: c.page || null,
-    order,
-    createdAt: serverTimestamp()
-  };
-}
-
-function markCustomised(batch, kind) {
-  batch.set(doc(db, categoryPath(kind), CATEGORY_STATE_ID), { customised: true, updatedAt: serverTimestamp() }, { merge: true });
 }
 
 export function watchCategories(kind, callback, onError) {
-  const ref = collection(db, categoryPath(kind));
-  return onSnapshot(ref, (snap) => {
-    const { items, seeded } = categoriesFromSnap(kind, snap);
-    callback(items, { seeded });
+  return onSnapshot(collection(db, categoryPath(kind)), (snap) => {
+    const items = snap.docs
+      .filter(d => !d.id.startsWith("_"))
+      .map((d, i) => normaliseCategory(d.id, d.data(), i))
+      .sort((a, b) => a.order - b.order || a.name.localeCompare(b.name));
+    callback(items);
   }, (err) => {
-    console.warn(`watchCategories(${kind}) failed, falling back to defaults.`, err);
-    callback(defaultsFor(kind).map((c, i) => normaliseCategory(c.slug, c, i)), { seeded: false });
+    console.error(`watchCategories(${kind}) error:`, err);
     onError?.(err);
   });
 }
 
-export async function fetchCategories(kind) {
-  try {
-    return categoriesFromSnap(kind, await getDocs(collection(db, categoryPath(kind)))).items;
-  } catch (err) {
-    console.warn(`fetchCategories(${kind}) failed, falling back to defaults.`, err);
-    return defaultsFor(kind).map((c, i) => normaliseCategory(c.slug, c, i));
-  }
-}
-
-export async function seedDefaultCategories(kind) {
-  const ref = collection(db, categoryPath(kind));
-  const snap = await getDocs(ref);
-  if (!snap.empty) return false;
-  const batch = writeBatch(db);
-  defaultsFor(kind).forEach((c, i) => {
-    batch.set(doc(db, categoryPath(kind), c.slug), defaultCategoryDoc(c, i));
-  });
-  markCustomised(batch, kind);
-  await batch.commit();
-  return true;
-}
-
-export async function restoreDefaultCategories(kind) {
-  const snap = await getDocs(collection(db, categoryPath(kind)));
-  const existing = new Set(snap.docs.map(d => d.id));
-  const missing = defaultsFor(kind).filter(c => !existing.has(c.slug));
-  if (!missing.length) return 0;
-  let order = snap.docs.filter(d => d.id !== CATEGORY_STATE_ID).length;
-  const batch = writeBatch(db);
-  missing.forEach(c => batch.set(doc(db, categoryPath(kind), c.slug), defaultCategoryDoc(c, order++)));
-  markCustomised(batch, kind);
-  await batch.commit();
-  await logChange("category.restore", kind, missing.map(c => c.slug).join(", "));
-  return missing.length;
-}
-
 export async function createCategory(kind, name) {
-  const slug = slugify(name, "category");
+  const clean = (name || "").trim();
+  if (!clean) throw new Error("Give it a name.");
+  const slug = slugify(clean, "category");
   const ref = doc(db, categoryPath(kind), slug);
   if ((await getDoc(ref)).exists()) {
     throw new Error(`A category with the slug "${slug}" already exists.`);
@@ -341,17 +352,38 @@ export async function createCategory(kind, name) {
   const existing = await getDocs(collection(db, categoryPath(kind)));
   await setDoc(ref, {
     slug,
-    name: name.trim(),
+    name: clean,
     tagline: "",
     blurb: "",
-    order: existing.docs.filter(d => d.id !== CATEGORY_STATE_ID).length,
+    cover: "",
+    order: existing.docs.filter(d => !d.id.startsWith("_")).length,
     createdAt: serverTimestamp()
   });
+  await logChange("category.create", `${kind}/${slug}`, clean);
   return slug;
 }
 
 export async function updateCategory(kind, id, patch) {
   await updateDoc(doc(db, categoryPath(kind), id), patch);
+  await logChange("category.update", `${kind}/${id}`, Object.keys(patch).join(", "));
+}
+
+export async function setCategoryCover(id, nextUrl) {
+  const ref = doc(db, "artCategories", id);
+  const snap = await getDoc(ref);
+  if (!snap.exists()) throw new Error("That collection no longer exists.");
+  const previous = snap.data().cover || "";
+  if (previous === nextUrl) return { released: null };
+  if (!nextUrl && previous) {
+    const released = await releaseAsset(previous, { ownerPath: `artCategories/${id}` });
+    await updateDoc(ref, { cover: "" });
+    await logChange("category.cover", `art/${id}`, "cleared");
+    return { released };
+  }
+  await updateDoc(ref, { cover: nextUrl });
+  await logChange("category.cover", `art/${id}`, nextUrl);
+  const released = previous ? await releaseAsset(previous, { ownerPath: `artCategories/${id}`, expectedInOwner: 0 }) : null;
+  return { released };
 }
 
 export async function reorderCategories(kind, orderedIds) {
@@ -360,121 +392,67 @@ export async function reorderCategories(kind, orderedIds) {
   await batch.commit();
 }
 
-export async function moveCategoryItems(kind, fromSlug, toSlug) {
+export async function deleteCategory(kind, id, { onProgress } = {}) {
   const isComics = kind === "comics";
-  const field = isComics ? "categorySlug" : "category";
-  const snap = await getDocs(query(collection(db, isComics ? "comics" : "artworks"), where(field, "==", fromSlug)));
-  const docs = snap.docs.filter(d => isComics || d.data().uploaded === true);
-  for (let i = 0; i < docs.length; i += 400) {
-    const batch = writeBatch(db);
-    docs.slice(i, i + 400).forEach(d => batch.update(d.ref, { [field]: toSlug }));
-    await batch.commit();
+  const items = await getDocs(query(
+    collection(db, isComics ? "comics" : "artworks"),
+    where(isComics ? "categorySlug" : "category", "==", id)
+  ));
+  let removed = 0;
+  for (const item of items.docs) {
+    onProgress?.(removed, items.size);
+    if (isComics) await deleteComic(item.id);
+    else await deleteArtwork(item.id);
+    removed++;
   }
-  return docs.length;
-}
-
-export async function deleteCategory(kind, id) {
-  const batch = writeBatch(db);
-  batch.delete(doc(db, categoryPath(kind), id));
-  markCustomised(batch, kind);
-  await batch.commit();
-}
-
-export async function fetchCategoryCovers() {
-  const covers = {};
-  try {
-    const snap = await getDocs(query(collection(db, "artworks"), where("status", "==", "published")));
-    snap.docs
-      .map(d => normaliseArtwork(d.id, d.data()))
-      .filter(a => a.uploaded && a.imageUrl)
-      .sort((a, b) => b.createdAt - a.createdAt)
-      .forEach(a => { covers[a.category] ||= a.imageUrl; });
-  } catch (err) {
-    console.warn("Collection covers from uploads unavailable.", err);
+  if (!isComics) {
+    const cat = await getDoc(doc(db, "artCategories", id));
+    const cover = cat.exists() ? cat.data().cover || "" : "";
+    if (cover) await releaseAsset(cover, { ownerPath: `artCategories/${id}` });
   }
-  return covers;
+  await deleteDoc(doc(db, categoryPath(kind), id));
+  await logChange("category.delete", `${kind}/${id}`, `${removed} items removed`);
+  return { removed };
 }
 
 
 function normaliseArtwork(id, data) {
   return {
     id,
-    category: data.category || "general",
-    title: data.title || "Untitled",
-    hasTitle: typeof data.title === "string" && data.title.trim() !== "",
-    archive: data.archive === true,
-    hidden: data.hidden === true,
-    description: data.description || "",
+    category: data.category || "",
+    title: typeof data.title === "string" ? data.title : "",
+    caption: typeof data.caption === "string" ? data.caption : "",
+    description: typeof data.description === "string" ? data.description : "",
     imageUrl: imageDeliveryUrl(data.imageUrl || "", autoQualityEnabled()),
+    originalUrl: data.imageUrl || "",
     likes: data.likes || 0,
     uploaded: data.uploaded === true,
     publicId: data.publicId || null,
-    status: data.status || (data.uploaded === true ? "published" : "draft"),
-    featured: data.featured === true,
+    status: data.status || "draft",
+    hidden: data.status === "draft",
     order: typeof data.order === "number" ? data.order : 0,
     createdAt: data.createdAt?.seconds || 0
   };
 }
 
+export function sortArtworks(list) {
+  return list.slice().sort((a, b) => a.order - b.order || b.createdAt - a.createdAt);
+}
+
 export function watchArtworks(categorySlug, callback, onError) {
   const ref = categorySlug
-    ? query(collection(db, "artworks"),
-            where("category", "==", categorySlug),
-            where("status", "==", "published"))
+    ? query(collection(db, "artworks"), where("status", "==", "published"), where("category", "==", categorySlug))
     : query(collection(db, "artworks"), where("status", "==", "published"));
 
   return onSnapshot(ref, (snap) => {
     const items = snap.docs
       .map(d => normaliseArtwork(d.id, d.data()))
-      .filter(a => a.imageUrl && a.uploaded)
-      .sort((a, b) => b.createdAt - a.createdAt);
-    callback(items);
+      .filter(a => a.uploaded && a.imageUrl);
+    callback(sortArtworks(items));
   }, (err) => {
     console.error("watchArtworks error:", err);
     onError?.(err);
   });
-}
-
-export function watchGalleryPieces(categorySlug, callback, onError, { includeDrafts = false } = {}) {
-  const base = [collection(db, "artworks"), where("category", "==", categorySlug)];
-  const ref = includeDrafts
-    ? query(...base)
-    : query(...base, where("status", "==", "published"));
-
-  let artworkItems = { uploaded: [], archive: [] };
-  let deletions = [];
-  let artReady = false;
-  let deletionsReady = false;
-  const emit = () => {
-    if (!artReady || !deletionsReady) return;
-    callback({
-      ...artworkItems,
-      deletedIds: deletions.filter(d => d.kind === "art").map(d => d.itemId),
-      deletedUrls: deletions.filter(d => d.kind === "art" && d.imageUrl).map(d => d.imageUrl)
-    });
-  };
-  const stopArt = onSnapshot(ref, (snap) => {
-    const all = snap.docs.map(d => normaliseArtwork(d.id, d.data()));
-    artworkItems = {
-      uploaded: all
-        .filter(a => a.imageUrl && a.uploaded)
-        .sort((a, b) => b.createdAt - a.createdAt),
-      archive: all
-        .filter(a => a.imageUrl && !a.uploaded && a.archive)
-        .sort((a, b) => a.order - b.order)
-    };
-    artReady = true;
-    emit();
-  }, (err) => {
-    console.error("watchGalleryPieces error:", err);
-    onError?.(err);
-  });
-  const stopDeletions = onSnapshot(collection(db, "contentDeletions"), (snap) => {
-    deletions = snap.docs.map(d => ({ id: d.id, ...d.data() }));
-    deletionsReady = true;
-    emit();
-  }, (err) => { console.error("watchGalleryPieces deletion error:", err); onError?.(err); });
-  return () => { stopArt(); stopDeletions(); };
 }
 
 export function watchAllArtworks(callback, onError) {
@@ -486,34 +464,12 @@ export function watchAllArtworks(callback, onError) {
   });
 }
 
-export function watchContentDeletions(callback, onError) {
-  return onSnapshot(collection(db, "contentDeletions"), (snap) => {
-    callback(snap.docs.map(d => ({ id: d.id, ...d.data() })));
-  }, (err) => {
-    console.error("watchContentDeletions error:", err);
-    onError?.(err);
-  });
-}
-
 export async function createArtwork({
-  categorySlug, file, title, description, imageUrl, publicId,
-  status = "published", onProgress, onStatus
+  categorySlug, file, title, caption, description, onProgress, onStatus
 }) {
-  let url = imageUrl;
-  let assetId = publicId || null;
-  const name = (title || file?.name || "Untitled").trim();
-  const id = artworkId(categorySlug, name);
-
-  if (!imageUrl) {
-    const existing = await getDoc(doc(db, "artworks", id));
-    if (existing.exists()) throw new Error(`“${name}” already exists in this category. Rename the upload and try again.`);
-  }
-
-  if (!url) {
-    const asset = await uploadAndRecord(file, { usedFor: "artwork", onProgress });
-    url = asset.url;
-    assetId = asset.publicId;
-  }
+  const name = (title || file?.name || "").trim().replace(/\.[a-z0-9]+$/i, "");
+  const id = artworkId(categorySlug, name || "artwork");
+  const asset = await uploadAndRecord(file, { usedFor: "artwork", onProgress });
 
   onStatus?.("Saving to the site…");
 
@@ -521,274 +477,180 @@ export async function createArtwork({
     await setDoc(doc(db, "artworks", id), {
       category: categorySlug,
       title: name,
-      description: description || "",
-      imageUrl: url,
-      publicId: assetId,
+      caption: (caption || "").trim(),
+      description: (description || "").trim(),
+      imageUrl: asset.url,
+      publicId: asset.publicId,
       likes: 0,
-      status,
-      featured: false,
-      order: 0,
+      status: "published",
+      order: -Math.floor(Date.now() / 1000),
       createdAt: serverTimestamp(),
       uploaded: true
-    }, { merge: true });
+    });
   } catch (err) {
-    if (assetId && !imageUrl) {
-      try { await deleteMedia(slugify(assetId, "asset"), assetId, "image"); }
-      catch (cleanupError) { console.error("Could not clean up an artwork upload after its record failed.", cleanupError); }
-    }
+    console.error("Artwork record failed; removing the upload.", err);
+    try { await destroyAsset(asset.publicId, asset.resourceType); }
+    catch (cleanupError) { console.error("Could not clean up an artwork upload after its record failed.", cleanupError); }
     throw err;
   }
 
-  try { await logChange("artwork.create", id, name); }
-  catch (err) { console.warn("Artwork published, but its activity entry could not be saved.", err); }
-  return { id, imageUrl: url, publicId: assetId };
+  await logChange("artwork.create", id, name);
+  return { id, imageUrl: asset.url, publicId: asset.publicId };
 }
 
 export async function updateArtwork(id, patch) {
   await updateDoc(doc(db, "artworks", id), patch);
+  await logChange("artwork.update", id, Object.keys(patch).join(", "));
 }
 
-export function archivePieceId(categorySlug, index) {
-  return `${categorySlug}-archive-${index + 1}`;
+export async function setArtworkVisibility(id, visible) {
+  await updateDoc(doc(db, "artworks", id), { status: visible ? "published" : "draft" });
+  await logChange(visible ? "artwork.show" : "artwork.hide", id, "");
 }
 
-export async function saveArchivePiece(id, { categorySlug, title, description }) {
-  const name = (title || "").trim();
-  await setDoc(doc(db, "artworks", id), {
-    category: categorySlug,
-    title: name,
-    description: (description || "").trim(),
-    archive: true,
-    status: "published"
-  }, { merge: true });
-  await logChange("artwork.rename", id, name || "(cleared)");
-}
-
-export async function deleteArtwork(id) {
+export async function replaceArtworkImage(id, file, { onProgress } = {}) {
   const ref = doc(db, "artworks", id);
   const snap = await getDoc(ref);
-  const item = snap.exists() ? snap.data() : {};
-  const imageUrl = item.imageUrl || "";
-  const tombstone = doc(db, "contentDeletions", `art-${id}`);
-  await setDoc(tombstone, {
-    kind: "art", itemId: id, imageUrl, createdAt: serverTimestamp()
-  });
-  try { await deleteDoc(ref); }
-  catch (err) {
-    try { await deleteDoc(tombstone); } catch { }
+  if (!snap.exists()) throw new Error("That artwork no longer exists.");
+  const previous = snap.data().imageUrl || "";
+  const asset = await uploadAndRecord(file, { usedFor: "artwork", onProgress });
+  try {
+    await updateDoc(ref, { imageUrl: asset.url, publicId: asset.publicId });
+  } catch (err) {
+    console.error("Could not point the artwork at its new image; removing the new upload.", err);
+    try { await destroyAsset(asset.publicId, asset.resourceType); }
+    catch (cleanupError) { console.error("Cleanup of the new upload failed.", cleanupError); }
     throw err;
   }
-
-  const warnings = [];
-  let cloudinaryCleanup = null;
-  if (snap.exists()) {
-    const publicId = item.publicId || publicIdFromUrl(imageUrl);
-    if (publicId && /(^|\.)cloudinary\.com\//i.test(imageUrl)) {
-      cloudinaryCleanup = deleteMedia(slugify(publicId, "asset"), publicId, item.resourceType || "image")
-        .then(() => ({ deleted: true }))
-        .catch(err => ({ deleted: false, message: err.message || "Cloudinary could not delete the image." }));
-    }
-    try {
-      const comments = await getDocs(collection(db, "artworks", id, "comments"));
-      const results = await Promise.allSettled(comments.docs.map(comment => deleteDoc(comment.ref)));
-      if (results.some(result => result.status === "rejected")) warnings.push("Some artwork comments could not be removed.");
-    } catch { warnings.push("Artwork comments could not be checked for cleanup."); }
-  }
-  return { removed: true, cloudinaryCleanup, warnings };
+  await logChange("artwork.replace", id, asset.url);
+  const released = previous ? await releaseAsset(previous, { ownerPath: `artworks/${id}`, expectedInOwner: 0 }) : null;
+  return { imageUrl: asset.url, publicId: asset.publicId, released };
 }
 
-
-export async function setArchiveVisibility(id, visible) {
-  await updateDoc(doc(db, "artworks", id), { hidden: !visible });
-  await logChange(visible ? "archive.show" : "archive.hide", id, "");
-}
-
-export async function replaceArchiveImage(id, { imageUrl, publicId }) {
-  await updateDoc(doc(db, "artworks", id), { imageUrl, publicId: publicId || null });
-  await logChange("archive.replace", id, imageUrl);
-}
-
-export async function reorderArchivePieces(orderedIds) {
+export async function reorderArtworks(orderedIds) {
   const batch = writeBatch(db);
   orderedIds.forEach((id, i) => batch.update(doc(db, "artworks", id), { order: i }));
   await batch.commit();
 }
 
-export async function moveArchiveToCloudinary(pieces, onProgress) {
-  const pending = pieces.filter(p => p.imageUrl && !/^https?:/i.test(p.imageUrl));
-  let done = 0;
-  const failures = [];
+async function deleteChildren(path) {
+  const snap = await getDocs(collection(db, ...path));
+  for (const child of snap.docs) await deleteDoc(child.ref);
+}
 
-  for (const piece of pending) {
-    try {
-      const response = await fetch(piece.imageUrl);
-      if (!response.ok) throw new Error(`could not read ${piece.imageUrl}`);
-      const blob = await response.blob();
-      const name = piece.imageUrl.split("/").pop();
-      const file = new File([blob], name, { type: blob.type || "image/jpeg" });
-
-      const asset = await uploadAndRecord(file, {
-        usedFor: "archive",
-        onProgress: (p) => onProgress?.(done + p, pending.length, name)
-      });
-
-      await replaceArchiveImage(piece.id, { imageUrl: asset.url, publicId: asset.publicId });
-    } catch (err) {
-      console.error("archive migration failed for", piece.id, err);
-      failures.push(`${piece.id}: ${err.message}`);
-    }
-    done++;
-    onProgress?.(done, pending.length, "");
-  }
-
-  await logChange("archive.toCloudinary", pieces[0]?.category || "", `${done - failures.length} of ${pending.length} moved`);
-  return { moved: done - failures.length, total: pending.length, failures };
+export async function deleteArtwork(id) {
+  const ref = doc(db, "artworks", id);
+  const snap = await getDoc(ref);
+  if (!snap.exists()) return { removed: false };
+  const imageUrl = snap.data().imageUrl || "";
+  const released = imageUrl ? await releaseAsset(imageUrl, { ownerPath: `artworks/${id}` }) : null;
+  await deleteChildren(["artworks", id, "comments"]);
+  await deleteDoc(ref);
+  await logChange("artwork.delete", id, imageUrl);
+  return { removed: true, released };
 }
 
 
 function normaliseComic(id, data) {
+  const pages = Array.isArray(data.pages) ? data.pages.filter(Boolean) : [];
   return {
     id,
-    title: data.title || "Untitled Story",
-    categorySlug: data.categorySlug || "uncategorised",
-    description: data.description || "",
-    coverUrl: imageDeliveryUrl(data.coverUrl || data.pages?.[0] || "", autoQualityEnabled()),
-    pages: Array.isArray(data.pages)
-      ? data.pages.filter(Boolean).map(p => imageDeliveryUrl(p, autoQualityEnabled()))
-      : [],
+    title: typeof data.title === "string" ? data.title : "",
+    categorySlug: data.categorySlug || "",
+    description: typeof data.description === "string" ? data.description : "",
+    coverUrl: imageDeliveryUrl(data.coverUrl || "", autoQualityEnabled()),
+    originalCoverUrl: data.coverUrl || "",
+    pages: pages.map(p => imageDeliveryUrl(p, autoQualityEnabled())),
+    originalPages: pages,
     likes: data.likes || 0,
     order: typeof data.order === "number" ? data.order : 0,
-    status: data.status || "published",
-    featured: data.featured === true,
-    coverPublicId: data.coverPublicId || null,
+    status: data.status || "draft",
     createdAt: data.createdAt?.seconds || 0
   };
 }
 
-function readComics(publishedOnly) {
-  return publishedOnly
-    ? query(collection(db, "comics"), where("status", "==", "published"))
-    : collection(db, "comics");
-}
-
-function shelfItems(snap, publishedOnly) {
-  return snap.docs
-    .map(d => normaliseComic(d.id, d.data()))
-    .filter(c => !publishedOnly || c.coverUrl || c.pages.length)
-    .sort((a, b) => a.order - b.order || b.createdAt - a.createdAt);
+function sortComics(list) {
+  return list.slice().sort((a, b) => a.order - b.order || b.createdAt - a.createdAt);
 }
 
 export function watchComics(callback, onError, { publishedOnly = false } = {}) {
-  return onSnapshot(readComics(publishedOnly), (snap) => {
-    callback(shelfItems(snap, publishedOnly));
+  const ref = publishedOnly
+    ? query(collection(db, "comics"), where("status", "==", "published"))
+    : collection(db, "comics");
+  return onSnapshot(ref, (snap) => {
+    callback(sortComics(snap.docs.map(d => normaliseComic(d.id, d.data()))));
   }, (err) => {
     console.error("watchComics error:", err);
     onError?.(err);
   });
 }
 
-export async function fetchComics({ publishedOnly = true } = {}) {
-  try {
-    return shelfItems(await getDocs(readComics(publishedOnly)), publishedOnly);
-  } catch (err) {
-    console.warn("fetchComics failed.", err);
-    return [];
-  }
-}
-
 export async function createComic({ title, categorySlug, description, coverUrl, pages }) {
-  const id = slugify(title, "story");
+  const clean = (title || "").trim();
+  if (!clean) throw new Error("Give the story a title.");
+  const id = slugify(clean, "story");
   const ref = doc(db, "comics", id);
-  const existing = await getDoc(ref);
-  if (existing.exists()) throw new Error(`A story called "${title}" already exists.`);
+  if ((await getDoc(ref)).exists()) throw new Error(`A story called "${clean}" already exists.`);
 
-  const all = await getDocs(collection(db, "comics"));
   await setDoc(ref, {
-    title: title.trim(),
+    title: clean,
     categorySlug,
     description: description || "",
-    coverUrl: coverUrl || pages[0] || "",
+    coverUrl: coverUrl || "",
     pages,
     likes: 0,
-    order: all.size,
+    status: "published",
+    order: -Math.floor(Date.now() / 1000),
     createdAt: serverTimestamp(),
     updatedAt: serverTimestamp()
   });
+  await logChange("comic.create", id, clean);
   return id;
 }
 
 export async function updateComic(id, patch) {
-  await updateDoc(doc(db, "comics", id), { ...patch, updatedAt: serverTimestamp() });
+  const ref = doc(db, "comics", id);
+  const before = await getDoc(ref);
+  if (!before.exists()) throw new Error("That story no longer exists.");
+  const old = before.data();
+  await updateDoc(ref, { ...patch, updatedAt: serverTimestamp() });
+  await logChange("comic.update", id, Object.keys(patch).join(", "));
+  const after = { ...old, ...patch };
+  const keep = new Set([after.coverUrl, ...(after.pages || [])].map(publicIdFromUrl).filter(Boolean));
+  const dropped = [...new Set([old.coverUrl, ...(old.pages || [])].filter(url => {
+    const pid = publicIdFromUrl(url);
+    return pid && !keep.has(pid);
+  }))];
+  const released = [];
+  for (const url of dropped) released.push(await releaseAsset(url, { ownerPath: `comics/${id}`, expectedInOwner: 0 }));
+  return { released };
 }
 
-export async function getComicDeletionPlan(id) {
-  const comicSnap = await getDoc(doc(db, "comics", id));
-  if (!comicSnap.exists()) return id === BUILTIN_SAMPLE_STORY.id
-    ? { ...BUILTIN_SAMPLE_STORY, exists: true }
-    : { id, exists: false, pages: [], coverUrl: "" };
-  const comic = comicSnap.data();
-  return {
-    id,
-    exists: true,
-    pages: Array.isArray(comic.pages) ? comic.pages.filter(Boolean) : [],
-    coverUrl: comic.coverUrl || ""
-  };
+export async function setComicVisibility(id, visible) {
+  await updateDoc(doc(db, "comics", id), { status: visible ? "published" : "draft", updatedAt: serverTimestamp() });
+  await logChange(visible ? "comic.show" : "comic.hide", id, "");
 }
 
-export async function deleteComic(id, plan = null) {
-  const comicRef = doc(db, "comics", id);
-  const deletion = plan || await getComicDeletionPlan(id);
-  if (!deletion.exists && id === BUILTIN_SAMPLE_STORY.id) {
-    await setDoc(doc(db, "contentDeletions", `story-${id}`), {
-      kind: "story", itemId: id, createdAt: serverTimestamp()
-    });
-    return { pages: BUILTIN_SAMPLE_STORY.pages.length, assets: 0, cloudinaryFailures: [] };
+export async function deleteComic(id) {
+  const ref = doc(db, "comics", id);
+  const snap = await getDoc(ref);
+  if (!snap.exists()) return { removed: false, pages: 0 };
+  const data = snap.data();
+  const urls = [...new Set([data.coverUrl, ...(Array.isArray(data.pages) ? data.pages : [])].filter(Boolean))];
+  const released = [];
+  for (const url of urls) {
+    const owned = [data.coverUrl, ...(data.pages || [])].filter(u => publicIdFromUrl(u) === publicIdFromUrl(url)).length;
+    released.push(await releaseAsset(url, { ownerPath: `comics/${id}`, expectedInOwner: owned }));
   }
-  if (!deletion.exists) return { pages: 0 };
-  const pageUrls = deletion.pages;
-
-  // Story pages are Cloudinary assets (with a media-library record). Remove
-  // each unique page and cover asset before deleting the Firestore story.
-  const cloudAssets = new Map();
-  for (const url of [...pageUrls, deletion.coverUrl].filter(Boolean)) {
-    const publicId = publicIdFromUrl(url);
-    if (publicId && /(^|\.)cloudinary\.com\//i.test(url)) {
-      cloudAssets.set(publicId, { publicId, resourceType: "image" });
-    }
+  await deleteChildren(["comics", id, "comments"]);
+  const chapters = await getDocs(collection(db, "comics", id, "chapters"));
+  for (const chapter of chapters.docs) {
+    await deleteChildren(["comics", id, "chapters", chapter.id, "pages"]);
+    await deleteDoc(chapter.ref);
   }
-  // Remove the visible record and persist a seed tombstone before secondary cleanup.
-  const tombstone = doc(db, "contentDeletions", `story-${id}`);
-  await setDoc(tombstone, {
-    kind: "story", itemId: id, createdAt: serverTimestamp()
-  });
-  try { await deleteDoc(comicRef); }
-  catch (err) {
-    try { await deleteDoc(tombstone); } catch { }
-    throw err;
-  }
-
-  const warnings = [];
-  try {
-    const commentSnaps = await getDocs(collection(db, "comics", id, "comments"));
-    const chapterSnaps = await getDocs(collection(db, "comics", id, "chapters"));
-    const childRefs = commentSnaps.docs.map(comment => comment.ref);
-    for (const chapter of chapterSnaps.docs) {
-      const pageSnaps = await getDocs(collection(db, "comics", id, "chapters", chapter.id, "pages"));
-      childRefs.push(...pageSnaps.docs.map(page => page.ref), chapter.ref);
-    }
-    const results = await Promise.allSettled(childRefs.map(ref => deleteDoc(ref)));
-    if (results.some(result => result.status === "rejected")) warnings.push("Some story comments or chapter pages could not be removed.");
-  } catch { warnings.push("Story comments or chapter pages could not be checked for cleanup."); }
-
-  const cloudinaryCleanup = Promise.all([...cloudAssets.values()].map(async asset => {
-    try {
-      await deleteMedia(slugify(asset.publicId, "asset"), asset.publicId, asset.resourceType);
-      return { deleted: true, publicId: asset.publicId };
-    } catch (err) {
-      return { deleted: false, publicId: asset.publicId, message: err.message || "Cloudinary could not delete the image." };
-    }
-  }));
-  return { pages: pageUrls.length, assets: cloudAssets.size, cloudinaryCleanup, warnings };
+  await deleteDoc(ref);
+  await logChange("comic.delete", id, `${urls.length} images`);
+  return { removed: true, pages: (data.pages || []).length, released };
 }
 
 export async function reorderComics(orderedIds) {
@@ -802,7 +664,7 @@ const LIKED_KEY = "alafi_liked_ids";
 
 export function getLikedIds() {
   try { return JSON.parse(localStorage.getItem(LIKED_KEY) || "[]"); }
-  catch { return []; }
+  catch (err) { console.error("Liked list in localStorage is unreadable.", err); return []; }
 }
 
 export function hasLiked(id) {
@@ -813,28 +675,13 @@ function rememberLiked(id) {
   const liked = getLikedIds();
   if (liked.includes(id)) return;
   liked.push(id);
-  try { localStorage.setItem(LIKED_KEY, JSON.stringify(liked)); } catch { }
-}
-
-function likeSeed() {
-  return { likes: 1, status: "published", createdAt: serverTimestamp() };
+  try { localStorage.setItem(LIKED_KEY, JSON.stringify(liked)); }
+  catch (err) { console.error("Could not remember the like locally.", err); }
 }
 
 export async function toggleLike(collectionName, id) {
   if (hasLiked(id)) return false;
-  const ref = doc(db, collectionName, id);
-
-  if ((await getDoc(ref)).exists()) {
-    await updateDoc(ref, { likes: increment(1) });
-  } else {
-    try {
-      await setDoc(ref, likeSeed());
-    } catch (err) {
-      if (!(await getDoc(ref)).exists()) throw err;
-      await updateDoc(ref, { likes: increment(1) });
-    }
-  }
-
+  await updateDoc(doc(db, collectionName, id), { likes: increment(1) });
   rememberLiked(id);
   return true;
 }
@@ -844,20 +691,6 @@ export function watchLikes(collectionName, id, callback, onError) {
     callback(snap.exists() ? (snap.data().likes || 0) : 0);
   }, (err) => {
     console.error("watchLikes error for", id, err);
-    onError?.(err);
-  });
-}
-
-export function watchPieceMeta(collectionName, id, callback, onError) {
-  return onSnapshot(doc(db, collectionName, id), (snap) => {
-    const d = snap.exists() ? snap.data() : {};
-    callback({
-      likes: d.likes || 0,
-      title: (d.title || "").trim(),
-      description: (d.description || "").trim()
-    });
-  }, (err) => {
-    console.error("watchPieceMeta error for", id, err);
     onError?.(err);
   });
 }

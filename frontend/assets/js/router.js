@@ -74,7 +74,7 @@ async function render(url, { push = true, scroll = true } = {}) {
 
   await adoptStyles(incoming);
 
-  try { current?.unmount?.(); } catch (err) { console.warn("unmount failed:", err); }
+  try { current?.unmount?.(); } catch (err) { console.error("unmount failed:", err); }
   current = null;
 
   document.documentElement.setAttribute("data-bg", incoming.documentElement.getAttribute("data-bg") || "");
@@ -103,7 +103,7 @@ async function go(url, options) {
   try {
     await render(url, options);
   } catch (err) {
-    console.warn("Router falling back to a full load:", err);
+    console.error("Router falling back to a full load:", err);
     location.href = url.href;
     return;
   } finally {

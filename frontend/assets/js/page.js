@@ -1,4 +1,4 @@
-import { observeReveals, initNav } from "./reveal.js?v=20260823a";
+import { observeReveals, initNav } from "./reveal.js?v=20261031a";
 
 export function mount() {
   initNav();

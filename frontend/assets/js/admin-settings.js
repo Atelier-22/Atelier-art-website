@@ -1,30 +1,28 @@
 import {
-  DEFAULT_CONFIG, DISPLAY_FONTS, BODY_FONTS, fetchConfig, saveDraft,
-  publishDraft, discardDraft, contrastReport, hasBlockingContrastFailure,
-  derivePalette, mergeConfig, parseEmbed, updateState, timeLeft, UPDATE_DURATIONS
-} from "./site-config.js?v=20261017b";
+  DISPLAY_FONTS, BODY_FONTS, watchConfig, saveConfig, contrastReport, hasBlockingContrastFailure,
+  derivePalette, mergeConfig, parseEmbed, updateState, timeLeft, UPDATE_DURATIONS, sanitiseHtml
+} from "./site-config.js?v=20261031a";
 import {
   uploadAndRecord, watchMedia, inspectVideo, videoRejectionReason,
   videoTrimNotice, resourceTypeFor, isAudio, MAX_VIDEO_BYTES,
-  MAX_AUDIO_BYTES, MAX_AUDIO_SECONDS
-} from "./data.js?v=20261030a";
-import { posterFromVideo, VIDEO_TRIM_SECONDS } from "./cloudinary.js?v=20260823a";
-import { readTrackName, titleFromFilename } from "./id3.js?v=20260823a";
-import { LOCAL_SEEDS, CATEGORY_BY_SLUG } from "./site-data.js?v=20261030a";
-import { $, $$, escapeHtml, toast, modal } from "./admin-ui.js?v=20261027e";
+  MAX_AUDIO_BYTES, MAX_AUDIO_SECONDS, releaseAsset, setCategoryCover
+} from "./data.js?v=20261031a";
+import { posterFromVideo, VIDEO_TRIM_SECONDS } from "./cloudinary.js?v=20261031a";
+import { readTrackName, titleFromFilename } from "./id3.js?v=20261031a";
+import { $, $$, escapeHtml, toast, modal } from "./admin-ui.js?v=20261031a";
 
-const ROOT_IMAGES = ["1.jpg", "2.jpg", "AJ.jpeg", "AJ1.jpg", "AJ2.JPG", "tt.JPG"];
+const CONFIG_OWNER = "siteConfig/published";
 
 const state = {
-  draft: null,
-  published: null,
+  config: null,
   tab: "theme",
   view: "overview",
   dirty: false,
-  saveError: false,
-  publishError: false,
-  publishing: false,
+  saving: false,
+  saveError: "",
+  savedAt: 0,
   saveTimer: null,
+  queue: Promise.resolve(),
   readyPromise: null,
   mounted: false,
   categories: [],
@@ -93,10 +91,10 @@ const TABS = [
       {
         title: "Name and mark",
         fields: [
-          { type: "image", path: "branding.logoUrl", label: "Logo", note: "Optional. Upload one to replace the built-in AJONA mark that sits above the site name in the header. Leave empty to keep the built-in mark." },
+          { type: "image", path: "branding.logoUrl", label: "Logo", note: "Shown in the header and the footer. Leave empty for no logo." },
           { type: "text", path: "branding.wordmark", label: "Wordmark", placeholder: "Alafi" },
           { type: "text", path: "branding.wordmarkDot", label: "Accent character", note: "The bit after the name, shown in the accent colour." },
-          { type: "text", path: "branding.siteTitle", label: "Site name", note: "Used in the footer." }
+          { type: "text", path: "branding.siteTitle", label: "Site name", note: "Used in the footer and the browser tab." }
         ]
       },
       {
@@ -123,6 +121,13 @@ const TABS = [
           { type: "html", path: "home.heroLine1", label: "Headline, line 1" },
           { type: "html", path: "home.heroLine2", label: "Headline, line 2" },
           { type: "html", path: "home.heroLine3", label: "Headline, line 3" },
+          {
+            type: "list", path: "home.heroStory", label: "Animated story lines", addLabel: "Add a line",
+            note: "The opening animation cycles through these before settling on the headline.",
+            defaultItem: { text: "" },
+            itemFields: [{ key: "text", label: "Line", type: "text" }]
+          },
+          { type: "text", path: "home.heroCtaLabel", label: "Gallery button", note: "Leave empty for no button." },
           { type: "textarea", path: "home.heroBlurb", label: "Introduction", rows: 3 },
           {
             type: "list", path: "home.heroStats", label: "Figures", addLabel: "Add a figure",
@@ -147,7 +152,8 @@ const TABS = [
           { type: "image", path: "home.artistPortrait", label: "Portrait" },
           { type: "text", path: "home.artistEyebrow", label: "Eyebrow" },
           { type: "text", path: "home.artistName", label: "Name" },
-          { type: "textarea", path: "home.artistCopy", label: "Introduction", rows: 5, note: "Leave a blank line between paragraphs." }
+          { type: "textarea", path: "home.artistCopy", label: "Introduction", rows: 5, note: "Leave a blank line between paragraphs." },
+          { type: "text", path: "home.artistCtaLabel", label: "About-page link", note: "Leave empty for no link." }
         ]
       },
       {
@@ -155,7 +161,8 @@ const TABS = [
         fields: [
           { type: "text", path: "home.finaleEyebrow", label: "Eyebrow" },
           { type: "text", path: "home.finaleTitle", label: "Heading" },
-          { type: "textarea", path: "home.finaleBlurb", label: "Text", rows: 2 }
+          { type: "textarea", path: "home.finaleBlurb", label: "Text", rows: 2 },
+          { type: "text", path: "home.finaleCtaLabel", label: "Gallery button", note: "Leave empty for no button. The scrolling band above it lists your collections." }
         ]
       }
     ]
@@ -269,7 +276,7 @@ const TABS = [
   {
     id: "gallery",
     label: "Gallery",
-    note: "This tab is the collections index page — its wording and the cover picture on each card. The artwork inside a collection is managed in Artworks.",
+    note: "The collections index page. Each card shows its collection's own cover — the same cover you set under Collections. Changing it here or there changes the one picture.",
     groups: [
       {
         title: "The pictures inside each collection",
@@ -286,7 +293,7 @@ const TABS = [
       },
       {
         title: "Collection covers",
-        note: "Only the one picture shown on each card of the collections index — not the artwork inside.",
+        note: "Stored on each collection. Empty means the card shows no picture.",
         fields: [{ type: "covers", path: "gallery.covers" }]
       }
     ]
@@ -311,7 +318,7 @@ const TABS = [
             type: "toggle", path: "sound.autoplay", label: "Start playing on its own",
             note: "Visitors arrive with the music already on and turn it off if they would rather not — rather than arriving in silence and having to find the button. No browser will make sound before someone has touched the page, so where that applies it starts at their first tap or click instead. Because the site no longer reloads between pages, that happens once for the whole visit."
           },
-          { type: "number", path: "sound.volume", label: "Volume", min: 5, max: 80, step: 5, suffix: "%", note: "Background music should sit under the room, not in front of it. Around 30 is right for most tracks — press play on one above to judge it by ear." },
+          { type: "number", path: "sound.volume", label: "Volume", min: 5, max: 100, step: 5, suffix: "%", note: "Background music should sit under the room, not in front of it. Around 30 is right for most tracks — press play on one above to judge it by ear." },
           { type: "number", path: "sound.crossfade", label: "Overlap between tracks", min: 0, max: 12, step: 1, suffix: "s", note: "One piece begins underneath the last and they pass through each other, so there is never a gap or an abrupt cut. Zero switches straight over." },
           { type: "toggle", path: "sound.shuffle", label: "Play in a random order", note: "On, so two visitors are unlikely to hear the same opening — and neither will the same person coming back." }
         ]
@@ -332,7 +339,112 @@ const TABS = [
           { type: "image", path: "backgrounds.category", label: "Collection pages" },
           { type: "image", path: "backgrounds.comics", label: "Comics" },
           { type: "image", path: "backgrounds.about", label: "About" },
-          { type: "image", path: "backgrounds.contact", label: "Contact" }
+          { type: "image", path: "backgrounds.contact", label: "Contact" },
+          { type: "image", path: "backgrounds.notFound", label: "Page not found (404)" }
+        ]
+      }
+    ]
+  },
+
+  {
+    id: "comics",
+    label: "Comics page",
+    groups: [
+      {
+        title: "Reading Room header",
+        fields: [
+          { type: "text", path: "comics.title", label: "Page title" },
+          { type: "text", path: "comics.tagline", label: "Tagline" },
+          { type: "textarea", path: "comics.blurb", label: "Introduction", rows: 3 }
+        ]
+      }
+    ]
+  },
+
+  {
+    id: "contact",
+    label: "Contact page",
+    groups: [
+      {
+        title: "Header",
+        fields: [
+          { type: "text", path: "contact.title", label: "Page title" },
+          { type: "text", path: "contact.tagline", label: "Tagline" },
+          { type: "textarea", path: "contact.blurb", label: "Introduction", rows: 3 }
+        ]
+      },
+      {
+        title: "Ways to reach you",
+        note: "Emails and phone numbers link themselves. For Instagram or any other site, put the full address in Link.",
+        fields: [
+          { type: "text", path: "contact.eyebrow", label: "Eyebrow" },
+          { type: "text", path: "contact.heading", label: "Heading" },
+          {
+            type: "list", path: "contact.items", label: "Contact details", addLabel: "Add a contact",
+            defaultItem: { label: "", value: "", href: "" },
+            itemFields: [
+              { key: "label", label: "Label", type: "text" },
+              { key: "value", label: "Shown as", type: "text" },
+              { key: "href", label: "Link (optional)", type: "text" }
+            ]
+          }
+        ]
+      },
+      {
+        title: "Topics",
+        fields: [
+          { type: "text", path: "contact.topicsEyebrow", label: "Eyebrow" },
+          { type: "text", path: "contact.topicsHeading", label: "Heading" },
+          {
+            type: "list", path: "contact.topics", label: "Topics", addLabel: "Add a topic",
+            defaultItem: { title: "" },
+            itemFields: [{ key: "title", label: "Topic", type: "text" }]
+          }
+        ]
+      },
+      { title: "More sections", fields: [{ type: "blocks", path: "contact.blocks" }] }
+    ]
+  },
+
+  {
+    id: "seo",
+    label: "Sharing",
+    note: "What search engines and link previews read. WhatsApp, Facebook and X only pick up a change on their next crawl.",
+    groups: [
+      {
+        title: "Search and link previews",
+        fields: [
+          { type: "textarea", path: "seo.description", label: "Site description", rows: 3 },
+          { type: "image", path: "seo.shareImage", label: "Share image", note: "Shown when someone shares a link to the site. Empty means no image." }
+        ]
+      }
+    ]
+  },
+
+  {
+    id: "legal",
+    label: "Legal pages",
+    groups: [
+      {
+        title: "Privacy policy",
+        fields: [
+          { type: "text", path: "legal.privacyTitle", label: "Browser tab title" },
+          { type: "htmlarea", path: "legal.privacyHtml", label: "Page content (HTML)", rows: 18 }
+        ]
+      },
+      {
+        title: "Terms of service",
+        fields: [
+          { type: "text", path: "legal.termsTitle", label: "Browser tab title" },
+          { type: "htmlarea", path: "legal.termsHtml", label: "Page content (HTML)", rows: 18 }
+        ]
+      },
+      {
+        title: "Page not found (404)",
+        fields: [
+          { type: "text", path: "notFound.title", label: "Heading" },
+          { type: "text", path: "notFound.tagline", label: "Tagline" },
+          { type: "textarea", path: "notFound.blurb", label: "Text", rows: 3 }
         ]
       }
     ]
@@ -354,15 +466,6 @@ function set(obj, path, value) {
   target[last] = value;
 }
 
-
-function bundledImageGroups() {
-  const groups = [{ label: "Site images", items: ROOT_IMAGES }];
-  Object.keys(LOCAL_SEEDS).forEach((slug) => {
-    const items = LOCAL_SEEDS[slug] || [];
-    if (items.length) groups.push({ label: CATEGORY_BY_SLUG[slug]?.label || slug, items });
-  });
-  return groups;
-}
 
 const seconds = (n) => `${Math.round(n)}s`;
 const minutes = (n) => `${Math.floor(n / 60)}:${String(Math.round(n % 60)).padStart(2, "0")}`;
@@ -388,7 +491,6 @@ export function pickMedia(current = "", { allow = ["image"] } = {}) {
       close();
     };
 
-    const groups = bundledImageGroups();
     const accept = audioOnly ? "audio/*" : wantsVideo ? "image/*,video/*" : "image/*";
 
     const dropHint = audioOnly
@@ -406,7 +508,6 @@ export function pickMedia(current = "", { allow = ["image"] } = {}) {
           <div class="picker-tabs">
             <button type="button" class="is-active" data-ptab="upload">Upload</button>
             <button type="button" data-ptab="library">Library</button>
-            ${audioOnly ? "" : '<button type="button" data-ptab="bundled">Site images</button>'}
             ${wantsEmbed ? '<button type="button" data-ptab="embed">YouTube / Vimeo</button>' : ""}
             <button type="button" data-ptab="url">Address</button>
           </div>
@@ -424,16 +525,6 @@ export function pickMedia(current = "", { allow = ["image"] } = {}) {
           <div class="picker-pane" data-pane="library">
             <div class="picker-grid" data-pick-library><p class="empty-note">Loading…</p></div>
           </div>
-
-          ${audioOnly ? "" : `
-          <div class="picker-pane" data-pane="bundled">
-            <div class="toolbar">
-              <select data-pick-group>
-                ${groups.map((g, i) => `<option value="${i}">${escapeHtml(g.label)}</option>`).join("")}
-              </select>
-            </div>
-            <div class="picker-grid" data-pick-bundled></div>
-          </div>`}
 
           ${wantsEmbed ? `
             <div class="picker-pane" data-pane="embed">
@@ -453,10 +544,9 @@ export function pickMedia(current = "", { allow = ["image"] } = {}) {
           <div class="picker-pane" data-pane="url">
             <div class="field">
               <label>Address</label>
-              <input type="text" data-pick-url value="${escapeHtml(current)}" placeholder="https://… or 2.jpg">
+              <input type="text" data-pick-url value="${escapeHtml(current)}" placeholder="https://…">
             </div>
             <button class="btn is-primary" type="button" data-pick-url-go>Use this address</button>
-            <p class="form-note">Also how you clear a picture: empty the box and press the button.</p>
           </div>
         </div>
       `,
@@ -574,22 +664,6 @@ export function pickMedia(current = "", { allow = ["image"] } = {}) {
             }).join("")
           : `<p class="empty-note">Nothing ${audioOnly ? "here yet" : "uploaded yet"}. Use the Upload tab.</p>`;
 
-        const bundledHost = $("[data-pick-bundled]", overlay);
-        const groupSelect = $("[data-pick-group]", overlay);
-        if (bundledHost && groupSelect) {
-          const paintBundled = () => {
-            const group = groups[Number(groupSelect.value)] || groups[0];
-            bundledHost.innerHTML = group.items.map(src => `
-              <button type="button" class="picker-item${src === current ? " is-current" : ""}"
-                      data-url="${escapeHtml(src)}" data-type="image">
-                <img src="${escapeHtml(src)}" alt="" loading="lazy">
-                <span>${escapeHtml(src.split("/").pop())}</span>
-              </button>`).join("");
-          };
-          groupSelect.addEventListener("change", paintBundled);
-          paintBundled();
-        }
-
         overlay.addEventListener("click", (e) => {
           const item = e.target.closest(".picker-item");
           if (!item) return;
@@ -616,7 +690,8 @@ export function pickMedia(current = "", { allow = ["image"] } = {}) {
 
         $("[data-pick-url-go]", overlay).addEventListener("click", () => {
           const value = $("[data-pick-url]", overlay).value.trim();
-          finish({ url: value, type: value ? "image" : "", poster: "" }, close);
+          if (!value) return;
+          finish({ url: value, type: "image", poster: "" }, close);
         });
 
         $("[data-cancel]", overlay).addEventListener("click", () => {
@@ -635,24 +710,73 @@ export async function pickImage(current = "") {
 
 function markDirty() {
   state.dirty = true;
-  state.publishError = false;
+  state.saveError = "";
   renderStatus();
   clearTimeout(state.saveTimer);
-  state.saveTimer = setTimeout(commit, 550);
+  state.saveTimer = setTimeout(() => {
+    flushSave().catch(err => console.error("Autosave failed:", err));
+  }, 550);
 }
 
-async function commit() {
-  try {
-    await saveDraft(state.draft);
-    state.dirty = false;
-    state.saveError = false;
+export function flushSave() {
+  clearTimeout(state.saveTimer);
+  state.saveTimer = null;
+  const run = state.queue.then(async () => {
+    if (!state.config) return;
+    if (hasBlockingContrastFailure(state.config.theme)) {
+      state.saveError = "Not saved — fix the readability warnings in Theme first.";
+      renderStatus();
+      throw new Error(state.saveError);
+    }
+    const snapshot = mergeConfig(JSON.parse(JSON.stringify(state.config)));
+    state.saving = true;
     renderStatus();
-    state.onChange?.(state.draft);
+    try {
+      await saveConfig(snapshot);
+      state.dirty = JSON.stringify(mergeConfig(state.config)) !== JSON.stringify(snapshot);
+      state.saveError = "";
+      state.savedAt = Date.now();
+      state.onChange?.(snapshot);
+    } catch (err) {
+      console.error("Saving the site settings failed:", err);
+      state.saveError = `Not saved: ${err.message || err.code || "unknown error"}`;
+      toast(state.saveError, "error");
+      throw err;
+    } finally {
+      state.saving = false;
+      renderStatus();
+    }
+  });
+  state.queue = run.catch(() => undefined);
+  return run;
+}
+
+async function replaceAsset(oldUrl, write) {
+  write();
+  await flushSave();
+  if (!oldUrl) return null;
+  try {
+    const released = await releaseAsset(oldUrl, { ownerPath: CONFIG_OWNER, expectedInOwner: 0 });
+    return released;
   } catch (err) {
-    console.error(err);
-    state.saveError = true;
-    toast(err.message || "Could not save the draft.", "error");
+    console.error("The new file is live, but the old one could not be removed from Cloudinary:", err);
+    toast(`Saved. The old file is still in Cloudinary: ${err.message}`, "error");
+    return null;
   }
+}
+
+async function clearAsset(oldUrl, write) {
+  if (oldUrl) {
+    try {
+      await releaseAsset(oldUrl, { ownerPath: CONFIG_OWNER, expectedInOwner: 1 });
+    } catch (err) {
+      console.error("Cloudinary delete failed, so the field was kept:", err);
+      toast(`Not removed — Cloudinary refused: ${err.message}`, "error");
+      throw err;
+    }
+  }
+  write();
+  await flushSave();
 }
 
 function fieldShell(label, note, control, extraClass = "") {
@@ -666,11 +790,11 @@ function fieldShell(label, note, control, extraClass = "") {
 
 const FULL_WIDTH_FIELDS = new Set([
   "images", "list", "blocks", "covers", "contrast", "swatches", "typepreview",
-  "media", "link", "tracks", "post"
+  "media", "link", "tracks", "post", "htmlarea"
 ]);
 
 function renderField(field) {
-  const value = field.path ? get(state.draft, field.path) : undefined;
+  const value = field.path ? get(state.config, field.path) : undefined;
   const el = document.createElement("div");
   el.className = `setting-wrap${FULL_WIDTH_FIELDS.has(field.type) ? " is-full" : ""}`;
 
@@ -684,7 +808,7 @@ function renderField(field) {
       const picker = $("[data-setting]", el);
       const hex = $("[data-setting-hex]", el);
       const apply = (next) => {
-        set(state.draft, field.path, next);
+        set(state.config, field.path, next);
         picker.value = next;
         hex.value = next;
         markDirty();
@@ -694,7 +818,7 @@ function renderField(field) {
       hex.addEventListener("change", () => {
         const next = hex.value.trim();
         if (/^#(?:[0-9a-f]{3}|[0-9a-f]{6})$/i.test(next)) apply(next);
-        else hex.value = get(state.draft, field.path) || "";
+        else hex.value = get(state.config, field.path) || "";
       });
       break;
     }
@@ -706,18 +830,19 @@ function renderField(field) {
                 placeholder="${escapeHtml(field.placeholder || "")}">`);
       const input = $("[data-setting]", el);
       input.addEventListener("input", () => {
-        set(state.draft, field.path, sanitise(input.value, field.type === "html"));
+        set(state.config, field.path, sanitise(input.value, field.type === "html"));
         markDirty();
       });
       break;
     }
 
-    case "textarea": {
+    case "textarea":
+    case "htmlarea": {
       el.innerHTML = fieldShell(field.label, field.note,
-        `<textarea data-setting rows="${field.rows || 4}">${escapeHtml(value ?? "")}</textarea>`);
+        `<textarea data-setting rows="${field.rows || 4}"${field.type === "htmlarea" ? ' spellcheck="false" class="is-code"' : ""}>${escapeHtml(value ?? "")}</textarea>`);
       const input = $("[data-setting]", el);
       input.addEventListener("input", () => {
-        set(state.draft, field.path, input.value);
+        set(state.config, field.path, field.type === "htmlarea" ? sanitiseHtml(input.value) : input.value);
         markDirty();
       });
       break;
@@ -731,7 +856,7 @@ function renderField(field) {
         </select>`);
       const input = $("[data-setting]", el);
       input.addEventListener("change", () => {
-        set(state.draft, field.path, field.numeric ? Number(input.value) : input.value);
+        set(state.config, field.path, field.numeric ? Number(input.value) : input.value);
         markDirty();
         if (field.numeric) $$("[data-state]").forEach(node => node.closest(".setting")?._repaint?.());
         renderLiveTheme();
@@ -748,7 +873,7 @@ function renderField(field) {
       const input = $("[data-setting]", el);
       const out = $("[data-setting-out]", el);
       input.addEventListener("input", () => {
-        set(state.draft, field.path, Number(input.value));
+        set(state.config, field.path, Number(input.value));
         out.textContent = `${input.value}${field.suffix || ""}`;
         markDirty();
         renderLiveTheme();
@@ -772,16 +897,16 @@ function renderField(field) {
         </div>`;
       const input = $("[data-setting]", el);
       input.addEventListener("change", () => {
-        set(state.draft, field.path, input.checked);
+        set(state.config, field.path, input.checked);
         markDirty();
       });
       break;
     }
 
     case "image":
-      el.appendChild(imageField(field.label, field.note, value, (next) => {
-        set(state.draft, field.path, next);
-        markDirty();
+      el.appendChild(imageField(field.label, field.note, value, {
+        onReplace: (next, previous) => replaceAsset(previous, () => set(state.config, field.path, next)),
+        onClear: (previous) => clearAsset(previous, () => set(state.config, field.path, ""))
       }));
       break;
 
@@ -852,25 +977,25 @@ function sanitise(value, allowMarkup) {
     .replace(/javascript:/gi, "");
 }
 
-function imageField(label, note, value, onPick) {
+function imageField(label, note, value, { onReplace, onClear }) {
   const el = document.createElement("div");
   el.className = "setting";
   el.innerHTML = `
     ${label ? `<label class="setting-label">${escapeHtml(label)}</label>` : ""}
     <div class="setting-control">
       <div class="image-field">
-        <div class="image-thumb" data-thumb>
-          ${value ? `<img src="${escapeHtml(value)}" alt="">` : '<span class="image-empty">None</span>'}
-        </div>
+        <div class="image-thumb" data-thumb></div>
         <div class="image-actions">
-          <button class="btn is-small" type="button" data-choose>${value ? "Replace" : "Choose"}</button>
-          <button class="btn is-small is-danger" type="button" data-clear ${value ? "" : "hidden"}>Remove</button>
-          <code class="image-path" data-path>${escapeHtml(value || "")}</code>
+          <button class="btn is-small" type="button" data-choose></button>
+          <button class="btn is-small is-danger" type="button" data-clear>Remove</button>
+          <code class="image-path" data-path></code>
+          <p class="setting-note" data-field-status role="status" aria-live="polite" style="flex-basis:100%"></p>
         </div>
       </div>
     </div>
     ${note ? `<p class="setting-note">${escapeHtml(note)}</p>` : ""}`;
 
+  const statusEl = $("[data-field-status]", el);
   const paint = (next) => {
     $("[data-thumb]", el).innerHTML = next
       ? `<img src="${escapeHtml(next)}" alt="">`
@@ -879,19 +1004,40 @@ function imageField(label, note, value, onPick) {
     $("[data-clear]", el).hidden = !next;
     $("[data-path]", el).textContent = next || "";
   };
+  const busy = (on, text = "") => {
+    $$("button", el).forEach(b => { b.disabled = on; });
+    statusEl.textContent = text;
+  };
+  paint(value);
 
   $("[data-choose]", el).addEventListener("click", async () => {
     const next = await pickImage(value);
-    if (next === null) return;
-    value = next;
-    paint(next);
-    onPick(next);
+    if (next === null || next === value) return;
+    const previous = value;
+    busy(true, "Saving…");
+    try {
+      const released = await onReplace(next, previous);
+      value = next;
+      paint(next);
+      busy(false, released?.destroyed ? "Saved. The old file was deleted from Cloudinary." : "Saved.");
+    } catch (err) {
+      console.error(err);
+      busy(false, `Not saved: ${err.message}`);
+    }
   });
 
-  $("[data-clear]", el).addEventListener("click", () => {
-    value = "";
-    paint("");
-    onPick("");
+  $("[data-clear]", el).addEventListener("click", async () => {
+    const previous = value;
+    busy(true, "Removing…");
+    try {
+      await onClear(previous);
+      value = "";
+      paint("");
+      busy(false, "Removed.");
+    } catch (err) {
+      console.error(err);
+      busy(false, `Not removed: ${err.message}`);
+    }
   });
 
   return el;
@@ -915,9 +1061,9 @@ function mediaField(field) {
     </div>`;
 
   const paint = () => {
-    const url = get(state.draft, field.urlPath) || "";
-    const type = get(state.draft, field.typePath) || "";
-    const poster = get(state.draft, field.posterPath) || "";
+    const url = get(state.config, field.urlPath) || "";
+    const type = get(state.config, field.typePath) || "";
+    const poster = get(state.config, field.posterPath) || "";
 
     const thumb = $("[data-thumb]", el);
     const note = $("[data-media-note]", el);
@@ -932,7 +1078,7 @@ function mediaField(field) {
         ? `Embedded from ${parsed.provider}. Costs nothing to serve, and carries their player.`
         : "This link is not a YouTube or Vimeo address, so nothing will be shown.";
     } else if (type === "video") {
-      const duration = Number(field.durationPath ? get(state.draft, field.durationPath) : 0) || 0;
+      const duration = Number(field.durationPath ? get(state.config, field.durationPath) : 0) || 0;
       const trimmed = duration > VIDEO_TRIM_SECONDS;
       thumb.innerHTML = `<img src="${escapeHtml(poster || posterFromVideo(url))}" alt="">`;
       note.textContent = trimmed
@@ -949,23 +1095,37 @@ function mediaField(field) {
   };
 
   const write = (url, type, poster, duration = null) => {
-    set(state.draft, field.urlPath, url);
-    set(state.draft, field.typePath, type);
-    set(state.draft, field.posterPath, poster);
-    set(state.draft, "story.mediaDuration", duration);
-    paint();
-    markDirty();
+    set(state.config, field.urlPath, url);
+    set(state.config, field.typePath, type);
+    set(state.config, field.posterPath, poster);
+    set(state.config, field.durationPath, duration);
   };
+  const statusEl = $("[data-media-note]", el);
 
   $("[data-choose]", el).addEventListener("click", async () => {
-    const choice = await pickMedia(get(state.draft, field.urlPath) || "", {
-      allow: ["image", "video", "embed"]
-    });
-    if (choice === null) return;
-    write(choice.url, choice.url ? choice.type : "", choice.poster || "", choice.duration ?? null);
+    const previous = get(state.config, field.urlPath) || "";
+    const choice = await pickMedia(previous, { allow: ["image", "video", "embed"] });
+    if (choice === null || !choice.url) return;
+    try {
+      const released = await replaceAsset(previous, () => write(choice.url, choice.type, choice.poster || "", choice.duration ?? null));
+      paint();
+      if (released?.destroyed) statusEl.textContent += " The previous file was deleted from Cloudinary.";
+    } catch (err) {
+      console.error(err);
+      paint();
+      statusEl.textContent = `Not saved: ${err.message}`;
+    }
   });
 
-  $("[data-clear]", el).addEventListener("click", () => write("", "", "", null));
+  $("[data-clear]", el).addEventListener("click", async () => {
+    try {
+      await clearAsset(get(state.config, field.urlPath) || "", () => write("", "", "", null));
+      paint();
+    } catch (err) {
+      console.error(err);
+      statusEl.textContent = `Not removed: ${err.message}`;
+    }
+  });
 
   paint();
   return el;
@@ -981,12 +1141,13 @@ function tracksField(field) {
     <div class="setting-control"><div class="track-list" data-list></div></div>`;
 
   const host = $("[data-list]", el);
-  const read = () => (get(state.draft, field.path) || []).slice();
-  const write = (tracks) => { set(state.draft, field.path, tracks); markDirty(); };
+  const read = () => (get(state.config, field.path) || []).slice();
+  const write = (tracks) => { set(state.config, field.path, tracks); markDirty(); };
+  const commitTracks = (tracks) => { set(state.config, field.path, tracks); };
 
   const paint = () => {
     const tracks = read();
-    const volume = Math.min(1, Math.max(0, (Number(get(state.draft, "sound.volume")) || 30) / 100));
+    const volume = Math.min(1, Math.max(0, (Number(get(state.config, "sound.volume")) || 30) / 100));
 
     host.innerHTML = tracks.map((track, i) => `
       <div class="track-row">
@@ -1029,24 +1190,48 @@ function tracksField(field) {
     if (!button) return;
     const tracks = read();
 
-    if (button.dataset.add !== undefined) {
-      if (tracks.length >= MAX_TRACKS) return;
-      const choice = await pickMedia("", { allow: ["audio"] });
-      if (!choice?.url) return;
-      tracks.push({ url: choice.url, title: choice.title || titleFromFilename(choice.url.split("/").pop()) });
-    } else if (button.dataset.swap !== undefined) {
-      const i = Number(button.dataset.swap);
-      const choice = await pickMedia(tracks[i].url, { allow: ["audio"] });
-      if (!choice?.url) return;
-      tracks[i] = { url: choice.url, title: choice.title || tracks[i].title || titleFromFilename(choice.url.split("/").pop()) };
-    } else if (button.dataset.up !== undefined) {
+    try {
+      if (button.dataset.add !== undefined) {
+        if (tracks.length >= MAX_TRACKS) return;
+        const choice = await pickMedia("", { allow: ["audio"] });
+        if (!choice?.url) return;
+        tracks.push({ url: choice.url, title: choice.title || titleFromFilename(choice.url.split("/").pop()) });
+        commitTracks(tracks);
+        await flushSave();
+        paint();
+        return;
+      }
+      if (button.dataset.swap !== undefined) {
+        const i = Number(button.dataset.swap);
+        const previous = tracks[i].url;
+        const choice = await pickMedia(previous, { allow: ["audio"] });
+        if (!choice?.url) return;
+        tracks[i] = { url: choice.url, title: choice.title || tracks[i].title || titleFromFilename(choice.url.split("/").pop()) };
+        await replaceAsset(previous, () => commitTracks(tracks));
+        paint();
+        return;
+      }
+      if (button.dataset.remove !== undefined) {
+        const i = Number(button.dataset.remove);
+        const previous = tracks[i].url;
+        tracks.splice(i, 1);
+        await clearAsset(previous, () => commitTracks(tracks));
+        paint();
+        return;
+      }
+    } catch (err) {
+      console.error(err);
+      toast(err.message, "error");
+      paint();
+      return;
+    }
+
+    if (button.dataset.up !== undefined) {
       const i = Number(button.dataset.up);
       [tracks[i - 1], tracks[i]] = [tracks[i], tracks[i - 1]];
     } else if (button.dataset.down !== undefined) {
       const i = Number(button.dataset.down);
       [tracks[i + 1], tracks[i]] = [tracks[i], tracks[i + 1]];
-    } else if (button.dataset.remove !== undefined) {
-      tracks.splice(Number(button.dataset.remove), 1);
     } else {
       return;
     }
@@ -1073,7 +1258,7 @@ function postField() {
     </div>`;
 
   const paint = () => {
-    const update = state.draft.update || {};
+    const update = state.config.update || {};
     const info = updateState(update);
     const stateEl = $("[data-state]", el);
     const postBtn = $("[data-post]", el);
@@ -1114,24 +1299,18 @@ function postField() {
   };
 
   $("[data-post]", el).addEventListener("click", () => {
-    const hours = Number(state.draft.update?.durationHours) || 0;
+    const hours = Number(state.config.update?.durationHours) || 0;
     const label = UPDATE_DURATIONS.find(d => d.hours === hours)?.label || `${hours} hours`;
-    const pending = unpublishedCount();
-    const others = Math.max(0, pending - 1);
 
     modal({
       title: "Post this update?",
       body: `It goes to the top of the homepage now, and
-             ${hours ? `comes down by itself after <b>${escapeHtml(label)}</b>` : "<b>stays until you take it down</b>"}.
-             ${others ? `<br><br>This publishes the site, so <b>${others} other unpublished change${others === 1 ? "" : "s"}</b> will go live at the same time.` : ""}`,
+             ${hours ? `comes down by itself after <b>${escapeHtml(label)}</b>` : "<b>stays until you take it down</b>"}.`,
       confirmLabel: "Post it",
       onConfirm: async () => {
-        set(state.draft, "update.enabled", true);
-        set(state.draft, "update.postedAt", new Date().toISOString());
-        clearTimeout(state.saveTimer);
-        await saveDraft(state.draft);
-        state.published = await publishDraft();
-        state.dirty = false;
+        set(state.config, "update.enabled", true);
+        set(state.config, "update.postedAt", new Date().toISOString());
+        await flushSave();
         renderBody();
         toast("Posted — it's at the top of the homepage.", "ok");
       }
@@ -1145,11 +1324,8 @@ function postField() {
       confirmLabel: "Take it down",
       danger: true,
       onConfirm: async () => {
-        set(state.draft, "update.enabled", false);
-        clearTimeout(state.saveTimer);
-        await saveDraft(state.draft);
-        state.published = await publishDraft();
-        state.dirty = false;
+        set(state.config, "update.enabled", false);
+        await flushSave();
         renderBody();
         toast("Taken down.", "ok");
       }
@@ -1172,7 +1348,7 @@ function imageListField(field) {
   const host = $("[data-list]", el);
 
   const paint = () => {
-    const items = get(state.draft, field.path) || [];
+    const items = get(state.config, field.path) || [];
     host.innerHTML = items.map((src, i) => `
       <div class="image-list-item">
         <img src="${escapeHtml(src)}" alt="">
@@ -1185,7 +1361,7 @@ function imageListField(field) {
   };
 
   host.addEventListener("click", async (e) => {
-    const items = (get(state.draft, field.path) || []).slice();
+    const items = (get(state.config, field.path) || []).slice();
     const button = e.target.closest("button");
     if (!button) return;
 
@@ -1193,19 +1369,33 @@ function imageListField(field) {
       const next = await pickImage("");
       if (!next) return;
       items.push(next);
-    } else if (button.dataset.up !== undefined) {
+      set(state.config, field.path, items);
+      try { await flushSave(); }
+      catch (err) { console.error(err); }
+      paint();
+      return;
+    }
+    if (button.dataset.remove !== undefined) {
+      const i = Number(button.dataset.remove);
+      const previous = items[i];
+      items.splice(i, 1);
+      button.disabled = true;
+      try { await clearAsset(previous, () => set(state.config, field.path, items)); }
+      catch (err) { console.error(err); button.disabled = false; return; }
+      paint();
+      return;
+    }
+    if (button.dataset.up !== undefined) {
       const i = Number(button.dataset.up);
       [items[i - 1], items[i]] = [items[i], items[i - 1]];
     } else if (button.dataset.down !== undefined) {
       const i = Number(button.dataset.down);
       [items[i + 1], items[i]] = [items[i], items[i + 1]];
-    } else if (button.dataset.remove !== undefined) {
-      items.splice(Number(button.dataset.remove), 1);
     } else {
       return;
     }
 
-    set(state.draft, field.path, items);
+    set(state.config, field.path, items);
     paint();
     markDirty();
   });
@@ -1225,7 +1415,7 @@ function listField(field) {
   const host = $("[data-list]", el);
 
   const paint = () => {
-    const items = get(state.draft, field.path) || [];
+    const items = get(state.config, field.path) || [];
     host.innerHTML = items.map((item, i) => `
       <div class="repeat-row">
         <div class="repeat-fields">
@@ -1247,16 +1437,16 @@ function listField(field) {
   host.addEventListener("input", (e) => {
     const input = e.target.closest("input[data-key]");
     if (!input) return;
-    const items = (get(state.draft, field.path) || []).slice();
+    const items = (get(state.config, field.path) || []).slice();
     items[Number(input.dataset.i)] = { ...items[Number(input.dataset.i)], [input.dataset.key]: input.value };
-    set(state.draft, field.path, items);
+    set(state.config, field.path, items);
     markDirty();
   });
 
   host.addEventListener("click", (e) => {
     const button = e.target.closest("button");
     if (!button) return;
-    const items = (get(state.draft, field.path) || []).slice();
+    const items = (get(state.config, field.path) || []).slice();
 
     if (button.dataset.add !== undefined) items.push({ ...(field.defaultItem || {}) });
     else if (button.dataset.up !== undefined) {
@@ -1268,7 +1458,7 @@ function listField(field) {
     } else if (button.dataset.remove !== undefined) items.splice(Number(button.dataset.remove), 1);
     else return;
 
-    set(state.draft, field.path, items);
+    set(state.config, field.path, items);
     paint();
     markDirty();
   });
@@ -1292,8 +1482,8 @@ function blocksField(field) {
   el.innerHTML = '<div class="setting-control"><div class="block-list" data-list></div></div>';
   const host = $("[data-list]", el);
 
-  const read = () => (get(state.draft, field.path) || []).slice();
-  const write = (blocks) => { set(state.draft, field.path, blocks); markDirty(); };
+  const read = () => (get(state.config, field.path) || []).slice();
+  const write = (blocks) => { set(state.config, field.path, blocks); markDirty(); };
 
   const paint = () => {
     const blocks = read();
@@ -1402,7 +1592,7 @@ function blocksField(field) {
 }
 
 
-function coversField(field) {
+function coversField() {
   const el = document.createElement("div");
   el.className = "setting is-full";
   el.innerHTML = '<div class="setting-control"><div class="cover-grid" data-list></div></div>';
@@ -1410,20 +1600,14 @@ function coversField(field) {
 
   const paint = () => {
     host.innerHTML = "";
-    const categories = state.categories.length
-      ? state.categories
-      : Object.keys(CATEGORY_BY_SLUG).map(slug => ({ slug, name: CATEGORY_BY_SLUG[slug].label }));
-
-    if (!categories.length) {
+    if (!state.categories.length) {
       host.innerHTML = '<p class="empty-note">No collections yet.</p>';
       return;
     }
-
-    categories.forEach((category) => {
-      const path = `${field.path}.${category.slug}`;
-      host.appendChild(imageField(category.name || category.slug, "", get(state.draft, path) || "", (next) => {
-        set(state.draft, path, next);
-        markDirty();
+    state.categories.forEach((category) => {
+      host.appendChild(imageField(category.name || category.slug, "", category.cover || "", {
+        onReplace: (next) => setCategoryCover(category.id, next).then(r => r.released),
+        onClear: () => setCategoryCover(category.id, "")
       }));
     });
   };
@@ -1435,7 +1619,7 @@ function coversField(field) {
 
 
 function renderLiveTheme() {
-  const palette = derivePalette(state.draft.theme);
+  const palette = derivePalette(state.config.theme);
 
   $$("[data-swatches]").forEach((host) => {
     const shown = [
@@ -1458,7 +1642,7 @@ function renderLiveTheme() {
   });
 
   $$("[data-contrast]").forEach((host) => {
-    const report = contrastReport(state.draft.theme);
+    const report = contrastReport(state.config.theme);
     host.innerHTML = report.map(row => `
       <div class="contrast-row is-${row.level}">
         <span class="contrast-chip" style="background:${row.bg};color:${row.fg}">Aa</span>
@@ -1467,35 +1651,13 @@ function renderLiveTheme() {
         <span class="contrast-verdict">${row.level === "pass" ? "Readable" : row.level === "warn" ? "Marginal" : "Too low"}</span>
       </div>`).join("") +
       (report.some(r => r.level === "fail")
-        ? '<p class="contrast-block">Publishing is blocked while anything here is too low to read.</p>'
+        ? '<p class="contrast-block">Saving is blocked while anything here is too low to read.</p>'
         : "");
   });
 
   renderStatus();
 }
 
-
-function unpublishedCount() {
-  if (!state.published) return 0;
-  let count = 0;
-  const walk = (a, b) => {
-    const keys = new Set([...Object.keys(a || {}), ...Object.keys(b || {})]);
-    keys.forEach((key) => {
-      if (key === "updatedAt" || key === "publishedAt") return;
-      const x = a?.[key];
-      const y = b?.[key];
-      if (x && y && typeof x === "object" && typeof y === "object" && !Array.isArray(x) && !Array.isArray(y)) {
-        walk(x, y);
-      } else if (JSON.stringify(x) !== JSON.stringify(y)) {
-        count++;
-      }
-    });
-  };
-  walk(state.draft, state.published);
-  return count;
-}
-
-const DRAFT_VIEWS = new Set(["settings", "preview"]);
 
 export function setActiveView(view) {
   state.view = view;
@@ -1504,36 +1666,23 @@ export function setActiveView(view) {
 
 function renderStatus() {
   const host = $("#settings-status");
-  if (!host || !state.draft) return;
+  if (!host || !state.config) return;
 
-  const pending = unpublishedCount();
-  const blocked = hasBlockingContrastFailure(state.draft.theme);
-  const waiting = pending > 0;
-
-  host.textContent = state.publishing
-    ? "Publishing…"
-    : state.dirty && pending
-      ? `${pending} change${pending === 1 ? "" : "s"} ${state.saveError ? "could not be saved — try Publish" : state.publishError ? "could not be published — try again" : "saving…"}`
-    : pending
-      ? `${pending} change${pending === 1 ? "" : "s"} not live yet — press Publish`
-      : "Everything is published";
-  host.className = `settings-status${pending ? " is-pending" : " is-clean"}`;
+  host.textContent = state.saveError
+    ? state.saveError
+    : state.saving || state.dirty
+      ? "Saving…"
+      : state.savedAt
+        ? "Saved — live on the site"
+        : "All changes save straight to the live site";
+  host.className = `settings-status${state.saveError ? " is-error" : state.saving || state.dirty ? " is-pending" : " is-clean"}`;
 
   const bar = $("#publish-bar");
   if (bar) {
-    const showing = waiting || DRAFT_VIEWS.has(state.view);
+    const showing = state.view === "settings";
     bar.hidden = !showing;
-    bar.classList.toggle("is-pending", pending > 0);
     document.body.classList.toggle("has-publish-bar", showing);
   }
-
-  const publish = $("#settings-publish");
-  if (publish) {
-    publish.disabled = blocked || !waiting || state.publishing;
-    publish.title = blocked ? "Fix the readability warnings first." : "";
-  }
-  const discard = $("#settings-discard");
-  if (discard) discard.disabled = !waiting;
 }
 
 
@@ -1580,15 +1729,25 @@ function renderBody() {
   renderLiveTheme();
 }
 
-async function loadDrafts() {
-  const [draft, published] = await Promise.all([fetchConfig("draft"), fetchConfig("published")]);
-  state.published = published;
-
-  const draftIsEmpty = JSON.stringify(draft) === JSON.stringify(DEFAULT_CONFIG)
-    && JSON.stringify(published) !== JSON.stringify(DEFAULT_CONFIG);
-
-  state.draft = mergeConfig(draftIsEmpty ? published : draft);
-  if (draftIsEmpty) await saveDraft(state.draft);
+function loadConfig() {
+  return new Promise((resolve, reject) => {
+    let first = true;
+    watchConfig((config) => {
+      if (first) {
+        first = false;
+        state.config = config;
+        resolve();
+        return;
+      }
+      if (state.dirty || state.saving) return;
+      if (JSON.stringify(config) === JSON.stringify(mergeConfig(state.config))) return;
+      state.config = config;
+      if (state.mounted && $("#settings-body") && !document.activeElement?.closest?.("#settings-body")) renderBody();
+    }, (err) => {
+      if (first) reject(err);
+      else toast(`Live settings stopped updating: ${err.message}`, "error");
+    });
+  });
 }
 
 export async function initSettings({ onChange } = {}) {
@@ -1596,7 +1755,7 @@ export async function initSettings({ onChange } = {}) {
   state.mounted = true;
   state.onChange = onChange;
   state.readyPromise = (async () => {
-    await loadDrafts();
+    await loadConfig();
     const urlTab = new URLSearchParams(location.search).get("tab");
     if (TABS.some(tab => tab.id === urlTab)) state.tab = urlTab;
     renderTabs();
@@ -1608,69 +1767,20 @@ export async function initSettings({ onChange } = {}) {
       $$(`[data-tab]`, $("#settings-tabs")).forEach(button => button.classList.toggle("is-active", button.dataset.tab === tab));
       renderBody();
     });
-    watchMedia((items) => { state.media = items; }, () => { state.media = []; });
-    $("#settings-publish").addEventListener("click", async () => {
-      try { await publishSettingsChanges(); }
-      catch (err) { console.error(err); toast(err.message || "Could not publish. Your changes are still waiting.", "error"); }
-    });
-    $("#settings-discard").addEventListener("click", () => {
-      modal({
-        title: "Throw away the draft?",
-        body: "Every unpublished change goes back to what is currently live. This cannot be undone.",
-        confirmLabel: "Discard changes",
-        danger: true,
-        onConfirm: async () => {
-          clearTimeout(state.saveTimer);
-          state.draft = await discardDraft();
-          state.published = mergeConfig(state.draft);
-          state.dirty = false;
-          state.saveError = false;
-          state.publishError = false;
-          renderBody();
-          toast("Draft reset to the live site.", "ok");
-          state.onChange?.(state.draft);
-        }
-      });
+    watchMedia((items) => { state.media = items; }, (err) => {
+      state.media = [];
+      toast(`The media library could not be loaded: ${err.message}`, "error");
     });
   })();
   return state.readyPromise;
 }
 
-export async function hasUnpublishedChanges() {
-  if (!state.mounted) await initSettings();
-  else await state.readyPromise;
-  return unpublishedCount() > 0;
+export function hasPendingSave() {
+  return state.dirty || state.saving || !!state.saveTimer;
 }
 
-export async function publishSettingsChanges() {
-  if (!state.mounted) await initSettings();
-  else await state.readyPromise;
-  if (!unpublishedCount()) return;
-  const button = $("#settings-publish");
-  state.publishing = true;
-  if (button) button.textContent = "Publishing...";
-  renderStatus();
-  clearTimeout(state.saveTimer);
-  try {
-    await saveDraft(state.draft);
-    state.dirty = false;
-    state.published = await publishDraft();
-    state.draft = mergeConfig(state.published);
-    state.saveError = false;
-    state.publishError = false;
-    toast("Published successfully", "ok");
-    renderStatus();
-    state.onChange?.(state.draft);
-  } catch (err) {
-    state.dirty = true;
-    state.publishError = true;
-    renderStatus();
-    throw err;
-  } finally {
-    state.publishing = false;
-    if (button) button.textContent = "Publish changes";
-    renderStatus();
-  }
+export function settingsSnapshot() {
+  return state.config ? mergeConfig(state.config) : null;
 }
 
 const TAB_KEYWORDS = {
@@ -1681,6 +1791,10 @@ const TAB_KEYWORDS = {
   story: "story section narrative",
   about: "about biography bio portrait page",
   gallery: "gallery collections covers index header",
+  comics: "comics reading room stories header",
+  contact: "contact email phone instagram details",
+  seo: "seo share image og twitter description preview",
+  legal: "privacy terms legal 404 not found",
   sound: "music audio playlist songs tracks volume",
   backgrounds: "background wallpaper wallpapers images pages"
 };
@@ -1749,5 +1863,5 @@ export async function openSetting(tabId, groupIndex, fieldIndex) {
 
 export function setSettingsCategories(categories) {
   state.categories = categories;
-  if (state.tab === "gallery" && state.mounted) renderBody();
+  if (state.tab === "gallery" && state.mounted && state.config) renderBody();
 }

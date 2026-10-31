@@ -11,7 +11,8 @@ function decode(bytes, encodingByte) {
   const label = ENCODINGS[encodingByte] || "utf-8";
   try {
     return new TextDecoder(label).decode(bytes).replace(/\0+$/, "").trim();
-  } catch {
+  } catch (err) {
+    console.error(err);
     return new TextDecoder("utf-8").decode(bytes).replace(/\0+$/, "").trim();
   }
 }
@@ -80,7 +81,7 @@ export async function readTrackName(file) {
     if (title && artist) return `${title} — ${artist}`;
     if (title) return title;
   } catch (err) {
-    console.warn("Could not read the tag; using the filename.", err);
+    console.error("Could not read the tag; using the filename.", err);
   }
 
   return fallback;

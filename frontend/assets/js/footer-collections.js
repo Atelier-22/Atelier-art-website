@@ -1,33 +1,33 @@
-import { mergeCategories, categoryHref } from "./site-data.js?v=20261030a";
-import { previewHref, escapeHtml } from "./site-config.js?v=20261017b";
+import { categoryHref } from "./site-data.js?v=20261031a";
+import { escapeHtml } from "./site-config.js?v=20261031a";
+import { watchCategories } from "./data.js?v=20261031a";
 
-let pending = null;
-
-function loadCategories() {
-  pending ||= import("./data.js?v=20261030a")
-    .then(({ fetchCategories }) => fetchCategories("art"))
-    .then(mergeCategories)
-    .catch((err) => {
-      console.warn("Footer collections unavailable.", err);
-      pending = null;
-      return null;
-    });
-  return pending;
-}
+let latest = [];
 
 function links(list) {
   return list.map(c =>
-    `<li><a href="${escapeHtml(previewHref(categoryHref(c)))}">${escapeHtml(c.label)}</a></li>`).join("");
+    `<li><a href="${escapeHtml(categoryHref(c))}">${escapeHtml(c.name)}</a></li>`).join("");
 }
 
-export async function paintFooterCollections() {
-  const categories = await loadCategories();
-  if (!categories) return;
+export function paintFooterCollections() {
   const columns = document.querySelectorAll(".site-footer .footer-col ul");
   if (columns.length < 2) return;
-  const split = Math.ceil(categories.length / 2);
-  columns[0].innerHTML = links(categories.slice(0, split));
-  columns[1].innerHTML = links(categories.slice(split))
-    + `<li><a href="${escapeHtml(previewHref("about.html"))}">About the Artist</a></li>`;
+  const split = Math.ceil(latest.length / 2);
+  columns[0].innerHTML = links(latest.slice(0, split));
+  columns[1].innerHTML = links(latest.slice(split));
   columns[0].closest(".footer-col").hidden = !split;
+  columns[1].closest(".footer-col").hidden = latest.length < 2;
+  document.querySelectorAll("[data-collection-marquee]").forEach((el) => {
+    const names = latest.map(c => c.name).filter(Boolean);
+    el.textContent = names.length ? `${names.join(" · ")} · `.repeat(2) : "";
+    el.closest(".marquee").hidden = !names.length;
+  });
+}
+
+export function startFooterCollections() {
+  watchCategories("art", (items) => {
+    latest = items;
+    paintFooterCollections();
+  });
+  document.addEventListener("alafi:navigated", paintFooterCollections);
 }

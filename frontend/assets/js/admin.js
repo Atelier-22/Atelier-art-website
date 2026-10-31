@@ -1,32 +1,28 @@
-import { watchAuth, isOwner, ownerLogin, ownerLogout, ownerPasswordReset, authReady } from "../../firebase-config.js?v=20261027h";
+import { watchAuth, isOwner, ownerLogin, ownerLogout, ownerPasswordReset, authReady } from "../../firebase-config.js?v=20261031a";
 import {
-  watchCategories, seedDefaultCategories, createCategory, updateCategory,
-  reorderCategories, deleteCategory, restoreDefaultCategories, moveCategoryItems,
-  watchAllArtworks, watchContentDeletions, createArtwork, updateArtwork, deleteArtwork,
-  archivePieceId, saveArchivePiece, setArchiveVisibility, replaceArchiveImage,
-  reorderArchivePieces, moveArchiveToCloudinary, publicIdFromUrl,
-  watchComics, createComic, updateComic, getComicDeletionPlan, deleteComic, reorderComics, BUILTIN_SAMPLE_STORY,
-  watchAllComments, deleteComment, uploadAndRecord, deleteMedia,
-  grantAdminClaim, watchChangeLog, logChange
-} from "./data.js?v=20261030a";
-import { categoryHref, LOCAL_SEEDS, CATEGORY_BY_SLUG } from "./site-data.js?v=20261030a";
+  watchCategories, createCategory, updateCategory, setCategoryCover,
+  reorderCategories, deleteCategory,
+  watchAllArtworks, createArtwork, updateArtwork, deleteArtwork,
+  setArtworkVisibility, replaceArtworkImage, reorderArtworks, sortArtworks,
+  watchComics, createComic, updateComic, deleteComic, reorderComics, setComicVisibility,
+  watchAllComments, deleteComment, uploadAndRecord, destroyAsset,
+  grantAdminClaim, watchChangeLog
+} from "./data.js?v=20261031a";
+import { categoryHref } from "./site-data.js?v=20261031a";
 import {
   $, $$, escapeHtml, relativeTime, toast, modal
-} from "./admin-ui.js?v=20261027e";
+} from "./admin-ui.js?v=20261031a";
 import {
-  initSettings, setSettingsCategories, pickImage, setActiveView,
-  hasUnpublishedChanges, publishSettingsChanges
-} from "./admin-settings.js?v=20261030a";
-import { initPreview, setPreviewCategories, onPreviewShown } from "./admin-preview.js?v=20261027h";
-import { initAdminSearch } from "./admin-search.js?v=20261030a";
+  initSettings, setSettingsCategories, pickImage, setActiveView, hasPendingSave, flushSave
+} from "./admin-settings.js?v=20261031a";
+import { initPreview, setPreviewCategories, onPreviewShown } from "./admin-preview.js?v=20261031a";
+import { initAdminSearch } from "./admin-search.js?v=20261031a";
 
 const state = {
   artCategories: [],
   comicCategories: [],
   artworks: [],
   comics: [],
-  deletedContent: new Set(),
-  deletionSnapshotReady: false,
   comments: [],
   view: ["overview", "artworks", "comics", "categories", "settings", "preview", "maintenance", "engagement", "changelog"].includes(new URLSearchParams(location.search).get("section"))
     ? new URLSearchParams(location.search).get("section") : "overview",
@@ -59,27 +55,6 @@ function restoreSelectionFocus(container, selector, key) {
   input?.focus({ preventScroll: true });
 }
 
-function reportDeleteCleanup(results) {
-  Promise.all(results.map(async result => {
-    let cloud = [];
-    if (result?.cloudinaryCleanup) {
-      const outcome = await Promise.resolve(result.cloudinaryCleanup).catch(err => ({ deleted: false, message: err?.message || "Cloudinary cleanup failed." }));
-      cloud = Array.isArray(outcome) ? outcome : [outcome];
-    }
-    return {
-      cloudFailures: cloud.filter(item => item?.deleted === false).length,
-      warnings: result?.warnings || []
-    };
-  })).then(summaries => {
-    const cloudFailures = summaries.reduce((sum, item) => sum + item.cloudFailures, 0);
-    const warnings = summaries.flatMap(item => item.warnings);
-    if (cloudFailures) {
-      toast(`Removed from your website. ${cloudFailures} image file${cloudFailures === 1 ? " is" : "s are"} still stored in Cloudinary and can be deleted there.`, "error");
-    }
-    if (warnings.length) toast(`Website items were removed. ${warnings[0]}`, "error");
-  });
-}
-
 const DASHBOARD_STATE_KEY = "alafi-admin-dashboard-state-v2";
 
 function saveDashboardState() {
@@ -93,7 +68,7 @@ function saveDashboardState() {
       selectingComicCats: state.selectingComicCats, selectedComicCats: [...state.selectedComicCats],
       selectingComments: state.selectingComments, selectedComments: [...state.selectedComments], scrollY: window.scrollY
     }));
-  } catch { }
+  } catch (err) { console.error("Dashboard state could not be remembered.", err); }
 }
 
 function restoreDashboardState() {
@@ -126,7 +101,7 @@ function restoreDashboardState() {
       } else setTimeout(restoreScroll, 200);
     };
     requestAnimationFrame(() => requestAnimationFrame(restoreScroll));
-  } catch { state.dashboardRestored = true; }
+  } catch (err) { console.error("Dashboard state could not be restored.", err); state.dashboardRestored = true; }
 }
 
 window.addEventListener("scroll", saveDashboardState, { passive: true });
@@ -213,23 +188,35 @@ authReady.then((mode) => {
 });
 
 $("#logout").addEventListener("click", async () => {
-  if (!await hasUnpublishedChanges()) { await ownerLogout(); return; }
-  modal({
-    title: "Unpublished changes",
-    body: "You have unpublished changes. Publish them now?",
-    confirmLabel: "Yes, publish",
-    cancelLabel: "No, log out",
-    onConfirm: async () => { await publishSettingsChanges(); await ownerLogout(); },
-    onCancel: ownerLogout
-  });
+  if (hasPendingSave()) {
+    try { await flushSave(); }
+    catch (err) {
+      console.error(err);
+      toast(`Your last setting did not save: ${err.message}. Still signed in.`, "error");
+      return;
+    }
+  }
+  await ownerLogout();
 });
 
-watchAuth((user) => {
-  if (isOwner(user)) {
+async function hasAdminAccess(user) {
+  if (!user) return false;
+  if (isOwner(user)) return true;
+  try {
+    const token = await user.getIdTokenResult();
+    return token.claims.admin === true;
+  } catch (err) {
+    console.error("Could not read the sign-in claims:", err);
+    return false;
+  }
+}
+
+watchAuth(async (user) => {
+  if (await hasAdminAccess(user)) {
     loginScreen.hidden = true;
     shell.hidden = false;
-    $("#who").textContent = user.email;
-    paintIdentity(user).catch(err => console.warn("Identity panel failed:", err));
+    $("#who").textContent = user.email || user.uid;
+    paintIdentity(user).catch(err => console.error("Identity panel failed:", err));
     if (!state.ready) {
       state.ready = true; boot();
       restoreDashboardState();
@@ -389,11 +376,10 @@ $("#art-thumbs").addEventListener("click", (e) => {
 $("#art-upload-btn").addEventListener("click", async () => {
   if (!artFiles.length || artUploading) return;
   const categorySlug = $("#art-category").value;
-  if (!categorySlug) { toast("Pick a category first.", "error"); return; }
+  if (!categorySlug) { toast("Create a collection first, then pick it here.", "error"); return; }
 
   const bar = $("#art-progress span");
   const btn = $("#art-upload-btn");
-  if (artUploading) return;
   artUploading = true;
   renderArtFiles();
   btn.disabled = true;
@@ -414,31 +400,31 @@ $("#art-upload-btn").addEventListener("click", async () => {
         categorySlug,
         file,
         title,
+        caption: total === 1 ? $("#art-caption").value.trim() : "",
         description: total === 1 ? $("#art-desc").value.trim() : "",
         onStatus: (message) => { $("#art-status").textContent = `${file.name}: ${message}`; },
         onProgress: (p) => { bar.style.width = `${((done + p) / total) * 100}%`; }
       });
+      artFiles = artFiles.filter(queued => queued !== file);
     } catch (err) {
+      console.error(`Upload failed for ${file.name}:`, err);
       failures.push({ file, message: err.message || "Upload failed." });
     }
-    if (!failures.some(item => item.file === file)) artFiles = artFiles.filter(queued => queued !== file);
     done++;
     renderArtFiles();
-    $("#art-status").textContent = done < total ? `Finished ${done} of ${total}. Next: ${batch[done].name}` : `Finished ${done} of ${total}.`;
   }
 
   artUploading = false;
   $("#art-category").disabled = false;
   $("#art-input").disabled = false;
-  if (!failures.length) { $("#art-title").value = ""; $("#art-desc").value = ""; }
+  if (!failures.length) { $("#art-title").value = ""; $("#art-caption").value = ""; $("#art-desc").value = ""; }
   renderArtFiles();
   $("#art-progress").hidden = true;
   bar.style.width = "0%";
 
   if (failures.length) {
     $("#art-status").textContent = `${failures[0].file.name}: ${failures[0].message}. Still queued; retry after fixing the issue.`;
-    toast(`${done - failures.length} uploaded; ${failures.length} still queued.`, "error");
-    console.warn("Artwork upload failures:", failures.map(item => `${item.file.name}: ${item.message}`).join("; "));
+    toast(`${done - failures.length} uploaded; ${failures.length} failed: ${failures[0].message}`, "error");
   } else {
     $("#art-status").textContent = `${done} artwork${done === 1 ? "" : "s"} published.`;
     toast(`${done} artwork${done === 1 ? "" : "s"} published.`, "ok");
@@ -446,108 +432,27 @@ $("#art-upload-btn").addEventListener("click", async () => {
 });
 
 function collectionSlugs() {
-  const fromCategories = state.artCategories
-    .filter(c => c.slug !== "comics")
-    .map(c => c.slug);
+  const fromCategories = state.artCategories.map(c => c.slug);
   const orphaned = state.artworks
-    .filter(a => a.uploaded && a.category && a.category !== "comics")
+    .filter(a => a.uploaded && a.category && !fromCategories.includes(a.category))
     .map(a => a.category);
   return Array.from(new Set([...fromCategories, ...orphaned]));
 }
 
-function archivePlaceholder(slug, i) {
-  const label = CATEGORY_BY_SLUG[slug]?.label || categoryName("art", slug);
-  return `${label.replace(/s$/, "")} No. ${String(i + 1).padStart(2, "0")}`;
-}
-
-function archiveSeeded(slug) {
-  return state.artworks.some(a => a.archive && a.category === slug && a.imageUrl);
-}
-
-function archivePieces(slug) {
-  if (!state.deletionSnapshotReady) return [];
-  if (archiveSeeded(slug)) {
-    const records = state.artworks
-      .filter(a => a.archive && a.category === slug && a.imageUrl)
-      .filter(a => !state.deletedContent.has(`art:${a.id}`))
-      .sort((a, b) => a.order - b.order)
-      .filter(record => !state.deletedContent.has(`art:${record.id}`))
-      .map((record, position) => {
-        const index = Number(String(record.id).split("-").pop()) - 1;
-        return {
-          id: record.id,
-          slug,
-          kind: "archive",
-          position,
-          imageUrl: record.imageUrl,
-          title: record.hasTitle ? record.title : "",
-          placeholder: archivePlaceholder(slug, Number.isFinite(index) ? index : position),
-          description: record.description,
-          likes: record.likes,
-          hidden: record.hidden,
-          onCloudinary: /^https?:/i.test(record.imageUrl),
-          managed: true,
-          deletable: true
-        };
-      });
-    const seen = new Set(records.map(item => item.id));
-    const missingSeeds = (LOCAL_SEEDS[slug] || []).map((src, i) => {
-      const id = archivePieceId(slug, i);
-      if (seen.has(id) || state.deletedContent.has(`art:${id}`)) return null;
-      return {
-        id, slug, kind: "archive", position: i, imageUrl: src, title: "",
-        placeholder: archivePlaceholder(slug, i), description: "", likes: 0,
-        hidden: false, onCloudinary: false, managed: false, deletable: true
-      };
-    }).filter(Boolean);
-    return [...records, ...missingSeeds];
-  }
-
-  return (LOCAL_SEEDS[slug] || []).map((src, i) => {
-    const id = archivePieceId(slug, i);
-    if (state.deletedContent.has(`art:${id}`)) return null;
-    const saved = state.artworks.find(a => a.id === id);
-    return {
-      id, slug, kind: "archive", position: i, imageUrl: src,
-      title: saved?.hasTitle ? saved.title : "",
-      placeholder: archivePlaceholder(slug, i),
-      description: saved?.description || "",
-      likes: saved?.likes || 0,
-      hidden: false,
-      onCloudinary: false,
-      managed: false,
-      deletable: true
-    };
-  }).filter(Boolean);
-}
-
-function uploadedPieces(slug) {
-  return state.artworks
-    .filter(a => a.uploaded && a.imageUrl && a.category === slug)
-    .sort((a, b) => b.createdAt - a.createdAt)
-    .map(a => ({
-      id: a.id,
-      slug,
-      kind: "upload",
-      imageUrl: a.imageUrl,
-      title: a.title,
-      placeholder: a.title,
-      description: a.description,
-      likes: a.likes,
-      hidden: a.hidden,
-      onCloudinary: /^https?:/i.test(a.imageUrl),
-      managed: true
-    }));
-}
-
 function collectionPieces(slug) {
-  return [...uploadedPieces(slug), ...archivePieces(slug)];
+  return sortArtworks(state.artworks.filter(a => a.uploaded && a.category === slug))
+    .map((a, position) => ({ ...a, slug, position }));
 }
 
 function activeCollection() {
   const slugs = collectionSlugs();
   if (!slugs.includes(state.collection)) state.collection = slugs[0] || "";
   return state.collection;
+}
+
+function matchesSearch(piece) {
+  const term = state.collectionSearch.trim().toLowerCase();
+  return !term || [piece.title, piece.caption, piece.description].some(v => (v || "").toLowerCase().includes(term));
 }
 
 function renderCollectionChips() {
@@ -566,78 +471,91 @@ function renderCollectionChips() {
   }).join("");
 }
 
+async function runAction(button, work, success) {
+  if (button) button.disabled = true;
+  try {
+    const message = await work();
+    toast(message || success, "ok");
+  } catch (err) {
+    console.error(err);
+    toast(err.message || "That did not work.", "error");
+  } finally {
+    if (button) button.disabled = false;
+  }
+}
+
+function pickFile(accept = "image/*") {
+  return new Promise((resolve) => {
+    const input = document.createElement("input");
+    input.type = "file";
+    input.accept = accept;
+    input.addEventListener("change", () => resolve(input.files[0] || null), { once: true });
+    input.click();
+  });
+}
+
+function releaseNote(released) {
+  if (!released) return "";
+  if (released.destroyed) return " The old file was deleted from Cloudinary.";
+  if (released.reason === "in-use") return " The old file is still used elsewhere, so it was kept.";
+  return "";
+}
+
 function renderCollection() {
   const host = $("#collection-grid");
   if (!host) return;
 
   const slug = activeCollection();
-  const term = state.collectionSearch.trim().toLowerCase();
   const all = collectionPieces(slug);
-  const seeded = !all.some(p => p.kind === "archive" && !p.managed);
-  const archiveCount = archivePieces(slug).length;
-
-  const list = all.filter(p =>
-    !term || p.title.toLowerCase().includes(term) || p.placeholder.toLowerCase().includes(term));
-
+  const list = all.filter(matchesSearch);
   const hidden = all.filter(p => p.hidden).length;
-  const onCloud = all.filter(p => p.onCloudinary).length;
 
   $("#collection-count").textContent = all.length
-    ? `${all.length} piece${all.length === 1 ? "" : "s"}`
-      + (hidden ? ` · ${hidden} hidden` : "")
-      + ` · ${onCloud} of ${all.length} on Cloudinary`
+    ? `${all.length} piece${all.length === 1 ? "" : "s"}${hidden ? ` · ${hidden} hidden` : ""}`
     : "nothing here yet";
 
   const viewLink = $("#collection-view");
-  if (viewLink) viewLink.href = categoryHref({ slug });
-
-  const notice = $("#archive-notice");
-  if (notice) notice.hidden = seeded;
-  $("#archive-migrate").hidden = !seeded || !all.length || onCloud === all.length;
+  if (viewLink) {
+    viewLink.href = slug ? categoryHref({ slug }) : "gallery.html";
+    viewLink.hidden = !slug;
+  }
 
   host.innerHTML = list.length
     ? ""
-    : `<p class="empty-note">${all.length ? "Nothing matches that search." : "This collection is empty. Upload something above."}</p>`;
+    : `<p class="empty-note">${all.length ? "Nothing matches that search." : slug ? "This collection is empty. Upload something above." : "Create a collection under Collections first."}</p>`;
 
   list.forEach((piece) => {
     const el = document.createElement("article");
     el.className = `m-card${piece.hidden ? " is-hidden-piece" : ""}`;
     el.dataset.selectionKey = piece.id;
-    if (state.selectingArt) el.classList.add("is-selection-mode");
-    if (state.selectingArt && piece.deletable) el.classList.add("is-selectable", ...(state.selectedArt.has(piece.id) ? ["is-selected"] : []));
-    const shown = piece.title || piece.placeholder;
+    el.dataset.artId = piece.id;
+    if (state.selectingArt) el.classList.add("is-selection-mode", "is-selectable", ...(state.selectedArt.has(piece.id) ? ["is-selected"] : []));
+    const shown = piece.title || "Untitled";
 
     el.innerHTML = `
       ${piece.likes ? `<span class="m-badge">${piece.likes} &#9829;</span>` : ""}
       <img src="${escapeHtml(piece.imageUrl)}" alt="${escapeHtml(shown)}" loading="lazy">
       <div class="m-card-body">
         <h4>${escapeHtml(shown)}</h4>
-        <p>
-          ${piece.kind === "upload" ? "Uploaded" : piece.title ? "Named" : "Unnamed"}
-          ${piece.hidden ? ' · <b style="color:var(--danger)">Hidden</b>' : ""}
-          ${piece.onCloudinary ? " · Cloudinary" : ""}
-        </p>
+        <p>${piece.caption ? escapeHtml(piece.caption) : ""}${piece.hidden ? ' <b style="color:var(--danger)">Hidden</b>' : ""}</p>
       </div>
       <div class="m-card-actions">
-        ${state.selectingArt && piece.deletable ? `<label class="bulk-select"><input type="checkbox" data-select-piece ${state.selectedArt.has(piece.id) ? "checked" : ""}> Select</label>` : ""}
-        <button class="btn is-small" data-edit>${piece.kind === "upload" || piece.title ? "Edit" : "Add a title"}</button>
-        ${piece.managed ? `
+        ${state.selectingArt ? `<label class="bulk-select"><input type="checkbox" data-select-piece ${state.selectedArt.has(piece.id) ? "checked" : ""}> Select</label>` : `
+          <button class="btn is-small" data-edit>Edit</button>
           <button class="btn is-small" data-replace>Replace</button>
-          ${piece.kind === "archive" ? `
-            <button class="btn is-small" data-up ${piece.position === 0 ? "disabled" : ""} aria-label="Move earlier">&#9650;</button>
-            <button class="btn is-small" data-down ${piece.position === archiveCount - 1 ? "disabled" : ""} aria-label="Move later">&#9660;</button>` : ""}
+          <button class="btn is-small" data-up ${piece.position === 0 ? "disabled" : ""} aria-label="Move earlier">&#9650;</button>
+          <button class="btn is-small" data-down ${piece.position === all.length - 1 ? "disabled" : ""} aria-label="Move later">&#9660;</button>
           <button class="btn is-small" data-visible>${piece.hidden ? "Show" : "Hide"}</button>
-          ${state.selectingArt ? "" : '<button class="btn is-small is-danger" data-del>Select to delete</button>'}` : ""}
+          <button class="btn is-small is-danger" data-del>Select to delete</button>`}
       </div>
     `;
 
-    if (state.selectingArt && piece.deletable) {
+    if (state.selectingArt) {
       $("[data-select-piece]", el).addEventListener("click", (e) => {
-        const selectable = list.filter(p => p.deletable);
-        const index = selectable.findIndex(p => p.id === piece.id);
+        const index = list.findIndex(p => p.id === piece.id);
         if (e.shiftKey && state.artAnchor) {
-          const anchorIndex = selectable.findIndex(p => p.id === state.artAnchor);
-          if (anchorIndex >= 0) selectable.slice(Math.min(anchorIndex, index), Math.max(anchorIndex, index) + 1).forEach(p => e.target.checked ? state.selectedArt.add(p.id) : state.selectedArt.delete(p.id));
+          const anchorIndex = list.findIndex(p => p.id === state.artAnchor);
+          if (anchorIndex >= 0) list.slice(Math.min(anchorIndex, index), Math.max(anchorIndex, index) + 1).forEach(p => e.target.checked ? state.selectedArt.add(p.id) : state.selectedArt.delete(p.id));
         } else {
           e.target.checked ? state.selectedArt.add(piece.id) : state.selectedArt.delete(piece.id);
           state.artAnchor = piece.id;
@@ -645,25 +563,23 @@ function renderCollection() {
         renderCollection();
         restoreSelectionFocus(host, "[data-select-piece]", piece.id);
       });
-    }
-    if (!state.selectingArt) $("[data-edit]", el).addEventListener("click", () => editPiece(piece));
+    } else {
+      $("[data-edit]", el).addEventListener("click", () => editPiece(piece));
 
-    if (piece.managed) {
-      if (!state.selectingArt) $("[data-replace]", el).addEventListener("click", async () => {
-        const next = await pickImage(piece.imageUrl);
-        if (!next) return;
-        const patch = { imageUrl: next, publicId: publicIdFromUrl(next) };
-        if (piece.kind === "upload") await updateArtwork(piece.id, patch);
-        else await replaceArchiveImage(piece.id, patch);
-        toast("Picture replaced — its title, likes and comments are untouched.", "ok");
+      $("[data-replace]", el).addEventListener("click", async (e) => {
+        const file = await pickFile();
+        if (!file) return;
+        await runAction(e.target, async () => {
+          const result = await replaceArtworkImage(piece.id, file);
+          return `Picture replaced — title, likes and comments are untouched.${releaseNote(result.released)}`;
+        });
       });
 
-      if (!state.selectingArt) $("[data-visible]", el).addEventListener("click", async () => {
-        await setArchiveVisibility(piece.id, piece.hidden);
-        toast(piece.hidden ? "Back on the site." : "Hidden from the site — you can put it back.", "ok");
-      });
+      $("[data-visible]", el).addEventListener("click", (e) => runAction(e.target,
+        () => setArtworkVisibility(piece.id, piece.hidden),
+        piece.hidden ? "Back on the site." : "Hidden from the site — you can put it back."));
 
-      if (!state.selectingArt) $("[data-del]", el).addEventListener("click", () => {
+      $("[data-del]", el).addEventListener("click", () => {
         state.selectingArt = true;
         state.selectedArt.clear();
         state.selectedArt.add(piece.id);
@@ -671,16 +587,14 @@ function renderCollection() {
         renderCollection();
       });
 
-      if (piece.kind === "archive") {
-        const move = async (delta) => {
-          const ids = archivePieces(slug).map(p => p.id);
-          const i = piece.position;
-          [ids[i + delta], ids[i]] = [ids[i], ids[i + delta]];
-          await reorderArchivePieces(ids);
-        };
-        $("[data-up]", el).addEventListener("click", () => move(-1));
-        $("[data-down]", el).addEventListener("click", () => move(1));
-      }
+      const move = (delta) => (e) => runAction(e.target, async () => {
+        const ids = all.map(p => p.id);
+        const i = piece.position;
+        [ids[i + delta], ids[i]] = [ids[i], ids[i + delta]];
+        await reorderArtworks(ids);
+      }, "Order saved.");
+      $("[data-up]", el).addEventListener("click", move(-1));
+      $("[data-down]", el).addEventListener("click", move(1));
     }
 
     host.appendChild(el);
@@ -695,7 +609,7 @@ function updateBulkControls(kind) {
   const toggle = $(art ? "#art-select-toggle" : "#comic-select-toggle");
   const action = $(art ? "#art-delete-selected" : "#comic-delete-selected");
   const items = art
-    ? collectionPieces(activeCollection()).filter(p => p.deletable && (!state.collectionSearch.trim() || p.title.toLowerCase().includes(state.collectionSearch.trim().toLowerCase()) || p.placeholder.toLowerCase().includes(state.collectionSearch.trim().toLowerCase())))
+    ? collectionPieces(activeCollection()).filter(matchesSearch)
     : state.comics.filter(c => state.comicFilter === "all" || c.categorySlug === state.comicFilter);
   const countHost = $(art ? "#art-selected-count" : "#comic-selected-count");
   const allButton = $(art ? "#art-select-all" : "#comic-select-all");
@@ -714,37 +628,24 @@ async function deleteSelected(kind) {
   const art = kind === "art";
   const ids = [...(art ? state.selectedArt : state.selectedComics)];
   if (!ids.length) return;
-  let plans = [];
-  if (!art) {
-    try { plans = await Promise.all(ids.map(id => getComicDeletionPlan(id))); }
-    catch (err) { toast(err.message || "Couldn't check the selected stories.", "error"); return; }
-  }
-  const pages = plans.reduce((sum, plan) => sum + plan.pages.length, 0);
-  const existingCount = art ? ids.length : plans.filter(plan => plan.exists).length;
-  if (!existingCount) { toast("Those items no longer exist.", "error"); return; }
-  confirmBulkDelete(existingCount, pages, async (report) => {
+  const pages = art ? 0 : ids.reduce((sum, id) => sum + (state.comics.find(c => c.id === id)?.pages.length || 0), 0);
+  confirmBulkDelete(ids.length, pages, async (report) => {
     const selected = art ? state.selectedArt : state.selectedComics;
     const errors = [];
-    const cleanupResults = [];
     let deleted = 0;
-    const pending = ids.filter((id, index) => selected.has(id) && (art || plans[index]?.exists));
-    for (let i = 0; i < pending.length; i++) {
-      const id = pending[i];
-      report(`Deleting ${i + 1} of ${pending.length}…`);
+    let kept = 0;
+    for (let i = 0; i < ids.length; i++) {
+      const id = ids[i];
+      report(`Deleting ${i + 1} of ${ids.length} — Cloudinary first, then the site…`);
       try {
-        if (art) {
-          const result = await deleteArtwork(id);
-          cleanupResults.push(result);
-        }
-        else {
-          const index = ids.indexOf(id);
-          const result = await deleteComic(id, plans[index]);
-          cleanupResults.push(result);
-          if (editingComicId === id) resetComicForm();
-        }
+        const result = art ? await deleteArtwork(id) : await deleteComic(id);
+        if (!art && editingComicId === id) resetComicForm();
+        const released = art ? [result.released] : result.released || [];
+        kept += released.filter(r => r && r.reason === "in-use").length;
         selected.delete(id);
         deleted++;
       } catch (err) {
+        console.error(`Delete failed for ${id}:`, err);
         errors.push({ id, message: err.message || "Delete failed." });
       }
     }
@@ -753,13 +654,14 @@ async function deleteSelected(kind) {
       if (art) state.selectingArt = false; else state.selectingComics = false;
     }
     art ? renderCollection() : renderComics();
-    reportDeleteCleanup(cleanupResults);
-    const message = `${deleted} item${deleted === 1 ? "" : "s"} removed from your website.`;
+    const message = `${deleted} item${deleted === 1 ? "" : "s"} permanently deleted from the site and Cloudinary.${kept ? ` ${kept} file${kept === 1 ? " is" : "s are"} still used elsewhere and ${kept === 1 ? "was" : "were"} kept.` : ""}`;
     if (errors.length) {
       const first = errors[0];
-      toast(`${message} ${errors.length} item${errors.length === 1 ? "" : "s"} could not be removed: ${first.id}: ${first.message}`, "error");
-      report(`${deleted} deleted. ${errors.length} still selected; close and retry after fixing the error.`);
-    } else toast(message, "ok");
+      toast(`${message} ${errors.length} could not be deleted and are untouched — ${first.id}: ${first.message}`, "error");
+      report(`${deleted} deleted. ${errors.length} still selected.`);
+      throw new Error(first.message);
+    }
+    toast(message, "ok");
   });
 }
 
@@ -769,7 +671,7 @@ function confirmBulkDelete(count, pages, remove) {
   let dialog;
   dialog = modal({
     title: `Delete ${count} ${count === 1 ? "item" : "items"} permanently?`,
-    body: `This cannot be undone.${pages ? ` This also removes all <b>${pages} page${pages === 1 ? "" : "s"}</b> in the selected stories.` : ""}<p data-delete-progress class="delete-progress" aria-live="polite" hidden></p>`,
+    body: `The files are deleted from Cloudinary and the records from the site. This cannot be undone.${pages ? ` This also removes all <b>${pages} page${pages === 1 ? "" : "s"}</b> in the selected stories.` : ""}<p data-delete-progress class="delete-progress" aria-live="polite" hidden></p>`,
     confirmLabel: "Delete",
     danger: true,
     onClose: () => { bulkDeleteOpen = false; },
@@ -789,49 +691,41 @@ $("#art-select-toggle")?.addEventListener("click", () => {
 $("#art-delete-selected")?.addEventListener("click", () => deleteSelected("art"));
 $("#art-select-all")?.addEventListener("click", () => {
   const set = state.selectedArt;
-  const term = state.collectionSearch.trim().toLowerCase();
-  const items = collectionPieces(activeCollection()).filter(p => p.deletable && (!term || p.title.toLowerCase().includes(term) || p.placeholder.toLowerCase().includes(term)));
+  const items = collectionPieces(activeCollection()).filter(matchesSearch);
   const allSelected = items.every(item => set.has(item.id));
   items.forEach(item => allSelected ? set.delete(item.id) : set.add(item.id));
   renderCollection();
 });
 
 function editPiece(piece) {
-  const isUpload = piece.kind === "upload";
-
   modal({
-    title: isUpload ? "Edit artwork" : piece.title ? "Edit this piece" : "Name this piece",
+    title: "Edit artwork",
     body: `
       <div class="field">
         <label for="ep-title">Title</label>
-        <input id="ep-title" type="text" value="${escapeHtml(piece.title)}"
-               placeholder="${escapeHtml(piece.placeholder)}">
-        ${isUpload ? "" : `<p class="form-note">Leave this blank and the piece goes back to showing &ldquo;${escapeHtml(piece.placeholder)}&rdquo;.</p>`}
+        <input id="ep-title" type="text" value="${escapeHtml(piece.title)}" placeholder="Empty shows no title">
       </div>
-      ${isUpload ? `
-        <div class="field">
-          <label for="ep-cat">Collection</label>
-          <select id="ep-cat">${categoryOptions("art", piece.slug)}</select>
-        </div>` : ""}
       <div class="field">
-        <label for="ep-desc">${isUpload ? "Description" : "What it means"}</label>
-        <textarea id="ep-desc" placeholder="Shown under the title on the collection page.">${escapeHtml(piece.description)}</textarea>
+        <label for="ep-caption">Caption</label>
+        <input id="ep-caption" type="text" value="${escapeHtml(piece.caption)}" placeholder="A short line under the title — medium, size, year">
+      </div>
+      <div class="field">
+        <label for="ep-cat">Collection</label>
+        <select id="ep-cat">${categoryOptions("art", piece.slug)}</select>
+      </div>
+      <div class="field">
+        <label for="ep-desc">Description</label>
+        <textarea id="ep-desc" placeholder="Shown under the caption on the collection page.">${escapeHtml(piece.description)}</textarea>
       </div>
     `,
     confirmLabel: "Save",
     onConfirm: async () => {
-      const title = $("#ep-title").value;
-      const description = $("#ep-desc").value.trim();
-
-      if (isUpload) {
-        await updateArtwork(piece.id, {
-          title: title.trim() || piece.title,
-          category: $("#ep-cat").value,
-          description
-        });
-      } else {
-        await saveArchivePiece(piece.id, { categorySlug: piece.slug, title, description });
-      }
+      await updateArtwork(piece.id, {
+        title: $("#ep-title").value.trim(),
+        caption: $("#ep-caption").value.trim(),
+        category: $("#ep-cat").value,
+        description: $("#ep-desc").value.trim()
+      });
       toast("Saved — it's live on the site.", "ok");
     }
   });
@@ -874,59 +768,18 @@ $("#collection-search")?.addEventListener("input", (e) => {
   saveDashboardState();
 });
 
-$("#archive-setup")?.addEventListener("click", async () => {
-  const btn = $("#archive-setup");
-  const status = $("#archive-setup-status");
-  btn.disabled = true;
-  status.textContent = "Setting up…";
-  try {
-    const { seedArchiveRecords } = await import("./migrate.js?v=20261027j");
-    const written = await seedArchiveRecords();
-    status.textContent = "";
-    toast(`${written} pieces are now fully manageable.`, "ok");
-  } catch (err) {
-    console.error(err);
-    status.textContent = err.message || "That didn't work.";
-    btn.disabled = false;
-  }
-});
-
-function migrateCategoryToCloudinary() {
-  const slug = activeCollection();
-  const pending = collectionPieces(slug).filter(p => p.managed && !p.onCloudinary);
-
-  if (!pending.length) {
-    toast("This collection is already on Cloudinary.", "ok");
-    return;
-  }
-
-  modal({
-    title: `Move ${categoryName("art", slug)} to Cloudinary?`,
-    body: `<b>${pending.length}</b> image${pending.length === 1 ? "" : "s"} will be uploaded to Cloudinary,
-           and each piece will start using the uploaded copy.<br><br>
-           Nothing is deleted and nothing on the site changes visually. It is safe to
-           re-run &mdash; anything already moved is skipped &mdash; and safe to interrupt.`,
-    confirmLabel: "Start the move",
-    onConfirm: async () => {
-      const status = $("#archive-migrate-status");
-      status.textContent = "Starting…";
-      const { moved, total, failures } = await moveArchiveToCloudinary(pending, (done, count, name) => {
-        status.textContent = `Moved ${Math.floor(done)} of ${count}${name ? ` — ${name}` : ""}…`;
-      });
-      status.textContent = failures.length
-        ? `${moved} of ${total} moved. ${failures.length} failed — see the console.`
-        : `All ${moved} moved to Cloudinary.`;
-      if (failures.length) console.warn(failures);
-      toast(failures.length ? "Finished with some failures." : "Collection moved to Cloudinary.", failures.length ? "error" : "ok");
-    }
-  });
-}
-
-$("#archive-migrate")?.addEventListener("click", migrateCategoryToCloudinary);
-
 let comicCover = null;
 let comicPages = [];
 let editingComicId = null;
+let comicSaving = false;
+
+function lockComicForm(locked) {
+  comicSaving = locked;
+  $$("#comic-form input, #comic-form textarea, #comic-form select, #comic-form button").forEach((el) => {
+    if (el.id !== "comic-save") el.disabled = locked;
+  });
+  $("#comic-form").classList.toggle("is-busy", locked);
+}
 
 function renderComicCover() {
   const host = $("#comic-cover-thumb");
@@ -995,11 +848,13 @@ function renderComicPages() {
 }
 
 wireDropzone($("#comic-cover-drop"), $("#comic-cover-input"), (files) => {
+  if (comicSaving) return;
   comicCover = files[0];
   renderComicCover();
 });
 
 wireDropzone($("#comic-pages-drop"), $("#comic-pages-input"), (files) => {
+  if (comicSaving) return;
   const sorted = files.slice().sort((a, b) =>
     a.name.localeCompare(b.name, undefined, { numeric: true, sensitivity: "base" }));
   comicPages = comicPages.concat(sorted);
@@ -1025,11 +880,13 @@ $("#comic-save").addEventListener("click", async () => {
   const title = $("#comic-title").value.trim();
   const categorySlug = $("#comic-category").value;
   if (!title) { toast("Give the story a title.", "error"); return; }
-  if (!categorySlug) { toast("Pick a genre.", "error"); return; }
+  if (!categorySlug) { toast("Create a genre under Collections first, then pick it.", "error"); return; }
   if (!comicPages.length) { toast("A story needs at least one page.", "error"); return; }
 
   const btn = $("#comic-save");
+  if (comicSaving) return;
   btn.disabled = true;
+  lockComicForm(true);
   $("#comic-progress").hidden = false;
   const bar = $("#comic-progress span");
 
@@ -1037,7 +894,6 @@ $("#comic-save").addEventListener("click", async () => {
     + (comicCover && typeof comicCover !== "string" ? 1 : 0);
   let doneJobs = 0;
   const newAssets = [];
-  const previousComic = editingComicId ? state.comics.find(item => item.id === editingComicId) : null;
   const tick = (p) => { bar.style.width = `${((doneJobs + p) / Math.max(jobs, 1)) * 100}%`; };
 
   try {
@@ -1062,14 +918,15 @@ $("#comic-save").addEventListener("click", async () => {
 
     if (editingComicId) {
       $("#comic-status").textContent = "Saving story…";
-      await updateComic(editingComicId, {
+      const result = await updateComic(editingComicId, {
         title,
         categorySlug,
         description: $("#comic-desc").value.trim(),
         coverUrl: coverUrl || pageUrls[0],
         pages: pageUrls
       });
-      toast("Story updated.", "ok");
+      const removed = (result.released || []).filter(r => r?.destroyed).length;
+      toast(`Story updated.${removed ? ` ${removed} replaced file${removed === 1 ? " was" : "s were"} deleted from Cloudinary.` : ""}`, "ok");
     } else {
       $("#comic-status").textContent = "Publishing story…";
       await createComic({
@@ -1081,26 +938,18 @@ $("#comic-save").addEventListener("click", async () => {
       });
       toast("Story published.", "ok");
     }
-    if (previousComic) {
-      const nextUrls = new Set([...pageUrls, coverUrl || pageUrls[0]]);
-      const oldUrls = new Set([previousComic.coverUrl, ...previousComic.pages]);
-      for (const url of oldUrls) {
-        const publicId = publicIdFromUrl(url);
-        if (!url || nextUrls.has(url) || !publicId || !/^https?:\/\//i.test(url)) continue;
-        try { await deleteMedia(slugify(publicId, "asset"), publicId, "image"); }
-        catch (err) { console.warn("Story saved, but an old image could not be removed.", err); }
-      }
-    }
+    newAssets.length = 0;
     resetComicForm();
   } catch (err) {
     console.error(err);
     toast(err.message || "Publishing failed.", "error");
     for (const asset of newAssets) {
-      try { await deleteMedia(slugify(asset.publicId, "asset"), asset.publicId, asset.resourceType || "image"); }
+      try { await destroyAsset(asset.publicId, asset.resourceType || "image"); }
       catch (cleanupError) { console.error("Could not clean up a story upload after saving failed.", cleanupError); }
     }
   } finally {
-    btn.disabled = false;
+    lockComicForm(false);
+    btn.disabled = !comicPages.length;
     $("#comic-progress").hidden = true;
     bar.style.width = "0%";
     $("#comic-status").textContent = "";
@@ -1108,9 +957,10 @@ $("#comic-save").addEventListener("click", async () => {
 });
 
 function loadComicIntoForm(comic) {
+  if (comicSaving) return;
   editingComicId = comic.id;
-  comicCover = comic.coverUrl || null;
-  comicPages = comic.pages.slice();
+  comicCover = comic.originalCoverUrl || null;
+  comicPages = comic.originalPages.slice();
   $("#comic-title").value = comic.title;
   $("#comic-desc").value = comic.description;
   $("#comic-category").value = comic.categorySlug;
@@ -1124,9 +974,7 @@ function loadComicIntoForm(comic) {
 
 function renderComics() {
   const host = $("#comic-grid");
-  const stories = state.comics.length || !state.deletionSnapshotReady || state.deletedContent.has(`story:${BUILTIN_SAMPLE_STORY.id}`)
-    ? state.comics : [BUILTIN_SAMPLE_STORY];
-  const list = stories
+  const list = state.comics
     .filter(c => state.comicFilter === "all" || c.categorySlug === state.comicFilter);
 
   $("#comic-count").textContent = `${list.length} shown`;
@@ -1134,7 +982,7 @@ function renderComics() {
 
   list.forEach((comic, i) => {
     const el = document.createElement("article");
-    el.className = "m-card is-story";
+    el.className = `m-card is-story${comic.status === "published" ? "" : " is-hidden-piece"}`;
     el.dataset.selectionKey = comic.id;
     if (state.selectingComics) el.classList.add("is-selectable", ...(state.selectedComics.has(comic.id) ? ["is-selected"] : []));
     el.innerHTML = `
@@ -1142,7 +990,7 @@ function renderComics() {
       <img class="m-cover" src="${escapeHtml(comic.coverUrl)}" alt="${escapeHtml(comic.title)}" loading="lazy">
       <div class="m-card-body">
         <h4>${escapeHtml(comic.title)}</h4>
-        <p>${escapeHtml(categoryName("comics", comic.categorySlug))}</p>
+        <p>${escapeHtml(categoryName("comics", comic.categorySlug))}${comic.status === "published" ? "" : ' · <b style="color:var(--danger)">Hidden</b>'}</p>
       </div>
       <div class="m-card-actions">
         ${state.selectingComics ? `<label class="bulk-select"><input type="checkbox" data-select-story ${state.selectedComics.has(comic.id) ? "checked" : ""}> Select</label>` : ""}
@@ -1150,6 +998,7 @@ function renderComics() {
         <button class="btn is-small" data-edit>Edit</button>
         <button class="btn is-small" data-up ${i === 0 ? "disabled" : ""}>&#9650;</button>
         <button class="btn is-small" data-down ${i === list.length - 1 ? "disabled" : ""}>&#9660;</button>
+        <button class="btn is-small" data-visible>${comic.status === "published" ? "Hide" : "Show"}</button>
         <button class="btn is-small is-danger" data-del>Select to delete</button>`}
       </div>
     `;
@@ -1168,17 +1017,16 @@ function renderComics() {
     });
     if (!state.selectingComics) $("[data-edit]", el).addEventListener("click", () => loadComicIntoForm(comic));
 
-    if (!state.selectingComics) $("[data-up]", el).addEventListener("click", async () => {
+    const moveStory = (delta) => (e) => runAction(e.target, async () => {
       const ids = list.map(c => c.id);
-      [ids[i - 1], ids[i]] = [ids[i], ids[i - 1]];
+      [ids[i + delta], ids[i]] = [ids[i], ids[i + delta]];
       await reorderComics(ids);
-    });
-
-    if (!state.selectingComics) $("[data-down]", el).addEventListener("click", async () => {
-      const ids = list.map(c => c.id);
-      [ids[i + 1], ids[i]] = [ids[i], ids[i + 1]];
-      await reorderComics(ids);
-    });
+    }, "Order saved.");
+    if (!state.selectingComics) $("[data-up]", el).addEventListener("click", moveStory(-1));
+    if (!state.selectingComics) $("[data-down]", el).addEventListener("click", moveStory(1));
+    if (!state.selectingComics) $("[data-visible]", el).addEventListener("click", (e) => runAction(e.target,
+      () => setComicVisibility(comic.id, comic.status !== "published"),
+      comic.status === "published" ? "Story hidden from the site." : "Story back on the site."));
 
     if (!state.selectingComics) $("[data-del]", el).addEventListener("click", () => {
       state.selectingComics = true;
@@ -1232,10 +1080,10 @@ function categoryList(kind) {
 }
 
 function categoryName(kind, slug) {
-  const found = categoryList(kind).find(c => c.slug === slug)?.name;
-  if (found) return found;
+  const found = categoryList(kind).find(c => c.slug === slug);
+  if (found) return found.name || found.slug;
   if (!slug) return "Uncategorised";
-  return `${CATEGORY_BY_SLUG[slug]?.label || slug} (deleted)`;
+  return `${slug} (deleted)`;
 }
 
 function categoryOptions(kind, selected) {
@@ -1245,10 +1093,7 @@ function categoryOptions(kind, selected) {
 }
 
 function coverPreview(cat) {
-  return cat.cover
-    || state.artworks.find(a => a.uploaded && a.imageUrl && a.category === cat.slug)?.imageUrl
-    || (LOCAL_SEEDS[cat.slug] || [])[0]
-    || "";
+  return cat.cover || "";
 }
 
 function usageCount(kind, slug) {
@@ -1287,6 +1132,7 @@ function renderCategoryList(kind) {
         ${kind === "art" ? `<a class="btn is-small" href="${escapeHtml(categoryHref({ slug: cat.slug }))}" target="_blank" rel="noopener">View</a>` : ""}
         <button class="btn is-small" data-edit-category>Edit</button>
         ${kind === "art" ? `<button class="btn is-small" data-cover>${cat.cover ? "Change cover" : "Set cover"}</button>` : ""}
+        ${kind === "art" && cat.cover ? '<button class="btn is-small" data-cover-clear>Remove cover</button>' : ""}
         <button class="btn is-small is-danger" data-del>Select to delete</button>`}
       </div>
     `;
@@ -1297,33 +1143,29 @@ function renderCategoryList(kind) {
       updateDeleteSelection(kind === "comics" ? "comicCats" : "artCats");
     });
 
-    if (!selecting) $("[data-up]", row).addEventListener("click", async () => {
+    const moveCategory = (delta) => (e) => runAction(e.target, async () => {
       const ids = list.map(c => c.id);
-      [ids[i - 1], ids[i]] = [ids[i], ids[i - 1]];
-      await ensureSeeded(kind);
+      [ids[i + delta], ids[i]] = [ids[i], ids[i + delta]];
       await reorderCategories(kind, ids);
-    });
-
-    if (!selecting) $("[data-down]", row).addEventListener("click", async () => {
-      const ids = list.map(c => c.id);
-      [ids[i + 1], ids[i]] = [ids[i], ids[i + 1]];
-      await ensureSeeded(kind);
-      await reorderCategories(kind, ids);
-    });
+    }, "Order saved.");
+    if (!selecting) $("[data-up]", row).addEventListener("click", moveCategory(-1));
+    if (!selecting) $("[data-down]", row).addEventListener("click", moveCategory(1));
 
     if (!selecting) $("[data-edit-category]", row).addEventListener("click", () => editCategory(kind, cat));
 
-    if (!selecting && kind === "art") $("[data-cover]", row).addEventListener("click", async () => {
+    if (!selecting && kind === "art") $("[data-cover]", row).addEventListener("click", async (e) => {
       const next = await pickImage(cat.cover || "");
-      if (next === null) return;
-      try {
-        await ensureSeeded(kind);
-        await updateCategory(kind, cat.id, { cover: next });
-        toast(next ? "Cover updated — the gallery index shows it now." : "Cover removed.", "ok");
-      } catch (err) {
-        toast(err.message, "error");
-      }
+      if (next === null || next === cat.cover) return;
+      await runAction(e.target, async () => {
+        const result = await setCategoryCover(cat.id, next);
+        return `Cover updated — the gallery index shows it now.${releaseNote(result.released)}`;
+      });
     });
+
+    if (!selecting && kind === "art" && cat.cover) $("[data-cover-clear]", row).addEventListener("click", (e) => runAction(e.target, async () => {
+      const result = await setCategoryCover(cat.id, "");
+      return `Cover removed.${releaseNote(result.released)}`;
+    }));
 
     if (!selecting) $("[data-del]", row).addEventListener("click", () => {
       const isComic = kind === "comics";
@@ -1362,13 +1204,11 @@ function editCategory(kind, cat) {
     onConfirm: async () => {
       const name = $("#ec-name").value.trim();
       if (!name) throw new Error("Give it a name.");
-      await ensureSeeded(kind);
       await updateCategory(kind, cat.id, {
         name,
         tagline: $("#ec-tagline").value.trim(),
         blurb: $("#ec-blurb").value.trim()
       });
-      await logChange("category.update", `${kind}/${cat.slug}`, name);
       toast(`${name} saved — the site has it now.`, "ok");
     }
   });
@@ -1377,65 +1217,37 @@ function editCategory(kind, cat) {
 function confirmCategoryDelete(kind, chosen, onDone) {
   if (bulkDeleteOpen) return;
   const noun = kind === "comics" ? "genre" : "collection";
-  const items = (n) => kind === "comics" ? (n === 1 ? "story" : "stories") : (n === 1 ? "piece" : "pieces");
-  const chosenSlugs = new Set(chosen.map(c => c.slug));
-  const remaining = categoryList(kind).filter(c => !chosenSlugs.has(c.slug));
-  const holding = chosen.filter(c => usageCount(kind, c.slug));
-  const total = holding.reduce((n, c) => n + usageCount(kind, c.slug), 0);
-  const moveChoice = total ? `
-      <div class="field" style="margin-top:16px">
-        <label for="cd-move">The ${total} uploaded ${items(total)} inside</label>
-        <select id="cd-move">
-          ${remaining.map(c => `<option value="${escapeHtml(c.slug)}">Move to ${escapeHtml(c.name)}</option>`).join("")}
-          <option value="">Keep aside &mdash; off the site, still listed under Artworks</option>
-        </select>
-      </div>` : "";
+  const items = (n) => kind === "comics" ? (n === 1 ? "story" : "stories") : (n === 1 ? "artwork" : "artworks");
+  const total = chosen.reduce((n, c) => n + usageCount(kind, c.slug), 0);
   bulkDeleteOpen = true;
   const dialog = modal({
     title: `Delete ${chosen.length === 1 ? `“${chosen[0].name}”` : `${chosen.length} ${noun}s`}?`,
-    body: `It comes off the homepage, the gallery and the footer straight away.${moveChoice}<p data-delete-progress class="delete-progress" aria-live="polite" hidden></p>`,
+    body: `It comes off the homepage, the gallery and the footer straight away.
+      ${total ? `<p><b>${total} ${items(total)} inside will be permanently deleted</b> — their files from Cloudinary and their records from the site.</p>
+      <label class="bulk-select" style="margin-top:12px"><input type="checkbox" data-confirm-contents> Yes, delete the ${total} ${items(total)} too</label>` : ""}
+      <p data-delete-progress class="delete-progress" aria-live="polite" hidden></p>`,
     confirmLabel: "Delete",
     danger: true,
     onClose: () => { bulkDeleteOpen = false; },
     onConfirm: async () => {
+      if (total && !$("[data-confirm-contents]", dialog.overlay)?.checked) {
+        throw new Error(`Tick the box to confirm the ${total} ${items(total)} should be deleted too.`);
+      }
       const progress = $("[data-delete-progress]", dialog.overlay);
       const report = (text) => { progress.hidden = false; progress.textContent = text; };
-      const target = $("#cd-move", dialog.overlay)?.value || "";
-      const targetName = categoryName(kind, target);
-      await ensureSeeded(kind);
-      let moved = 0;
-      if (target) {
-        for (const cat of holding) {
-          report(`Moving ${items(2)} out of ${cat.name}…`);
-          moved += await moveCategoryItems(kind, cat.slug, target);
-        }
-      }
+      let removed = 0;
       for (let i = 0; i < chosen.length; i++) {
-        report(`Deleting ${i + 1} of ${chosen.length}…`);
-        await deleteCategory(kind, chosen[i].id);
-        await logChange("category.delete", `${kind}/${chosen[i].slug}`, chosen[i].name);
+        report(`Deleting ${chosen[i].name} (${i + 1} of ${chosen.length})…`);
+        const result = await deleteCategory(kind, chosen[i].id, {
+          onProgress: (done, count) => report(`Deleting ${chosen[i].name}: ${done} of ${count} ${items(count)}…`)
+        });
+        removed += result.removed;
       }
       onDone();
-      toast(`${chosen.length} ${noun}${chosen.length === 1 ? "" : "s"} deleted${moved ? `; ${moved} ${items(moved)} moved to ${targetName}` : ""}.`, "ok");
+      toast(`${chosen.length} ${noun}${chosen.length === 1 ? "" : "s"} deleted${removed ? ` with ${removed} ${items(removed)}` : ""}.`, "ok");
     }
   });
 }
-
-function restoreBuiltIns(kind) {
-  const noun = kind === "comics" ? "genres" : "collections";
-  modal({
-    title: `Restore the built-in ${noun}?`,
-    body: `Any of the original ${noun} you deleted come back with their original names and text, at the end of the list. Nothing you made yourself is touched.`,
-    confirmLabel: "Restore",
-    onConfirm: async () => {
-      const added = await restoreDefaultCategories(kind);
-      toast(added ? `${added} ${noun} restored.` : `All the built-in ${noun} are already there.`, "ok");
-    }
-  });
-}
-
-$("#art-cat-restore")?.addEventListener("click", () => restoreBuiltIns("art"));
-$("#comic-cat-restore")?.addEventListener("click", () => restoreBuiltIns("comics"));
 
 function updateDeleteSelection(type) {
   const config = {
@@ -1479,12 +1291,7 @@ async function deleteSelectedRecords(type) {
     for (let i = 0; i < chosen.length; i++) {
       const item = chosen[i];
       report(`Deleting ${i + 1} of ${chosen.length}…`);
-      if (type === "comments") await deleteComment(item.parentCollection, item.parentId, item.id);
-      else {
-        const kind = type === "comicCats" ? "comics" : "art";
-        await ensureSeeded(kind);
-        await deleteCategory(kind, item.id);
-      }
+      await deleteComment(item.parentCollection, item.parentId, item.id);
     }
     selected.clear();
     if (type === "comments") { state.selectingComments = false; renderComments(); }
@@ -1525,10 +1332,6 @@ wireDeleteSelection("artCats");
 wireDeleteSelection("comicCats");
 wireDeleteSelection("comments");
 
-async function ensureSeeded(kind) {
-  await seedDefaultCategories(kind);
-}
-
 function wireCategoryCreate(kind, formId, inputId) {
   $(formId).addEventListener("submit", async (e) => {
     e.preventDefault();
@@ -1536,11 +1339,11 @@ function wireCategoryCreate(kind, formId, inputId) {
     const name = input.value.trim();
     if (!name) return;
     try {
-      await ensureSeeded(kind);
       await createCategory(kind, name);
       input.value = "";
       toast(`Created "${name}".`, "ok");
     } catch (err) {
+      console.error(err);
       toast(err.message, "error");
     }
   });
@@ -1610,7 +1413,7 @@ async function paintIdentity(user) {
     const token = await user.getIdTokenResult?.(true);
     claimed = token?.claims?.admin === true;
   } catch (err) {
-    console.warn("Could not read the ID token claims:", err);
+    console.error("Could not read the ID token claims:", err);
   }
 
   stateEl.textContent = claimed
@@ -1625,7 +1428,8 @@ $("#copy-uid").addEventListener("click", async () => {
   try {
     await navigator.clipboard.writeText(uid);
     toast("UID copied.", "ok");
-  } catch {
+  } catch (err) {
+    console.error("Clipboard write failed:", err);
     toast(uid, "");
   }
 });
@@ -1636,70 +1440,11 @@ $("#grant-claim").addEventListener("click", async () => {
   try {
     const res = await grantAdminClaim();
     toast(`Claim granted to ${res.email}. Sign out and back in to activate it.`, "ok");
-    await logChange("admin.claimGranted", res.uid, res.email);
   } catch (err) {
     console.error(err);
-    toast(
-      /not-found|internal|unavailable/i.test(err.message)
-        ? "Cloud Functions are not deployed yet — see functions/README.md."
-        : err.message,
-      "error"
-    );
+    toast(err.message, "error");
     btn.disabled = false;
   }
-});
-
-function renderMigrationReport(plans, applied) {
-  const host = $("#migrate-report");
-  host.innerHTML = plans.map(p => `
-    <div class="row">
-      <div class="row-main">
-        <strong>${escapeHtml(p.label)}</strong>
-        <small>${applied
-          ? `${p.written} document${p.written === 1 ? "" : "s"} written`
-          : `${p.writes.length} document${p.writes.length === 1 ? "" : "s"} would change`}</small>
-        ${(p.notes || []).map(n => `<span style="display:block;color:var(--paper-faint);font-size:.76rem">${escapeHtml(n)}</span>`).join("")}
-      </div>
-    </div>
-  `).join("");
-}
-
-$("#migrate-dry").addEventListener("click", async () => {
-  const btn = $("#migrate-dry");
-  btn.disabled = true;
-  $("#migrate-report").innerHTML = '<p class="empty-note">Scanning…</p>';
-  try {
-    const { dryRun } = await import("./migrate.js?v=20261027j");
-    const { plans, totalWrites } = await dryRun();
-    renderMigrationReport(plans, false);
-    $("#migrate-run").disabled = totalWrites === 0;
-    toast(totalWrites
-      ? `${totalWrites} documents need migrating.`
-      : "Nothing to migrate — schema is already current.", "ok");
-  } catch (err) {
-    console.error(err);
-    $("#migrate-report").innerHTML = `<p class="empty-note">Scan failed: ${escapeHtml(err.message)}</p>`;
-    toast("Could not scan. Check the console.", "error");
-  } finally {
-    btn.disabled = false;
-  }
-});
-
-$("#migrate-run").addEventListener("click", () => {
-  modal({
-    title: "Run the schema migration?",
-    body: "This writes <b>status</b>, <b>featured</b>, and Cloudinary <b>public IDs</b> onto your existing documents, copies categories into artCategories, seeds comic genres, and backfills the media library.<br><br>It is additive and idempotent — nothing is deleted, and re-running it is harmless.",
-    confirmLabel: "Run migration",
-    onConfirm: async () => {
-      const { apply } = await import("./migrate.js?v=20261027j");
-      const { results, totalWrites } = await apply((label) => {
-        $("#migrate-report").innerHTML = `<p class="empty-note">Migrating: ${escapeHtml(label)}…</p>`;
-      });
-      renderMigrationReport(results, true);
-      $("#migrate-run").disabled = true;
-      toast(`Migration complete — ${totalWrites} documents written.`, "ok");
-    }
-  });
 });
 
 function renderChangeLog(entries) {
@@ -1748,15 +1493,6 @@ function boot() {
     renderOverview();
   });
 
-  watchContentDeletions((items) => {
-    state.deletedContent = new Set(items.map(item => `${item.kind}:${item.itemId}`));
-    state.deletionSnapshotReady = true;
-    renderCollectionChips();
-    renderCollection();
-    renderComics();
-    renderOverview();
-  }, (err) => toast(err.message || "Deleted items couldn't be loaded.", "error"));
-
   watchComics((items) => {
     state.comics = items;
     renderComics();
@@ -1768,13 +1504,12 @@ function boot() {
     state.comments = items;
     renderComments();
     renderOverview();
-  }, () => {
-    $("#comment-rows").innerHTML =
-      '<p class="empty-note">Comments couldn\'t be loaded. Publish the collection-group rule from firestore.rules in the Firebase Console.</p>';
+  }, (err) => {
+    $("#comment-rows").innerHTML = `<p class="empty-note">Comments couldn't be loaded: ${escapeHtml(err.message)}</p>`;
   });
 
-  watchChangeLog(renderChangeLog, () => {
-    $("#changelog-rows").innerHTML = '<p class="empty-note">Change log unavailable — publish the updated rules.</p>';
+  watchChangeLog(renderChangeLog, (err) => {
+    $("#changelog-rows").innerHTML = `<p class="empty-note">Change log unavailable: ${escapeHtml(err.message)}</p>`;
   });
 
   renderArtFiles();
@@ -1784,7 +1519,7 @@ function boot() {
   initSettings().catch((err) => {
     console.error("Settings failed to load:", err);
     $("#settings-body").innerHTML =
-      '<p class="empty-note">Settings could not be loaded. Check that the updated rules are published.</p>';
+      `<p class="empty-note">Settings could not be loaded: ${escapeHtml(err.message)}</p>`;
   });
   initPreview();
 }

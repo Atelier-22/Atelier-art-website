@@ -6,17 +6,17 @@
   <meta name="theme-color" content="#e6dfd1">
   <title>Studio | Alafi Art Work</title>
   <meta name="robots" content="noindex, nofollow">
-  <link rel="icon" type="image/svg+xml" href="favicon.svg?v=20261017b">
-  <link rel="icon" type="image/png" sizes="32x32" href="favicon-32x32.png?v=20261017b">
-  <link rel="icon" type="image/png" sizes="16x16" href="favicon-16x16.png?v=20261017b">
-  <link rel="icon" type="image/x-icon" href="favicon.ico?v=20261017b">
-  <link rel="apple-touch-icon" sizes="180x180" href="apple-touch-icon.png?v=20261017b">
+  <link rel="icon" type="image/svg+xml" href="favicon.svg?v=20261031a">
+  <link rel="icon" type="image/png" sizes="32x32" href="favicon-32x32.png?v=20261031a">
+  <link rel="icon" type="image/png" sizes="16x16" href="favicon-16x16.png?v=20261031a">
+  <link rel="icon" type="image/x-icon" href="favicon.ico?v=20261031a">
+  <link rel="apple-touch-icon" sizes="180x180" href="apple-touch-icon.png?v=20261031a">
   <link rel="preconnect" href="https://fonts.googleapis.com">
   <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
   <link href="https://fonts.googleapis.com/css2?family=Cormorant+Garamond:ital,wght@0,300;0,400;0,500;0,600&family=Inter:wght@300;400;500&display=swap" rel="stylesheet">
-  <link rel="stylesheet" href="assets/css/core.css?v=20261017b">
-  <link rel="stylesheet" href="assets/css/admin.css?v=20261030a">
-  <link rel="stylesheet" href="assets/css/settings.css?v=20260823a">
+  <link rel="stylesheet" href="assets/css/core.css?v=20261031a">
+  <link rel="stylesheet" href="assets/css/admin.css?v=20261031a">
+  <link rel="stylesheet" href="assets/css/settings.css?v=20261031a">
 </head>
 <body class="admin">
 
@@ -86,11 +86,11 @@
         <span class="ico">&#9788;</span> Settings
       </button>
       <button type="button" data-view="preview"
-              data-title="Preview" data-sub="The real site, showing your unpublished draft, before anyone else sees it.">
+              data-title="Preview" data-sub="The live site, exactly as visitors see it.">
         <span class="ico">&#9673;</span> Preview
       </button>
       <button type="button" data-view="maintenance"
-              data-title="Maintenance" data-sub="Schema migration, admin identity, and the change log.">
+              data-title="Maintenance" data-sub="Admin identity and the change log.">
         <span class="ico">&#9881;</span> Maintenance
       </button>
       <button type="button" data-view="engagement"
@@ -139,7 +139,7 @@
 
       <div class="panel">
         <h2>Recent uploads</h2>
-        <p class="panel-sub">The last things you published.</p>
+        <p class="panel-sub">The newest uploads.</p>
         <div class="rows" id="recent-uploads"></div>
       </div>
     </section>
@@ -167,6 +167,10 @@
             <input type="text" id="art-title" placeholder="Leave blank to use the filename">
           </div>
           <div class="field span-2">
+            <label for="art-caption">Caption (single upload only)</label>
+            <input type="text" id="art-caption" placeholder="Optional &mdash; a short line under the title">
+          </div>
+          <div class="field">
             <label for="art-desc">Description (single upload only)</label>
             <textarea id="art-desc" placeholder="Optional &mdash; shown under the title on the category page."></textarea>
           </div>
@@ -183,24 +187,15 @@
 
         <div class="collection-chips" id="collection-chips"></div>
 
-        <div class="alert is-warn" id="archive-notice" hidden>
-          <b>The pieces that came with the site aren&rsquo;t set up yet.</b>
-          Until they are, you can give them titles but not replace or remove them.
-          <button class="btn is-small is-primary" id="archive-setup" style="margin-left:10px">Set them up now</button>
-          <span class="status-line" id="archive-setup-status" style="margin:6px 0 0"></span>
-        </div>
-
         <div class="toolbar">
           <div class="grow"><input type="search" id="collection-search" placeholder="Search titles in this collection"></div>
           <span class="status-line" id="collection-count" style="margin:0"></span>
           <a class="btn is-small" id="collection-view" target="_blank" rel="noopener">View on the site &#8599;</a>
-          <button class="btn is-small" id="archive-migrate" hidden>Move to Cloudinary</button>
           <button class="btn is-small is-danger" type="button" id="art-select-toggle">Delete</button>
           <span id="art-selected-count" aria-live="polite" hidden>0 selected</span>
           <button class="btn is-small" type="button" id="art-select-all" hidden>Select all</button>
           <button class="btn is-small is-danger" type="button" id="art-delete-selected" hidden disabled>Delete selected (0)</button>
         </div>
-        <p class="status-line" id="archive-migrate-status"></p>
 
         <div class="manage-grid" id="collection-grid"></div>
       </div>
@@ -280,7 +275,7 @@
           <div class="grow"><input type="search" id="art-cat-name" placeholder="New collection name"></div>
           <button class="btn is-primary" type="submit">Add collection</button>
         </form>
-        <div class="toolbar"><button class="btn is-small is-danger" type="button" id="art-cat-select-toggle">Delete</button><span id="art-cat-selected-count" hidden>0 selected</span><button class="btn is-small" type="button" id="art-cat-select-all" hidden>Select all</button><button class="btn is-small is-danger" type="button" id="art-cat-delete-selected" hidden disabled>Delete selected</button><button class="btn is-small" type="button" id="art-cat-restore" title="Bring back any of the original collections you deleted">Restore built-in</button></div>
+        <div class="toolbar"><button class="btn is-small is-danger" type="button" id="art-cat-select-toggle">Delete</button><span id="art-cat-selected-count" hidden>0 selected</span><button class="btn is-small" type="button" id="art-cat-select-all" hidden>Select all</button><button class="btn is-small is-danger" type="button" id="art-cat-delete-selected" hidden disabled>Delete selected</button></div>
 
         <div class="rows" id="art-cat-rows"></div>
       </div>
@@ -293,7 +288,7 @@
           <div class="grow"><input type="search" id="comic-cat-name" placeholder="New genre name"></div>
           <button class="btn is-primary" type="submit">Add genre</button>
         </form>
-        <div class="toolbar"><button class="btn is-small is-danger" type="button" id="comic-cat-select-toggle">Delete</button><span id="comic-cat-selected-count" hidden>0 selected</span><button class="btn is-small" type="button" id="comic-cat-select-all" hidden>Select all</button><button class="btn is-small is-danger" type="button" id="comic-cat-delete-selected" hidden disabled>Delete selected</button><button class="btn is-small" type="button" id="comic-cat-restore" title="Bring back any of the original genres you deleted">Restore built-in</button></div>
+        <div class="toolbar"><button class="btn is-small is-danger" type="button" id="comic-cat-select-toggle">Delete</button><span id="comic-cat-selected-count" hidden>0 selected</span><button class="btn is-small" type="button" id="comic-cat-select-all" hidden>Select all</button><button class="btn is-small is-danger" type="button" id="comic-cat-delete-selected" hidden disabled>Delete selected</button></div>
 
         <div class="rows" id="comic-cat-rows"></div>
       </div>
@@ -326,10 +321,7 @@
         </div>
 
         <p class="form-note">
-          This is the real site reading your unpublished draft &mdash; not a mock-up. Edits in
-          Settings appear here within a second or two, and visitors keep seeing the published
-          site until you press Publish.
-        </p>
+          This is the live site. Every saved setting appears here within a second or two.</p>
       </div>
     </section>
 
@@ -353,20 +345,7 @@
             <div class="row-actions"><button class="btn is-small" id="grant-claim">Grant claim</button></div>
           </div>
         </div>
-        <p class="form-note" style="margin-top:14px">The claim requires the Cloud Functions to be deployed. Until then the rules fall back to matching your email, which is also enforced server-side.</p>
-      </div>
-
-      <div class="panel">
-        <h2>Schema migration</h2>
-        <p class="panel-sub">Stamps status, featured, and Cloudinary public IDs onto existing documents, copies categories into artCategories, seeds comic genres, and backfills the media library. Safe to run more than once.</p>
-        <div class="alert is-warn" id="migrate-warning">
-          Run this <b>before</b> publishing the new security rules. Public reads will require <code>status == "published"</code>, and documents created earlier have no status field.
-        </div>
-        <div class="toolbar">
-          <button class="btn" id="migrate-dry">Preview changes</button>
-          <button class="btn is-primary" id="migrate-run" disabled>Run migration</button>
-        </div>
-        <div class="rows" id="migrate-report" style="margin-top:16px"></div>
+        <p class="form-note" style="margin-top:14px">Granted by the site server. Until then the rules match your email, which is also enforced server-side.</p>
       </div>
 
       <div class="panel">
@@ -388,8 +367,6 @@
     <div class="publish-bar" id="publish-bar" hidden>
       <span class="settings-status" id="settings-status">Loading…</span>
       <div class="grow"></div>
-      <button class="btn" id="settings-discard" disabled>Discard draft</button>
-      <button class="btn is-primary" id="settings-publish" disabled>Publish changes</button>
     </div>
   </main>
 </div>
@@ -409,6 +386,6 @@
     });
   })();
 </script>
-<script type="module" src="assets/js/admin.js?v=20261030a"></script>
+<script type="module" src="assets/js/admin.js?v=20261031a"></script>
 </body>
 </html>

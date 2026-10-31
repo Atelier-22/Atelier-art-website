@@ -9,18 +9,19 @@ const store = {
       if (saved === "on") return true;
       if (saved === "off") return false;
       return !!defaultOn;
-    } catch {
+    } catch (err) {
+      console.error(err);
       return !!defaultOn;
     }
   },
   setWanted(on) {
-    try { localStorage.setItem(PREF_KEY, on ? "on" : "off"); } catch { }
+    try { localStorage.setItem(PREF_KEY, on ? "on" : "off"); } catch (err) { console.error(err); }
   },
   progress() {
-    try { return JSON.parse(sessionStorage.getItem(STATE_KEY)) || {}; } catch { return {}; }
+    try { return JSON.parse(sessionStorage.getItem(STATE_KEY)) || {}; } catch (err) { console.error(err); return {}; }
   },
   setProgress(url, at) {
-    try { sessionStorage.setItem(STATE_KEY, JSON.stringify({ url, at })); } catch { }
+    try { sessionStorage.setItem(STATE_KEY, JSON.stringify({ url, at })); } catch (err) { console.error(err); }
   }
 };
 
@@ -180,11 +181,12 @@ async function crossfadeTo(position, { instant = false } = {}) {
   incoming.volume = instant ? targetVolume() : 0;
 
   await whenReady(incoming);
-  try { if (incoming.currentTime > 0.05) incoming.currentTime = 0; } catch { }
+  try { if (incoming.currentTime > 0.05) incoming.currentTime = 0; } catch (err) { console.error(err); }
 
   try {
     await incoming.play();
-  } catch {
+  } catch (err) {
+    console.error(err);
     return false;
   }
 
@@ -235,7 +237,7 @@ function startTicker() {
     const at = session;
     crossfadeTo(cursor + 1)
       .then((ok) => { if (!ok && armedFor === at) armedFor = -1; })
-      .catch(() => { if (armedFor === at) armedFor = -1; });
+      .catch((err) => { console.error("Autoplay was blocked until the visitor interacts.", err); if (armedFor === at) armedFor = -1; });
   }, 200);
 }
 
@@ -258,7 +260,7 @@ async function begin() {
     if (ok) {
       const player = players[active];
       if (saved.url && player.src.endsWith(saved.url.split("/").pop())) {
-        try { player.currentTime = Number(saved.at) || 0; } catch { }
+        try { player.currentTime = Number(saved.at) || 0; } catch (err) { console.error(err); }
       }
       startTicker();
     } else {
@@ -339,6 +341,12 @@ export function renderAmbient(config) {
     button = buildButton();
     paint(players[active] ? !players[active].paused : false);
   }
+
+  button.dataset.tracks = tracks.map(t => t.url).join(" ");
+  button.dataset.volume = String(settings.volume);
+  button.dataset.crossfade = String(settings.crossfade);
+  button.dataset.shuffle = String(settings.shuffle);
+  button.dataset.autoplay = String(settings.autoplay);
 
   const nextSignature = tracks.map(t => t.url).join("|");
   if (nextSignature !== signature) {

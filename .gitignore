@@ -14,3 +14,4 @@ backend/*.json.key
 backend/.venv/
 __pycache__/
 *.pyc
+.zz-test/

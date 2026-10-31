@@ -38,6 +38,8 @@ class Settings:
     cloudinary_api_key: str = os.getenv("CLOUDINARY_API_KEY", "").strip()
     cloudinary_api_secret: str = os.getenv("CLOUDINARY_API_SECRET", "").strip()
 
+    public_origin: str = os.getenv("PUBLIC_ORIGIN", "").strip().rstrip("/")
+
     cors_origins: list[str] = _csv(
         "CORS_ORIGINS",
         "https://alafi-art-work.twendelink.com,http://localhost:8000,http://127.0.0.1:8000",

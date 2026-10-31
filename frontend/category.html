@@ -1,34 +1,36 @@
 <!DOCTYPE html>
-<html lang="en" data-bg="category">
+<html lang="en">
 <head>
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1.0, viewport-fit=cover">
   <meta name="theme-color" content="#e6dfd1">
-  <title>Collection | Alafi Art Work</title>
-  <meta name="description" content="A collection from the Alafi Art Work gallery.">
-  <meta name="robots" content="noindex, follow">
-  <link rel="icon" type="image/svg+xml" href="favicon.svg?v=20261017b">
-  <link rel="icon" type="image/png" sizes="32x32" href="favicon-32x32.png?v=20261017b">
-  <link rel="icon" type="image/png" sizes="16x16" href="favicon-16x16.png?v=20261017b">
-  <link rel="icon" type="image/x-icon" href="favicon.ico?v=20261017b">
-  <link rel="apple-touch-icon" sizes="180x180" href="apple-touch-icon.png?v=20261017b">
+  <title></title>
+  <meta name="google-site-verification" content="Pwb4XTcBVy1wo3y6EPkGy2YTbwMmCykxPZW71Tt5bFM" />
+  <link rel="icon" type="image/svg+xml" href="favicon.svg?v=20261031a">
+  <link rel="icon" type="image/png" sizes="32x32" href="favicon-32x32.png?v=20261031a">
+  <link rel="icon" type="image/png" sizes="16x16" href="favicon-16x16.png?v=20261031a">
+  <link rel="icon" type="image/x-icon" href="favicon.ico?v=20261031a">
+  <link rel="apple-touch-icon" sizes="180x180" href="apple-touch-icon.png?v=20261031a">
   <link rel="preconnect" href="https://fonts.googleapis.com">
   <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
-  <link href="https://fonts.googleapis.com/css2?family=Cormorant+Garamond:ital,wght@0,300;0,400;0,500;0,600;1,300;1,400&family=Inter:wght@300;400;500&display=swap" rel="stylesheet">
-  <link rel="stylesheet" href="assets/css/core.css?v=20261017b">
-  <link rel="stylesheet" href="assets/css/gallery.css?v=20261030a">
-  <script src="assets/js/theme-boot.js?v=20260823a"></script>
+  <link id="theme-fonts" href="https://fonts.googleapis.com/css2?family=Cormorant+Garamond:ital,wght@0,300;0,400;0,500;0,600;1,300;1,400&family=Inter:wght@300;400;500&display=swap" rel="stylesheet">
+  <link rel="stylesheet" href="assets/css/core.css?v=20261031a">
+  <link rel="stylesheet" href="assets/css/gallery.css?v=20261031a">
+  <script src="assets/js/theme-boot.js?v=20261031a"></script>
+  <link rel="canonical" href="https://alafi-art-work.twendelink.com/category.html">
+  <meta property="og:url" content="https://alafi-art-work.twendelink.com/category.html">
+  <meta property="og:type" content="website">
 </head>
-<body data-cfg-bg="backgrounds.category">
+<body data-page="category" data-cfg-bg="backgrounds.category">
 
 <div class="wallpaper" aria-hidden="true"></div>
 
 <nav class="site-nav">
-  <a class="wordmark" href="index.html"><img class="wordmark-mark" src="assets/images/logo-mark.svg" alt="" width="380" height="450"><span class="wordmark-text"><b data-cfg-text="branding.wordmark">Alafi</b><span data-cfg-text="branding.wordmarkDot">.</span></span></a>
+  <a class="wordmark" href="index.html"><img class="wordmark-mark" alt="" width="380" height="450" hidden><span class="wordmark-text"><b data-cfg-text="branding.wordmark"></b><span data-cfg-text="branding.wordmarkDot"></span></span></a>
   <button class="nav-toggle" type="button" aria-expanded="false" aria-controls="nav-links">Menu</button>
   <ul class="nav-links" id="nav-links">
     <li><a href="index.html">Home</a></li>
-    <li><a href="gallery.html" aria-current="page">Gallery</a></li>
+    <li><a href="gallery.html">Gallery</a></li>
     <li><a href="comics.html">Comics</a></li>
     <li><a href="about.html">About</a></li>
     <li><a href="contact.html">Contact</a></li>
@@ -39,10 +41,10 @@
 <main>
   <header class="page-head">
     <div class="shell">
-      <p class="crumbs"><a href="index.html">Home</a> <span>/</span> <a href="gallery.html">Gallery</a> <span>/</span> <span id="crumb-current">Collection</span></p>
-      <h1 id="category-title">Collection</h1>
-      <p class="page-tagline" id="category-tagline"></p>
-      <p class="page-blurb" id="category-blurb"></p>
+      <p class="crumbs"><a href="index.html">Home</a> <span>/</span> <a href="gallery.html">Gallery</a> <span>/</span> <span id="crumb-current"></span></p>
+      <h1 id="category-title" hidden></h1>
+      <p class="page-tagline" id="category-tagline" hidden></p>
+      <p class="page-blurb" id="category-blurb" hidden></p>
     </div>
   </header>
 
@@ -50,8 +52,9 @@
     <div class="shell">
       <div class="gallery-grid" id="gallery-grid"></div>
       <div class="empty-state" id="gallery-empty" hidden>
-        <h3>Nothing here yet</h3>
-        <p>This collection is still being hung. Check back soon.</p>
+        <h3 data-empty-none>Nothing here yet</h3>
+        <h3 data-empty-missing hidden>This collection is no longer on view</h3>
+        <p data-empty-missing hidden><a href="gallery.html">See the collections</a></p>
       </div>
     </div>
   </section>
@@ -60,36 +63,26 @@
 <footer class="site-footer">
   <div class="footer-grid">
     <div class="footer-brand">
-      <img class="footer-logo" src="assets/images/logo-full.svg" alt="" width="580" height="580">
-      <h4 data-cfg-text="branding.siteTitle">Alafi Art Work</h4>
-      <p data-cfg-text="branding.footerBlurb">A digital gallery of original work — built to be wandered through slowly.</p>
+      <img class="footer-logo" alt="" width="580" height="580" hidden>
+      <h4 data-cfg-text="branding.siteTitle"></h4>
+      <p data-cfg-text="branding.footerBlurb"></p>
     </div>
-    <div class="footer-col">
+    <div class="footer-col" hidden>
       <p class="col-title">Collections</p>
-      <ul>
-        <li><a href="paintings.html">Paintings</a></li>
-        <li><a href="sketches.html">Sketches</a></li>
-        <li><a href="digital.html">Digital Art</a></li>
-        <li><a href="sculptures.html">Sculptures</a></li>
-      </ul>
+      <ul></ul>
     </div>
-    <div class="footer-col">
+    <div class="footer-col" hidden>
       <p class="col-title">More</p>
-      <ul>
-        <li><a href="portraits.html">Portraits</a></li>
-        <li><a href="graphics.html">Graphics</a></li>
-        <li><a href="comics.html">Comics</a></li>
-        <li><a href="about.html">About the Artist</a></li>
-      </ul>
+      <ul></ul>
     </div>
   </div>
   <div class="footer-base">
-    <span data-cfg-text="branding.copyright">&copy; 2026 Alafi Art Work</span>
+    <span data-cfg-text="branding.copyright"></span>
     <span class="footer-legal"><a href="terms.html">Terms of Service</a><a href="privacy.html">Privacy Policy</a></span>
-    <span data-cfg-text="branding.rights">All rights reserved</span>
+    <span data-cfg-text="branding.rights"></span>
   </div>
 </footer>
 
-<script type="module" src="assets/js/app.js?v=20261030a"></script>
+<script type="module" src="assets/js/app.js?v=20261031a"></script>
 </body>
 </html>

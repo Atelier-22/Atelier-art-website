@@ -1,61 +1,27 @@
-import { ensureGuestAuth, watchAuth, isOwner } from "../../firebase-config.js?v=20261027h";
+import { ensureGuestAuth, watchAuth, isOwner } from "../../firebase-config.js?v=20261031a";
 import {
-  watchGalleryPieces, watchPieceMeta, toggleLike, hasLiked,
-  watchComments, addComment, deleteComment, fetchCategories, archivePieceId
-} from "./data.js?v=20261030a";
-import { isPreview, currentConfig, previewHref } from "./site-config.js?v=20261017b";
-import { LOCAL_SEEDS, CATEGORY_BY_SLUG, currentCategorySlug } from "./site-data.js?v=20261030a";
-import { bindGallery } from "./lightbox.js?v=20260823a";
-import { observeReveals, initNav } from "./reveal.js?v=20260823a";
-import { modal } from "./admin-ui.js?v=20261027e";
+  watchArtworks, watchLikes, toggleLike, hasLiked,
+  watchComments, addComment, deleteComment, watchCategories
+} from "./data.js?v=20261031a";
+import { currentConfig } from "./site-config.js?v=20261031a";
+import { currentCategorySlug } from "./site-data.js?v=20261031a";
+import { bindGallery } from "./lightbox.js?v=20261031a";
+import { observeReveals, initNav } from "./reveal.js?v=20261031a";
+import { modal } from "./admin-ui.js?v=20261031a";
 
 let slug = "";
 let grid = null;
 let emptyEl = null;
-let removed = false;
-
+let category = null;
+let categoriesReady = false;
 let cards = new Map();
 let owner = false;
-let deletedSeedIds = new Set();
-let deletedSeedUrls = new Set();
-
 let pageSubscriptions = [];
 
 function escapeHtml(str) {
   const d = document.createElement("div");
   d.textContent = str ?? "";
   return d.innerHTML;
-}
-
-function placeholderFor(i) {
-  const label = CATEGORY_BY_SLUG[slug]?.label || slug;
-  return `${label.replace(/s$/, "")} No. ${String(i + 1).padStart(2, "0")}`;
-}
-
-function localItems() {
-  return (LOCAL_SEEDS[slug] || []).map((src, i) => ({
-    id: archivePieceId(slug, i),
-    title: placeholderFor(i),
-    placeholder: placeholderFor(i),
-    imageUrl: src,
-    description: "",
-    archive: true
-  })).filter(item => !deletedSeedIds.has(item.id) && !deletedSeedUrls.has(item.imageUrl));
-}
-
-function recordItems(records) {
-  return records.map((record) => {
-    const index = Number(String(record.id).split("-").pop()) - 1;
-    const placeholder = placeholderFor(Number.isFinite(index) ? index : 0);
-    return {
-      id: record.id,
-      title: record.hasTitle ? record.title : placeholder,
-      placeholder,
-      imageUrl: record.imageUrl,
-      description: record.description,
-      archive: true
-    };
-  });
 }
 
 function orderedItems() {
@@ -66,7 +32,7 @@ function orderedItems() {
       id: item.id,
       src: item.imageUrl,
       title: item.title,
-      meta: item.description || CATEGORY_BY_SLUG[slug]?.label || ""
+      meta: [item.caption, item.description].filter(Boolean).join(" — ")
     }));
 }
 
@@ -76,15 +42,14 @@ function buildCard(item) {
   el.dataset.artId = item.id;
 
   el.innerHTML = `
-    <button class="art-frame" type="button" data-lightbox="${escapeHtml(item.id)}"
-            aria-label="View ${escapeHtml(item.title)} full size">
-      <img src="${escapeHtml(item.imageUrl)}" alt="${escapeHtml(item.title)}"
-           loading="lazy" decoding="async" draggable="false">
+    <button class="art-frame" type="button" data-lightbox="${escapeHtml(item.id)}">
+      <img alt="" loading="lazy" decoding="async" draggable="false">
       <span class="art-frame-hint">View</span>
     </button>
     <div class="art-body">
-      <h3 class="art-title">${escapeHtml(item.title)}</h3>
-      <p class="art-desc"${item.description ? "" : " hidden"}>${escapeHtml(item.description)}</p>
+      <h3 class="art-title"></h3>
+      <p class="art-caption"></p>
+      <p class="art-desc"></p>
       <div class="art-actions">
         <button class="like-btn" type="button" aria-label="Like this piece">
           <span class="heart" aria-hidden="true">&#9825;</span>
@@ -109,9 +74,25 @@ function buildCard(item) {
   const img = el.querySelector("img");
   img.addEventListener("contextmenu", e => e.preventDefault());
   img.addEventListener("dragstart", e => e.preventDefault());
-  img.addEventListener("error", () => el.remove(), { once: true });
-
+  img.addEventListener("error", () => console.error("Artwork image failed to load:", img.currentSrc || img.src));
+  paintCard(el, item);
   return el;
+}
+
+function paintCard(el, item) {
+  const img = el.querySelector("img");
+  if (img.getAttribute("src") !== item.imageUrl) img.src = item.imageUrl;
+  img.alt = item.title;
+  el.querySelector(".art-frame").setAttribute("aria-label", item.title ? `View ${item.title} full size` : "View full size");
+  const title = el.querySelector(".art-title");
+  title.textContent = item.title;
+  title.hidden = !item.title;
+  const caption = el.querySelector(".art-caption");
+  caption.textContent = item.caption;
+  caption.hidden = !item.caption;
+  const desc = el.querySelector(".art-desc");
+  desc.textContent = item.description;
+  desc.hidden = !item.description;
 }
 
 function showError(el, message) {
@@ -139,28 +120,7 @@ function wireCard(el, item) {
     heart.innerHTML = "&#9829;";
   }
 
-  unsubscribers.push(watchPieceMeta("artworks", item.id, (meta) => {
-    likeCount.textContent = meta.likes;
-
-    const entry = cards.get(item.id);
-    const model = entry ? entry.item : item;
-
-    const shown = meta.title || model.placeholder || model.title;
-
-    if (shown !== model.title) {
-      model.title = shown;
-      el.querySelector(".art-title").textContent = shown;
-      el.querySelector(".art-frame").setAttribute("aria-label", `View ${shown} full size`);
-      el.querySelector("img").alt = shown;
-    }
-
-    if (meta.description !== model.description) {
-      model.description = meta.description;
-      const desc = el.querySelector(".art-desc");
-      desc.textContent = meta.description;
-      desc.hidden = !meta.description;
-    }
-  }));
+  unsubscribers.push(watchLikes("artworks", item.id, (n) => { likeCount.textContent = n; }));
 
   likeBtn.addEventListener("click", async () => {
     likeBtn.disabled = true;
@@ -175,7 +135,7 @@ function wireCard(el, item) {
     } catch (err) {
       console.error("Like failed for", item.id, err);
       likeBtn.disabled = false;
-      showError(el, "Couldn't save your like — please try again.");
+      showError(el, `Couldn't save your like: ${err.message}`);
     }
   });
 
@@ -208,7 +168,7 @@ function wireCard(el, item) {
       danger: true,
       onConfirm: async () => {
         try { await deleteComment("artworks", item.id, id); }
-        catch (err) { showError(el, "Couldn't delete that comment."); throw err; }
+        catch (err) { console.error(err); showError(el, `Couldn't delete that comment: ${err.message}`); throw err; }
       }
     });
   });
@@ -224,7 +184,7 @@ function wireCard(el, item) {
       text.value = "";
     } catch (err) {
       console.error("Comment failed for", item.id, err);
-      showError(el, "Couldn't post your comment — please try again.");
+      showError(el, `Couldn't post your comment: ${err.message}`);
     } finally {
       submit.disabled = false;
     }
@@ -233,128 +193,87 @@ function wireCard(el, item) {
   return unsubscribers;
 }
 
-function addCard(item) {
-  if (cards.has(item.id)) return;
-  const el = buildCard(item);
-  el.setAttribute("data-reveal", "scale");
-  const unsubscribers = wireCard(el, item);
-  cards.set(item.id, { el, item, unsubscribers });
-  grid.appendChild(el);
-  observeReveals(grid);
-}
-
 function removeCard(id) {
   const entry = cards.get(id);
   if (!entry) return;
-  entry.unsubscribers.forEach(unsub => { try { unsub(); } catch { } });
+  entry.unsubscribers.forEach(unsub => {
+    try { unsub(); } catch (err) { console.error("Card listener could not be stopped.", err); }
+  });
   entry.el.remove();
   cards.delete(id);
 }
 
-function sync({ uploaded, archive, deletedIds = [], deletedUrls = [] }) {
-  if (removed) return;
-  deletedSeedIds = new Set(deletedIds);
-  deletedSeedUrls = new Set(deletedUrls);
-  const archiveItems = archive.length
-    ? recordItems(archive.filter(a => !a.hidden && !deletedSeedIds.has(a.id) && !deletedSeedUrls.has(a.imageUrl)))
-    : localItems();
-
-  const ordered = [...uploaded.filter(item => !deletedSeedIds.has(item.id) && !deletedSeedUrls.has(item.imageUrl)), ...archiveItems];
-  const incoming = new Set(ordered.map(i => i.id));
-
+function sync(items) {
+  if (!grid) return;
+  const incoming = new Set(items.map(i => i.id));
   cards.forEach((_, id) => { if (!incoming.has(id)) removeCard(id); });
 
-  ordered.forEach((item) => {
+  items.forEach((item) => {
     const existing = cards.get(item.id);
     if (!existing) {
-      addCard(item);
+      const el = buildCard(item);
+      el.setAttribute("data-reveal", "scale");
+      cards.set(item.id, { el, item, unsubscribers: wireCard(el, item) });
       return;
     }
-    if (existing.item.title !== item.title || existing.item.imageUrl !== item.imageUrl) {
-      existing.item = { ...existing.item, ...item };
-      existing.el.querySelector(".art-title").textContent = item.title;
-      const img = existing.el.querySelector("img");
-      if (img.getAttribute("src") !== item.imageUrl) img.src = item.imageUrl;
-    }
+    existing.item = item;
+    paintCard(existing.el, item);
   });
 
-  let anchor = null;
-  ordered.forEach((item) => {
-    const el = cards.get(item.id)?.el;
-    if (!el) return;
-    if (anchor) anchor.after(el);
-    else grid.prepend(el);
-    anchor = el;
-  });
-
+  items.forEach((item) => grid.appendChild(cards.get(item.id).el));
+  observeReveals(grid);
   updateEmptyState();
 }
 
 function updateEmptyState() {
-  if (!emptyEl || removed) return;
-  emptyEl.hidden = cards.size > 0;
+  if (!emptyEl || !grid) return;
+  const missing = categoriesReady && !category;
+  grid.hidden = missing;
+  emptyEl.hidden = !missing && cards.size > 0;
+  emptyEl.querySelector("[data-empty-missing]")?.toggleAttribute("hidden", !missing);
+  emptyEl.querySelector("[data-empty-none]")?.toggleAttribute("hidden", missing);
 }
 
-async function paintHeader() {
+function paintHeader() {
   const titleEl = document.getElementById("category-title");
   const taglineEl = document.getElementById("category-tagline");
   const blurbEl = document.getElementById("category-blurb");
-  if (!titleEl) return;
-
-  const pageSlug = slug;
-  const remote = await fetchCategories("art");
-  if (pageSlug !== slug) return;
-  const live = remote.find(c => c.slug === slug);
-  const known = CATEGORY_BY_SLUG[slug];
-  const label = live?.name || known?.label || slug.replace(/-/g, " ");
-
-  if (!live) {
-    removed = true;
-    titleEl.textContent = label;
-    if (taglineEl) taglineEl.textContent = "";
-    if (blurbEl) blurbEl.textContent = "";
-    cards.forEach((_, id) => removeCard(id));
-    if (grid) grid.hidden = true;
-    if (emptyEl) {
-      emptyEl.hidden = false;
-      emptyEl.innerHTML = `<h3>This collection has been taken down</h3><p>The work has moved on. <a href="${previewHref("gallery.html")}">See the collections on view now</a>.</p>`;
-    }
-    return;
-  }
-
-  const config = currentConfig();
-  const artist = (config.home?.artistName || "Alafi Jonathan").trim();
-  const brand = (config.branding?.siteTitle || "Alafi Art Work").trim();
-  document.title = `${label} by ${artist} | ${brand}`;
   const crumb = document.getElementById("crumb-current");
-  if (crumb) crumb.textContent = label;
+  const name = category?.name || "";
+  if (titleEl) { titleEl.textContent = name; titleEl.hidden = !name; }
+  if (crumb) crumb.textContent = name;
+  if (taglineEl) { taglineEl.textContent = category?.tagline || ""; taglineEl.hidden = !category?.tagline; }
+  if (blurbEl) { blurbEl.textContent = category?.blurb || ""; blurbEl.hidden = !category?.blurb; }
 
-  titleEl.textContent = label;
-  if (taglineEl) taglineEl.textContent = live.tagline || known?.tagline || "";
-  if (blurbEl) blurbEl.textContent = live.blurb || known?.blurb || "";
+  const site = currentConfig().branding.siteTitle.trim();
+  const title = [name, site].filter(Boolean).join(" | ");
+  if (title) document.title = title;
 }
 
 export function mount() {
   slug = currentCategorySlug();
   grid = document.getElementById("gallery-grid");
   emptyEl = document.getElementById("gallery-empty");
-  removed = false;
   cards = new Map();
+  category = null;
+  categoriesReady = false;
   pageSubscriptions = [];
 
   initNav();
   if (!grid) return;
 
-  paintHeader();
-
-  deletedSeedIds = new Set();
-  deletedSeedUrls = new Set();
-  updateEmptyState();
+  document.body.dataset.ownTitle = "1";
   observeReveals(document);
-
   bindGallery(grid, orderedItems);
 
-  ensureGuestAuth().catch(() => null).then(() => {
+  pageSubscriptions.push(watchCategories("art", (items) => {
+    category = items.find(c => c.slug === slug) || null;
+    categoriesReady = true;
+    paintHeader();
+    updateEmptyState();
+  }));
+
+  ensureGuestAuth().catch((err) => { console.error("Guest sign-in failed; likes and comments are unavailable.", err); return null; }).then(() => {
     if (!grid) return;
     pageSubscriptions.push(watchAuth((user) => {
       const next = isOwner(user);
@@ -364,20 +283,27 @@ export function mount() {
     }));
   });
 
-  pageSubscriptions.push(watchGalleryPieces(slug, sync, () => {
-    if (emptyEl && !removed) emptyEl.hidden = cards.size > 0;
-  }, { includeDrafts: isPreview() }));
+  pageSubscriptions.push(slug
+    ? watchArtworks(slug, sync, (err) => {
+        if (emptyEl) emptyEl.hidden = false;
+        console.error("Collection artworks could not be read.", err);
+      })
+    : () => {});
+  if (!slug) { categoriesReady = true; updateEmptyState(); }
 }
 
 export function unmount() {
   cards.forEach((_, id) => removeCard(id));
   cards.clear();
-  pageSubscriptions.forEach((stop) => { try { stop?.(); } catch { } });
+  pageSubscriptions.forEach((stop) => {
+    try { stop?.(); } catch (err) { console.error("Collection listener could not be stopped.", err); }
+  });
   pageSubscriptions = [];
   grid = null;
   emptyEl = null;
 }
 
 export function onConfig() {
+  paintHeader();
   observeReveals(document);
 }

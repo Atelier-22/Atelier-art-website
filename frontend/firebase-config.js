@@ -4,9 +4,7 @@ import {
   signInWithEmailAndPassword, sendPasswordResetEmail, signOut, setPersistence,
   indexedDBLocalPersistence, browserLocalPersistence, browserSessionPersistence
 } from "https://www.gstatic.com/firebasejs/10.13.0/firebase-auth.js";
-import {
-  getFirestore, getDocs, collection
-} from "https://www.gstatic.com/firebasejs/10.13.0/firebase-firestore.js";
+import { getFirestore } from "https://www.gstatic.com/firebasejs/10.13.0/firebase-firestore.js";
 
 const firebaseConfig = {
   apiKey: "AIzaSyBeZ1kT5TClG9_lMr9bs-WuF3T-6XHaKts",
@@ -41,7 +39,7 @@ export const authReady = (async () => {
       persistenceMode = name;
       return name;
     } catch (err) {
-      console.warn(`Auth persistence "${name}" unavailable:`, err?.code || err);
+      console.error(`Auth persistence "${name}" unavailable:`, err?.code || err);
     }
   }
   persistenceMode = "memory";
@@ -74,8 +72,6 @@ export function isOwner(user) {
 export function watchAuth(callback) {
   let active = true;
   let unsubscribe = null;
-  // Wait until the chosen persistence store has been initialized before
-  // observing auth; otherwise the first null state can briefly win a refresh.
   authReady.then(() => {
     if (active) unsubscribe = onAuthStateChanged(auth, callback);
   });
@@ -97,18 +93,4 @@ export async function ownerPasswordReset(email) {
 
 export function ownerLogout() {
   return signOut(auth);
-}
-
-export async function fetchUploadedArtworks() {
-  const snap = await getDocs(collection(db, "artworks"));
-  const byCategory = {};
-  snap.forEach((d) => {
-    const data = d.data();
-    if (data.uploaded !== true || !data.imageUrl) return;
-    (byCategory[data.category] ||= []).push({ id: d.id, ...data });
-  });
-  Object.values(byCategory).forEach(list =>
-    list.sort((a, b) => (b.createdAt?.seconds || 0) - (a.createdAt?.seconds || 0))
-  );
-  return byCategory;
 }

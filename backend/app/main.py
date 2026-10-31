@@ -45,8 +45,8 @@ app.add_middleware(
 async def cache_headers(request: Request, call_next):
     response = await call_next(request)
     path = request.url.path
-    if path.startswith("/api/") or path == "/api":
-        response.headers.setdefault("Cache-Control", "no-store")
+    if path.startswith("/api/") or path == "/api" or path == "/sitemap.xml":
+        response.headers["Cache-Control"] = "no-store" if path.startswith("/api") else "no-cache"
     else:
         response.headers["Cache-Control"] = cache_control_for(path)
     return response

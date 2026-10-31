@@ -1,9 +1,7 @@
 rules_version = '2';
 
-
 service cloud.firestore {
   match /databases/{database}/documents {
-
 
     function hasAdminClaim() {
       return request.auth != null && request.auth.token.admin == true;
@@ -25,34 +23,28 @@ service cloud.firestore {
       return request.auth != null;
     }
 
-
     function isPublished() {
       return resource.data.status == "published";
-    }
-
-    function incomingIsValidStatus() {
-      return request.resource.data.status in ["draft", "published", "archived"];
-    }
-
-    function isLikeIncrement() {
-      return signedIn()
-        && request.resource.data.diff(resource.data).affectedKeys().hasOnly(['likes'])
-        && request.resource.data.likes == resource.data.likes + 1;
-    }
-
-    function isLikeSeed() {
-      return signedIn()
-        && request.resource.data.keys().hasOnly(['likes', 'status', 'createdAt'])
-        && request.resource.data.likes == 1
-        && request.resource.data.status == "published";
     }
 
     function notFound() {
       return resource == null;
     }
 
+    function incomingIsValidStatus() {
+      return request.resource.data.status in ["draft", "published"];
+    }
+
+    function isLikeIncrement() {
+      return signedIn()
+        && resource.data.status == "published"
+        && request.resource.data.diff(resource.data).affectedKeys().hasOnly(['likes'])
+        && request.resource.data.likes == resource.data.get('likes', 0) + 1;
+    }
+
     function isValidComment() {
       return signedIn()
+        && request.resource.data.keys().hasOnly(['name', 'text', 'uid', 'createdAt'])
         && request.resource.data.text is string
         && request.resource.data.text.size() > 0
         && request.resource.data.text.size() <= 300
@@ -60,20 +52,14 @@ service cloud.firestore {
         && request.resource.data.name.size() <= 40;
     }
 
-
     match /siteConfig/published {
       allow read: if true;
       allow write: if isAdmin();
     }
 
-    match /siteConfig/draft {
-      allow read, write: if isAdmin();
-    }
-
     match /siteConfig/{other} {
       allow read, write: if isAdmin();
     }
-
 
     match /artCategories/{categoryId} {
       allow read: if true;
@@ -85,68 +71,45 @@ service cloud.firestore {
       allow write: if isAdmin();
     }
 
-    match /categories/{categoryId} {
-      allow read: if true;
-      allow write: if isAdmin();
-    }
-
-
     match /artworks/{artId} {
-      allow read: if isAdmin() || notFound() || isPublished();
-      allow create: if (isAdmin() && incomingIsValidStatus()) || isLikeSeed();
+      allow get: if isAdmin() || notFound() || isPublished();
+      allow list: if isAdmin() || isPublished();
+      allow create: if isAdmin() && incomingIsValidStatus();
+      allow update: if (isAdmin() && incomingIsValidStatus()) || isLikeIncrement();
       allow delete: if isAdmin();
-      allow update: if isAdmin() || isLikeIncrement();
 
       match /comments/{commentId} {
         allow read: if true;
         allow create: if isValidComment();
-        allow update: if isAdmin();
-        allow delete: if isAdmin();
+        allow update, delete: if isAdmin();
       }
     }
 
-
     match /comics/{comicId} {
-      allow read: if isAdmin() || notFound() || isPublished();
-      allow create: if (isAdmin() && incomingIsValidStatus()) || isLikeSeed();
+      allow get: if isAdmin() || notFound() || isPublished();
+      allow list: if isAdmin() || isPublished();
+      allow create: if isAdmin() && incomingIsValidStatus();
+      allow update: if (isAdmin() && incomingIsValidStatus()) || isLikeIncrement();
       allow delete: if isAdmin();
-      allow update: if isAdmin() || isLikeIncrement();
 
       match /comments/{commentId} {
         allow read: if true;
         allow create: if isValidComment();
-        allow update: if isAdmin();
-        allow delete: if isAdmin();
+        allow update, delete: if isAdmin();
       }
 
       match /chapters/{chapterId} {
-        allow read: if isAdmin() || isPublished();
-        allow write: if isAdmin();
+        allow read, write: if isAdmin();
 
         match /pages/{pageId} {
-          allow read: if true;
-          allow write: if isAdmin();
+          allow read, write: if isAdmin();
         }
       }
     }
 
-
-    match /stories/{storyId} {
-      allow read: if isAdmin() || isPublished();
-      allow write: if isAdmin();
-    }
-
-
     match /media/{mediaId} {
-      allow read: if isAdmin();
-      allow write: if isAdmin();
+      allow read, write: if isAdmin();
     }
-
-    match /contentDeletions/{deletionId} {
-      allow read: if true;
-      allow write: if isAdmin();
-    }
-
 
     match /changeLog/{entryId} {
       allow read: if isAdmin();
@@ -154,9 +117,20 @@ service cloud.firestore {
       allow update, delete: if false;
     }
 
-
     match /{path=**}/comments/{commentId} {
       allow read: if true;
+    }
+
+    match /contentDeletions/{deletionId} {
+      allow read, delete: if isAdmin();
+    }
+
+    match /categories/{categoryId} {
+      allow read, delete: if isAdmin();
+    }
+
+    match /stories/{storyId} {
+      allow read, delete: if isAdmin();
     }
   }
 }

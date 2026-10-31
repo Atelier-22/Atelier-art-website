@@ -50,7 +50,7 @@ function render() {
   img.classList.remove("is-loaded");
   img.src = item.src;
   img.alt = item.title || "Artwork";
-  img.decode?.().catch(() => {}).finally(() => img.classList.add("is-loaded"));
+  img.decode?.().catch((err) => console.error("Lightbox image decode failed.", err)).finally(() => img.classList.add("is-loaded"));
 
   overlay.querySelector(".lb-title").textContent = item.title || "";
   overlay.querySelector(".lb-meta").textContent = item.meta || "";

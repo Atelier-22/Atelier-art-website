@@ -1,5 +1,5 @@
-import { $, $$, escapeHtml } from "./admin-ui.js?v=20261027e";
-import { settingsSearchIndex, openSetting } from "./admin-settings.js?v=20261030a";
+import { $, $$, escapeHtml } from "./admin-ui.js?v=20261031a";
+import { settingsSearchIndex, openSetting } from "./admin-settings.js?v=20261031a";
 
 const VIEW_KEYWORDS = {
   overview: "home dashboard stats summary recent",
@@ -7,8 +7,8 @@ const VIEW_KEYWORDS = {
   comics: "stories pages upload comic book",
   categories: "collections genres rebuild create add delete rename reorder sort cover",
   settings: "configure options",
-  preview: "draft see view check before publish",
-  maintenance: "migration admin identity tools repair",
+  preview: "see view check live site",
+  maintenance: "admin identity tools change log",
   engagement: "likes comments visitors feedback reactions"
 };
 
@@ -42,8 +42,6 @@ function actionEntries() {
     { title: "Upload artwork", context: "Action", keywords: "add new photo picture image piece", run: focus("artworks", "#art-drop") },
     { title: "Add a gallery collection", context: "Action", keywords: "new category create build", run: focus("categories", "#art-cat-name") },
     { title: "Add a comic genre", context: "Action", keywords: "new category create", run: focus("categories", "#comic-cat-name") },
-    { title: "Restore built-in collections", context: "Action", keywords: "rebuild reset default categories original", run: focus("categories", "#art-cat-restore") },
-    { title: "Publish changes", context: "Action", keywords: "go live save settings", run: focus("settings", "#publish-bar") },
     { title: "Publish a comic", context: "Action", keywords: "new story upload", run: focus("comics", "#comic-form") }
   ];
 }

@@ -1,8 +1,9 @@
-import { DEFAULT_ART_CATEGORIES, LOCAL_SEEDS, mergeCategories, categoryHref } from "./site-data.js?v=20261030a";
-import { observeReveals, onScrollFrame, sectionProgress, initNav, prefersReducedMotion } from "./reveal.js?v=20260823a";
-import { renderHeroCanvas } from "./site-content.js?v=20261017b";
-import { previewHref, currentConfig, escapeHtml } from "./site-config.js?v=20261017b";
-import { watchContentDeletions, archivePieceId } from "./data.js?v=20261030a";
+import { categoryHref } from "./site-data.js?v=20261031a";
+import { observeReveals, onScrollFrame, sectionProgress, initNav, prefersReducedMotion } from "./reveal.js?v=20261031a";
+import { renderHeroCanvas, renderHeroStory } from "./site-content.js?v=20261031a";
+import { currentConfig, escapeHtml } from "./site-config.js?v=20261031a";
+import { watchArtworks, watchCategories } from "./data.js?v=20261031a";
+import { paintFooterCollections } from "./footer-collections.js?v=20261031a";
 
 const TILE_LAYOUT = ["t-hero", "t-tall", "t-strip", "t-strip", "t-strip"];
 const FRAMES_PER_TILE = 3;
@@ -24,13 +25,7 @@ function preload(src) {
   });
 }
 
-const pools = new Map();
-const uploadedPools = new Map();
-let categories = DEFAULT_ART_CATEGORIES;
-let deletionSubscription = null;
-let deletionSnapshotReady = false;
-let deletedArtIds = new Set();
-let deletedArtUrls = new Set();
+let live = { host: null, sections: [], detachScroll: null, categories: [], artworks: [], stops: [], signature: "" };
 
 function spread(list, count) {
   if (list.length <= count) return list.slice();
@@ -38,30 +33,18 @@ function spread(list, count) {
   return Array.from({ length: count }, (_, i) => list[Math.floor(i * step)]);
 }
 
-function toItem(src, category, title, id = "") {
-  return { src, category, title: title || "Untitled", id };
-}
-
-function seedPool(category) {
-  if (!deletionSnapshotReady) return [];
-  return (category.seeds || LOCAL_SEEDS[category.slug] || []).map((src, i) => ({
-    src, i, id: archivePieceId(category.slug, i)
-  })).filter(item => !deletedArtIds.has(`art:${item.id}`) && !deletedArtUrls.has(item.src))
-    .map(item => toItem(item.src, category.label, `${category.label.replace(/s$/, "")} Study ${item.i + 1}`, item.id));
-}
-
-function refreshPool(category) {
-  const uploaded = (uploadedPools.get(category.slug) || []).filter(item =>
-    !deletedArtIds.has(`art:${item.id}`) && !deletedArtUrls.has(item.src));
-  pools.set(category.slug, [...uploaded, ...seedPool(category)]);
+function poolFor(slug, label) {
+  return live.artworks
+    .filter(a => a.category === slug)
+    .map(a => ({ src: a.imageUrl, category: label, title: a.title, id: a.id }));
 }
 
 function buildTile(category, layoutClass, tileIndex) {
   const tile = document.createElement("a");
   tile.className = `tile ${layoutClass}`;
-  tile.href = previewHref(categoryHref(category));
+  tile.href = categoryHref(category);
   tile.dataset.depth = String(PARALLAX_DEPTH[tileIndex] || 0);
-  tile.setAttribute("aria-label", `View the ${category.label} collection`);
+  tile.setAttribute("aria-label", `View the ${category.name} collection`);
 
   const frames = document.createElement("div");
   frames.className = "tile-frames";
@@ -88,6 +71,8 @@ function paintTile(tile, reel) {
 
   if (!reel.length) {
     tile.classList.add("is-empty");
+    tile._caption.querySelector("strong").textContent = "";
+    tile._caption.querySelector("small").textContent = "";
     return;
   }
   tile.classList.remove("is-empty");
@@ -111,13 +96,14 @@ function paintTile(tile, reel) {
     tile._dots.appendChild(document.createElement("i"));
   });
 
-  if (reel.length < 2) tile._dots.style.display = "none";
+  tile._dots.style.display = reel.length < 2 ? "none" : "";
   applyFrame(tile, 0);
 }
 
 function dropFrame(tile, img) {
   const i = Array.from(tile._frames.children).indexOf(img);
   if (i < 0) return;
+  console.error("A homepage tile image failed to load:", img.currentSrc || img.src);
   img.remove();
   tile._dots.children[i]?.remove();
   tile._reel.splice(i, 1);
@@ -202,7 +188,7 @@ function wireHover(tile) {
   tile.addEventListener("blur", stop);
 }
 
-function buildSection(category, index) {
+function buildSection(category, index, total) {
   const section = document.createElement("section");
   section.className = "collection" + (index % 2 ? " is-flipped" : "");
   section.id = `collection-${category.slug}`;
@@ -215,11 +201,11 @@ function buildSection(category, index) {
   intro.className = "collection-intro";
   intro.setAttribute("data-reveal", index % 2 ? "right" : "left");
   intro.innerHTML = `
-    <span class="collection-index">${String(index + 1).padStart(2, "0")} / ${String(categories.length).padStart(2, "0")}</span>
-    <h2>${escapeHtml(category.label)}</h2>
-    <p class="collection-tagline">${escapeHtml(category.tagline || "")}</p>
-    <p class="blurb">${escapeHtml(category.blurb || "")}</p>
-    <a class="link-btn" href="${escapeHtml(previewHref(categoryHref(category)))}">Explore ${escapeHtml(category.label)} <span class="arrow">&#8594;</span></a>
+    <span class="collection-index">${String(index + 1).padStart(2, "0")} / ${String(total).padStart(2, "0")}</span>
+    <h2>${escapeHtml(category.name)}</h2>
+    ${category.tagline ? `<p class="collection-tagline">${escapeHtml(category.tagline)}</p>` : ""}
+    ${category.blurb ? `<p class="blurb">${escapeHtml(category.blurb)}</p>` : ""}
+    <a class="link-btn" href="${escapeHtml(categoryHref(category))}">${escapeHtml(category.name)} <span class="arrow">&#8594;</span></a>
     <span class="collection-count" data-count></span>
   `;
 
@@ -245,8 +231,11 @@ function buildSection(category, index) {
 }
 
 function refreshSection(section) {
-  const pool = pools.get(section.dataset.slug) || [];
+  const pool = poolFor(section.dataset.slug, section._category.name);
   const picks = spread(pool, TILE_LAYOUT.length * FRAMES_PER_TILE);
+  const signature = picks.map(p => p.src + p.title).join("|");
+  if (section._signature === signature) return;
+  section._signature = signature;
 
   section._tiles.forEach((tile, i) => {
     const reel = [];
@@ -260,7 +249,7 @@ function refreshSection(section) {
   const countEl = section.querySelector("[data-count]");
   if (countEl) {
     countEl.textContent = pool.length
-      ? `${pool.length} piece${pool.length === 1 ? "" : "s"} in this collection`
+      ? `${pool.length} piece${pool.length === 1 ? "" : "s"}`
       : "";
   }
 }
@@ -290,11 +279,12 @@ let heroTimer = null;
 
 function wireHeroCanvas() {
   const canvas = document.querySelector(".hero-canvas");
+  clearInterval(heroTimer);
+  heroTimer = null;
   if (!canvas) return;
   const imgs = Array.from(canvas.querySelectorAll("img"));
   if (!imgs.length) return;
 
-  clearInterval(heroTimer);
   imgs[0].classList.add("is-current");
   if (imgs.length < 2 || prefersReducedMotion) return;
 
@@ -318,46 +308,31 @@ function wireHeroCanvas() {
   heroTimer = setInterval(advance, 7000);
 }
 
-async function upgradeFromFirestore(sections) {
-  try {
-    const { fetchUploadedArtworks } = await import("../../firebase-config.js?v=20261027h");
-    const byCategory = await fetchUploadedArtworks();
-    sections.forEach((section) => {
-      const uploaded = byCategory[section.dataset.slug] || [];
-      uploadedPools.set(section.dataset.slug, uploaded.map(a => toItem(a.imageUrl, section._category.label, a.title, a.id)));
-      refreshPool(section._category);
-      refreshSection(section);
+function rebuildSections() {
+  const host = live.host;
+  if (!host) return;
+  const signature = live.categories.map(c => [c.slug, c.name, c.tagline, c.blurb].join("\u0001")).join("\u0002");
+  if (signature !== live.signature) {
+    live.signature = signature;
+    live.detachScroll?.();
+    live.sections.forEach((section) => section._tiles?.forEach(tile => clearInterval(tile._timer)));
+    host.innerHTML = "";
+    live.sections = live.categories.map((category, i) => {
+      const section = buildSection(category, i, live.categories.length);
+      host.appendChild(section);
+      return section;
     });
-    observeReveals(document);
-  } catch (err) {
-    console.warn("Live collection data unavailable, showing local archive.", err);
+    live.detachScroll = wireScrollMotion(live.sections);
   }
-}
-
-let live = { host: null, sections: [], detachScroll: null };
-
-function applyDeletions(items) {
-  deletedArtIds = new Set(items.filter(item => item.kind === "art").map(item => `art:${item.itemId}`));
-  deletedArtUrls = new Set(items.filter(item => item.kind === "art" && item.imageUrl).map(item => item.imageUrl));
-  Object.entries(LOCAL_SEEDS).forEach(([slug, seeds]) => seeds.forEach((src, i) => {
-    if (deletedArtIds.has(`art:${archivePieceId(slug, i)}`)) deletedArtUrls.add(src);
-  }));
-  deletionSnapshotReady = true;
-  categories.forEach(refreshPool);
   live.sections.forEach(refreshSection);
-  filterDeletedHeroImages();
+  observeReveals(document);
 }
 
-function filterDeletedHeroImages() {
-  const canvas = document.querySelector(".hero-canvas");
-  if (!canvas || !deletionSnapshotReady) return;
-  let changed = false;
-  canvas.querySelectorAll("img").forEach(img => {
-    const src = img.getAttribute("src") || "";
-    if (deletedArtUrls.has(src)) { img.remove(); changed = true; }
-  });
-  canvas.hidden = !canvas.querySelector("img");
-  if (changed) wireHeroCanvas();
+function paintHero(config) {
+  const canvasChanged = renderHeroCanvas(config);
+  const storyChanged = renderHeroStory(config);
+  if (canvasChanged) wireHeroCanvas();
+  if (storyChanged) document.dispatchEvent(new CustomEvent("alafi:hero-content"));
 }
 
 export function mount() {
@@ -366,35 +341,29 @@ export function mount() {
   const host = document.getElementById("collections");
   if (!host) return;
 
-  pools.clear();
-  uploadedPools.clear();
-  deletionSnapshotReady = false;
-  deletedArtIds = new Set();
-  deletedArtUrls = new Set();
-  categories = [];
-  live = { host, sections: [], detachScroll: null };
+  live = { host, sections: [], detachScroll: null, categories: [], artworks: [], stops: [], signature: "" };
 
   observeReveals(document);
-  renderHeroCanvas(currentConfig());
-  wireHeroCanvas();
-  deletionSubscription = watchContentDeletions(applyDeletions, err => {
-    console.warn("Deleted artwork could not be loaded; hiding bundled collection images.", err);
-  });
+  paintHero(currentConfig());
+  paintFooterCollections();
 
-  loadCategoryOrder().then((remote) => {
+  live.stops.push(watchCategories("art", (items) => {
     if (live.host !== host) return;
-    categories = remote || DEFAULT_ART_CATEGORIES;
-    const sections = buildSections(host);
-    live.sections = sections;
-    live.detachScroll = wireScrollMotion(sections);
-    observeReveals(document);
-    upgradeFromFirestore(sections);
-  });
+    live.categories = items;
+    rebuildSections();
+  }));
+
+  live.stops.push(watchArtworks(null, (items) => {
+    if (live.host !== host) return;
+    live.artworks = items;
+    rebuildSections();
+  }));
 }
 
 export function unmount() {
-  deletionSubscription?.();
-  deletionSubscription = null;
+  live.stops.forEach((stop) => {
+    try { stop(); } catch (err) { console.error("Homepage listener could not be stopped.", err); }
+  });
   live.detachScroll?.();
   live.sections.forEach((section) => {
     section._tiles?.forEach((tile) => {
@@ -404,32 +373,11 @@ export function unmount() {
   });
   clearInterval(heroTimer);
   heroTimer = null;
-  live = { host: null, sections: [], detachScroll: null };
+  document.querySelectorAll(".hero-canvas").forEach(c => { delete c.dataset.painted; });
+  live = { host: null, sections: [], detachScroll: null, categories: [], artworks: [], stops: [], signature: "" };
 }
 
 export function onConfig(config) {
-  if (renderHeroCanvas(config)) wireHeroCanvas();
-  filterDeletedHeroImages();
+  paintHero(config);
   observeReveals(document);
 }
-
-function buildSections(host) {
-  return categories.map((category, i) => {
-    pools.set(category.slug, seedPool(category));
-    const section = buildSection(category, i);
-    host.appendChild(section);
-    refreshSection(section);
-    return section;
-  });
-}
-
-async function loadCategoryOrder() {
-  try {
-    const { fetchCategories } = await import("./data.js?v=20261030a");
-    return mergeCategories(await fetchCategories("art"));
-  } catch (err) {
-    console.warn("Category order unavailable, using defaults.", err);
-    return null;
-  }
-}
-

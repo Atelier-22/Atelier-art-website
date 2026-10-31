@@ -1,11 +1,10 @@
-import { ensureGuestAuth, watchAuth, isOwner } from "../../firebase-config.js?v=20261027h";
+import { ensureGuestAuth, watchAuth, isOwner } from "../../firebase-config.js?v=20261031a";
 import {
-  watchCategories, watchComics, watchContentDeletions, watchLikes, toggleLike, hasLiked, BUILTIN_SAMPLE_STORY,
+  watchCategories, watchComics, watchLikes, toggleLike, hasLiked,
   watchComments, addComment, deleteComment
-} from "./data.js?v=20261030a";
-import { DEFAULT_COMIC_CATEGORIES } from "./site-data.js?v=20261030a";
-import { observeReveals, initNav } from "./reveal.js?v=20260823a";
-import { modal } from "./admin-ui.js?v=20261027e";
+} from "./data.js?v=20261031a";
+import { observeReveals, initNav } from "./reveal.js?v=20261031a";
+import { modal } from "./admin-ui.js?v=20261031a";
 
 let shelvesHost = null;
 let emptyHost = null;
@@ -13,15 +12,11 @@ let filterHost = null;
 
 let pageSubscriptions = [];
 
-let categories = DEFAULT_COMIC_CATEGORIES.map((c, i) => ({ ...c, name: c.label, order: i }));
+let categories = [];
 let comics = [];
 
-let genresSeeded = false;
-let sampleDeleted = false;
-let deletionSnapshotReady = false;
-
 function shelvedStories() {
-  return (deletionSnapshotReady && !sampleDeleted && !genresSeeded && !comics.length) ? [BUILTIN_SAMPLE_STORY] : comics;
+  return comics;
 }
 
 let activeFilter = "all";
@@ -105,7 +100,7 @@ function buildReader() {
 
   el.querySelector(".comment-form").addEventListener("submit", async (e) => {
     e.preventDefault();
-    if (!reader.story || reader.story.local) return;
+    if (!reader.story) return;
     const text = e.target.querySelector(".comment-text");
     if (!text.value.trim()) return;
     const submit = e.target.querySelector("button[type=submit]");
@@ -115,6 +110,9 @@ function buildReader() {
       text.value = "";
     } catch (err) {
       console.error("Comment failed:", err);
+      text.setCustomValidity(err.message);
+      text.reportValidity();
+      setTimeout(() => text.setCustomValidity(""), 4000);
     } finally {
       submit.disabled = false;
     }
@@ -138,7 +136,7 @@ function buildReader() {
   });
 
   el.querySelector(".reader-like").addEventListener("click", async () => {
-    if (!reader.story || reader.story.local) return;
+    if (!reader.story) return;
     const btn = el.querySelector(".reader-like");
     btn.disabled = true;
     try {
@@ -259,13 +257,13 @@ function openReader(story) {
   const likeBtn = reader.el.querySelector(".reader-like");
   const social = reader.el.querySelector(".reader-social");
   const commentsPanel = reader.el.querySelector(".reader-comments");
-  social.hidden = !!story.local;
+  social.hidden = false;
   commentsPanel.hidden = true;
 
-  reader.unsubscribers.forEach(u => { try { u(); } catch {} });
+  reader.unsubscribers.forEach(u => { try { u(); } catch (err) { console.error("Reader listener could not be stopped.", err); } });
   reader.unsubscribers = [];
 
-  if (!story.local) {
+  {
     likeBtn.disabled = hasLiked(story.id);
     likeBtn.classList.toggle("is-liked", hasLiked(story.id));
     likeBtn.querySelector(".heart").innerHTML = hasLiked(story.id) ? "&#9829;" : "&#9825;";
@@ -301,7 +299,7 @@ function closeReader(fromPop) {
   reader.el.classList.remove("is-open");
   document.body.style.overflow = "";
   document.removeEventListener("keydown", onReaderKey);
-  reader.unsubscribers.forEach(u => { try { u(); } catch {} });
+  reader.unsubscribers.forEach(u => { try { u(); } catch (err) { console.error("Reader listener could not be stopped.", err); } });
   reader.unsubscribers = [];
 
   setTimeout(() => { reader.el.hidden = true; reader.closing = false; }, 380);
@@ -412,8 +410,8 @@ function openFromHash() {
 }
 
 export function mount() {
-  deletionSnapshotReady = false;
-  sampleDeleted = false;
+  categories = [];
+  comics = [];
   shelvesHost = document.getElementById("comic-shelves");
   emptyHost = document.getElementById("comics-empty");
   filterHost = document.getElementById("comic-filters");
@@ -432,14 +430,13 @@ export function mount() {
     render();
   });
 
-  ensureGuestAuth().catch(() => null).then(() => {
+  ensureGuestAuth().catch((err) => { console.error("Guest sign-in failed; likes and comments are unavailable.", err); return null; }).then(() => {
     if (!shelvesHost) return;
     pageSubscriptions.push(watchAuth((user) => { owner = isOwner(user); }));
   });
 
-  pageSubscriptions.push(watchCategories("comics", (items, meta) => {
+  pageSubscriptions.push(watchCategories("comics", (items) => {
     categories = items;
-    genresSeeded = meta?.seeded === true;
     render();
     openFromHash();
   }));
@@ -448,16 +445,11 @@ export function mount() {
     comics = items;
     render();
     openFromHash();
-  }, () => {
+  }, (err) => {
+    console.error("Stories could not be read.", err);
     comics = [];
     render();
   }, { publishedOnly: true }));
-
-  pageSubscriptions.push(watchContentDeletions((items) => {
-    sampleDeleted = items.some(item => item.kind === "story" && item.itemId === BUILTIN_SAMPLE_STORY.id);
-    deletionSnapshotReady = true;
-    render();
-  }, () => { sampleDeleted = true; deletionSnapshotReady = true; render(); }));
 }
 
 export function unmount() {
@@ -467,7 +459,7 @@ export function unmount() {
   reader.story = null;
   document.body.style.overflow = "";
 
-  pageSubscriptions.forEach((stop) => { try { stop?.(); } catch { } });
+  pageSubscriptions.forEach((stop) => { try { stop?.(); } catch (err) { console.error("Comics listener could not be stopped.", err); } });
   pageSubscriptions = [];
   shelvesHost = null;
   emptyHost = null;

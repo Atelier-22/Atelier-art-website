@@ -1,5 +1,5 @@
-import { $, $$, escapeHtml, toast } from "./admin-ui.js?v=20261027e";
-import { categoryHref } from "./site-data.js?v=20261030a";
+import { $, $$, escapeHtml, toast } from "./admin-ui.js?v=20261031a";
+import { categoryHref } from "./site-data.js?v=20261031a";
 
 const DEVICES = {
   phone: { label: "Phone", width: 390, height: 844 },
@@ -45,7 +45,6 @@ function renderPageSelect() {
 function previewUrl() {
   const [path, query] = state.page.split("?");
   const params = new URLSearchParams(query || "");
-  params.set("preview", "1");
   params.set("t", String(performance.now() | 0));
   return `${path}?${params.toString()}`;
 }

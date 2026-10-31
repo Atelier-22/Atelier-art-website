@@ -1,14 +1,10 @@
 import os
-from pathlib import PurePosixPath
 
 from starlette.staticfiles import StaticFiles
 
-LONG_LIVED = {".jpg", ".jpeg", ".png", ".webp", ".avif", ".gif", ".svg", ".ico", ".woff", ".woff2"}
-
 
 def cache_control_for(path: str) -> str:
-    ext = PurePosixPath(path).suffix.lower()
-    return "public, max-age=604800" if ext in LONG_LIVED else "no-cache"
+    return "no-cache"
 
 
 class SiteFiles(StaticFiles):

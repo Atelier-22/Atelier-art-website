@@ -2,7 +2,7 @@
   "use strict";
 
   var root = document.documentElement;
-  var VERSION = "20260823a";
+  var VERSION = "20261031a";
 
   var reduced = false;
   try { reduced = window.matchMedia("(prefers-reduced-motion: reduce)").matches; } catch (e) { reduced = false; }
@@ -13,16 +13,6 @@
   var bailed = false;
   var gsapFailed = false;
   var current = null;
-
-  var FALLBACK = [
-    ["paintings", "Paintings", "painting", 20],
-    ["sketches", "Sketches", "sketch", 20],
-    ["digital", "Digital Art", "digital", 20],
-    ["sculptures", "Sculptures", "sculpture", 20],
-    ["portraits", "Portraits", "portrait", 20],
-    ["graphics", "Graphics", "graphic", 20],
-    ["comics", "Comics", "comic", 3]
-  ];
 
   var TIERS = [
     { name: "mobile", max: 700, cards: 4, tags: 1, scale: 0.9 },
@@ -161,67 +151,69 @@
     return piece.loading;
   }
 
-  function fallbackPieces(exclude) {
-    var out = [];
-    FALLBACK.forEach(function (c) {
-      for (var i = 1; i <= c[3]; i++) {
-        var src = "artworks/" + c[0] + "/" + c[2] + i + ".jpg";
-        if (!exclude[src]) out.push({ src: src, category: c[0], label: c[1], title: "" });
-      }
-    });
-    return out;
-  }
-
-  function loadPieces(exclude) {
-    return import("./site-data.js?v=" + VERSION).then(function (m) {
-      var out = [];
-      m.DEFAULT_ART_CATEGORIES.forEach(function (c) {
-        (c.seeds || []).forEach(function (src) {
-          if (!exclude[src]) out.push({ src: src, category: c.slug, label: c.label, title: "" });
-        });
-      });
-      return out.length ? out : fallbackPieces(exclude);
-    }).catch(function () { return fallbackPieces(exclude); });
-  }
-
-  function loadUploads(labels) {
-    return Promise.all([
-      import("../../firebase-config.js?v=20261027h"),
+  function watchPieces(onList) {
+    var stops = [];
+    var dead = false;
+    var labels = {};
+    var latest = null;
+    function emit(mods) {
+      if (!latest) return;
+      onList(latest.filter(function (a) { return a.imageUrl; }).map(function (a) {
+        return {
+          src: mods[1].withTransform(a.originalUrl || a.imageUrl, "f_auto,q_auto,w_900,c_limit"),
+          category: a.category,
+          label: labels[a.category] || "",
+          title: a.title || ""
+        };
+      }));
+    }
+    Promise.all([
+      import("./data.js?v=" + VERSION),
       import("./cloudinary.js?v=" + VERSION)
     ]).then(function (mods) {
-      return mods[0].fetchUploadedArtworks().then(function (byCategory) {
-        var out = [];
-        Object.keys(byCategory || {}).forEach(function (slug) {
-          byCategory[slug].forEach(function (a) {
-            if (!a.imageUrl) return;
-            out.push({
-              src: mods[1].withTransform(a.imageUrl, "f_auto,q_auto,w_900,c_limit"),
-              category: slug,
-              label: labels[slug] || slug,
-              title: a.title || ""
-            });
-          });
-        });
-        return out;
-      });
-    }).catch(function () { return []; });
+      if (dead) return;
+      stops.push(mods[0].watchCategories("art", function (items) {
+        labels = {};
+        items.forEach(function (c) { labels[c.slug] = c.name; });
+        emit(mods);
+      }));
+      stops.push(mods[0].watchArtworks(null, function (items) {
+        latest = items;
+        emit(mods);
+      }));
+    }).catch(function (err) { console.error("Hero artwork could not be loaded.", err); });
+    return function () {
+      dead = true;
+      stops.forEach(function (stop) { try { stop(); } catch (err) { console.error("Hero listener could not be stopped.", err); } });
+    };
   }
 
-  function Library(exclude) {
+  function Library() {
     var pieces = [];
+    var stopWatching = null;
     var recent = [];
     var queue = [];
     var labels = {};
 
-    function absorb(list) {
+    function replace(list) {
+      var previous = {};
+      pieces.forEach(function (p) { previous[p.src] = p; });
       var seen = {};
-      pieces.forEach(function (p) { seen[p.src] = true; });
+      pieces = [];
+      labels = {};
       list.forEach(function (p) {
         if (seen[p.src]) return;
         seen[p.src] = true;
-        pieces.push(p);
+        var kept = previous[p.src];
+        if (kept) { kept.title = p.title; kept.label = p.label; kept.category = p.category; pieces.push(kept); }
+        else pieces.push(p);
         labels[p.category] = p.label;
       });
+      queue = queue.filter(function (c) { return labels.hasOwnProperty(c); });
+    }
+
+    function has(src) {
+      return pieces.some(function (p) { return p.src === src; });
     }
 
     function categories() {
@@ -268,17 +260,21 @@
     }
 
     return {
-      absorb: absorb,
       pick: pick,
+      has: has,
       labels: labels,
       size: function () { return pieces.length; },
-      load: function () {
-        return loadPieces(exclude).then(function (seeds) {
-          absorb(seeds);
-          loadUploads(labels).then(function (uploads) { absorb(uploads); });
-          return pieces;
+      load: function (onChange) {
+        return new Promise(function (resolve) {
+          var first = true;
+          stopWatching = watchPieces(function (list) {
+            replace(list);
+            if (first) { first = false; resolve(pieces); }
+            else if (onChange) onChange();
+          });
         });
-      }
+      },
+      stop: function () { if (stopWatching) stopWatching(); stopWatching = null; }
     };
   }
 
@@ -399,10 +395,7 @@
       stats: hero.querySelector(".hero-meta"),
       cue: hero.querySelector(".scroll-cue")
     };
-    var exclude = {};
-    slice(hero.querySelectorAll(".hero-canvas img")).forEach(function (img) { exclude[img.getAttribute("src")] = true; });
-
-    var library = Library(exclude);
+    var library = Library();
     var headline = Headline(copy, gsap);
     var state = { dead: false, index: -1, active: [], free: cards.slice(), prepared: [], token: 0, timer: null, tl: null, slots: [], visible: true, waiting: null, firstPiece: null };
     var observers = [];
@@ -632,7 +625,14 @@
       goTo(0);
     }
 
-    library.load().then(function () {
+    library.load(function () {
+      if (state.dead) return;
+      state.active.forEach(function (a) {
+        if (!library.has(a.piece.src)) gsap.set(a.el, { opacity: 0 });
+      });
+      state.prepared = state.prepared.filter(function (p) { return library.has(p.src); });
+      if (state.index < 0 && library.size()) begin();
+    }).then(function () {
       if (state.dead) return;
       var first = library.pick(1, []);
       state.firstPiece = first[0] || null;
@@ -642,6 +642,7 @@
 
     return function teardown() {
       state.dead = true;
+      library.stop();
       clearTimeout(state.waiting);
       clearTimeout(resizeTimer);
       window.removeEventListener("resize", onResize);
@@ -657,12 +658,10 @@
   function stillMount(hero) {
     var stage = hero.querySelector(".hero-stage");
     var cards = stage ? slice(stage.querySelectorAll(".hero-card")) : [];
-    var exclude = {};
-    slice(hero.querySelectorAll(".hero-canvas img")).forEach(function (img) { exclude[img.getAttribute("src")] = true; });
-    var library = Library(exclude);
+    var library = Library();
     var dead = false;
-    library.load().then(function () {
-      if (dead) return;
+    function paint() {
+      cards.forEach(function (el) { el.innerHTML = ""; el.classList.remove("is-ready"); });
       var picks = library.pick(Math.min(5, cards.length), []);
       picks.forEach(function (piece, i) {
         var el = cards[i];
@@ -677,8 +676,9 @@
         el.appendChild(img);
         el.appendChild(tag);
       });
-    });
-    return function teardown() { dead = true; };
+    }
+    library.load(function () { if (!dead) paint(); }).then(function () { if (!dead) paint(); });
+    return function teardown() { dead = true; library.stop(); };
   }
 
   function run() {
@@ -708,6 +708,17 @@
   }
 
   setTimeout(function () { if (!started) bail(); }, 6000);
+
+  function remount() {
+    if (bailed) return;
+    if (current) { current(); current = null; }
+    var hero = document.querySelector(".hero");
+    if (!hero) return;
+    if (reduced) { current = stillMount(hero); return; }
+    if (window.gsap) current = mount(hero);
+  }
+
+  document.addEventListener("alafi:hero-content", remount);
 
   document.addEventListener("alafi:navigated", function () {
     if (bailed) return;
